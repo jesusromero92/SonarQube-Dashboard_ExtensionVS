@@ -105,12 +105,17 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.setRefreshSummary({
           configuredFolders: 0,
           published: 0,
+          newPublished: 0,
           skipped: 0,
           errors: [],
           issues: [],
+          newIssues: [],
+          hotspots: [],
+          newHotspots: [],
           severity: [],
+          newSeverity: [],
           evolution: [],
-          qualityGate: { status: 'NONE' },
+          qualityGate: { status: 'NONE', conditions: [] },
           ratings: {
             overall: {
               maintainability: 'NONE',
@@ -126,6 +131,12 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
             }
           },
           types: {
+            bugs: 0,
+            codeSmells: 0,
+            vulnerabilities: 0,
+            securityHotspots: 0
+          },
+          newTypes: {
             bugs: 0,
             codeSmells: 0,
             vulnerabilities: 0,

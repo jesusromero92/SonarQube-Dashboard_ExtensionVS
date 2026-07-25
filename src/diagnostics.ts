@@ -2,10 +2,12 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   DashboardIssue,
+  DashboardHotspot,
   DashboardSeverity,
   LoadedIssues,
   PublishResult,
   SonarImpact,
+  SonarHotspot,
   SonarInstanceMode,
   SonarIssue
 } from './types';
@@ -129,6 +131,119 @@ function resolveIssuePath(
   return undefined;
 }
 
+async function resolveLocalFile(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  component: string,
+  componentPaths: Map<string, string>
+): Promise<{ relativePath: string; uri: vscode.Uri } | undefined> {
+  const issueLike = { component } as SonarIssue;
+  const issuePath = resolveIssuePath(issueLike, projectKey, componentPaths);
+  if (!issuePath) {
+    return undefined;
+  }
+  const baseSegments = normalizeRelativePath(baseDir?.trim() || '')?.split('/') ?? [];
+  const relativePath = [...baseSegments, ...issuePath.split('/')].join('/');
+  const uri = vscode.Uri.joinPath(folder.uri, ...relativePath.split('/'));
+  if (
+    vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() !== folder.uri.toString() ||
+    !(await isFile(uri))
+  ) {
+    return undefined;
+  }
+  return { relativePath, uri };
+}
+
+async function toDashboardIssue(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  loaded: LoadedIssues,
+  issue: SonarIssue
+): Promise<DashboardIssue | undefined> {
+  const local = await resolveLocalFile(
+    folder,
+    projectKey,
+    baseDir,
+    issue.component,
+    loaded.componentPaths
+  );
+  if (!local) {
+    return undefined;
+  }
+  const severity = issueSeverityLabel(issue, loaded.instanceMode);
+  return {
+    key: issue.key,
+    rule: issue.rule,
+    ruleName: issue.ruleName || issue.rule,
+    severity,
+    severityRank: issueSeverityRank(severity),
+    type: issue.type || 'ISSUE',
+    message: issue.message,
+    relativePath: local.relativePath,
+    fileUri: local.uri.toString(),
+    line: Math.max(1, issue.textRange?.startLine ?? issue.line ?? 1)
+  };
+}
+
+export async function mapFolderIssues(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  loaded: LoadedIssues,
+  issues: SonarIssue[]
+): Promise<DashboardIssue[]> {
+  const mapped = await Promise.all(
+    issues.map(issue => toDashboardIssue(folder, projectKey, baseDir, loaded, issue))
+  );
+  return mapped.filter((issue): issue is DashboardIssue => Boolean(issue));
+}
+
+function hotspotPriority(hotspot: SonarHotspot): string {
+  return (
+    hotspot.securityReviewPriority ||
+    hotspot.vulnerabilityProbability ||
+    hotspot.priority ||
+    hotspot.securitySeverity ||
+    'UNKNOWN'
+  ).toUpperCase();
+}
+
+export async function mapFolderHotspots(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  loaded: LoadedIssues,
+  hotspots: SonarHotspot[]
+): Promise<DashboardHotspot[]> {
+  const mapped = await Promise.all(hotspots.map(async hotspot => {
+    const local = await resolveLocalFile(
+      folder,
+      hotspot.project || projectKey,
+      baseDir,
+      hotspot.component,
+      loaded.componentPaths
+    );
+    if (!local) {
+      return undefined;
+    }
+    return {
+      key: hotspot.key,
+      ruleKey: hotspot.rule ?? hotspot.ruleKey ?? '',
+      message: hotspot.message ?? '',
+      status: hotspot.status ?? '',
+      resolution: hotspot.resolution ?? '',
+      priority: hotspotPriority(hotspot),
+      relativePath: local.relativePath,
+      fileUri: local.uri.toString(),
+      folderUri: folder.uri.toString(),
+      line: Math.max(1, hotspot.textRange?.startLine ?? hotspot.line ?? 1)
+    };
+  }));
+  return mapped.filter((hotspot): hotspot is DashboardHotspot => Boolean(hotspot));
+}
+
 async function isFile(uri: vscode.Uri): Promise<boolean> {
   try {
     const stat = await vscode.workspace.fs.stat(uri);
@@ -146,40 +261,23 @@ export async function publishFolderDiagnostics(
   loaded: LoadedIssues
 ): Promise<PublishResult> {
   const diagnosticsByUri = new Map<string, vscode.Diagnostic[]>();
-  const baseSegments = normalizeRelativePath(baseDir?.trim() || '')?.split('/') ?? [];
   const dashboardIssues: DashboardIssue[] = [];
   let published = 0;
   let skipped = 0;
 
   for (const issue of loaded.issues) {
-    const relativePath = resolveIssuePath(
-      issue,
+    const dashboardIssue = await toDashboardIssue(
+      folder,
       projectKey,
-      loaded.componentPaths
+      baseDir,
+      loaded,
+      issue
     );
-
-    if (!relativePath) {
+    if (!dashboardIssue) {
       skipped += 1;
       continue;
     }
 
-    const uri = vscode.Uri.joinPath(
-      folder.uri,
-      ...baseSegments,
-      ...relativePath.split('/')
-    );
-
-    if (vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() !== folder.uri.toString()) {
-      skipped += 1;
-      continue;
-    }
-
-    if (!(await isFile(uri))) {
-      skipped += 1;
-      continue;
-    }
-
-    const severity = issueSeverityLabel(issue, loaded.instanceMode);
     const diagnostic = new vscode.Diagnostic(
       issueRange(issue),
       `[${issue.ruleName || issue.rule}] ${issue.message}`,
@@ -189,23 +287,12 @@ export async function publishFolderDiagnostics(
     diagnostic.source = 'SonarQube Dashboard';
     diagnostic.code = issue.key;
 
-    const uriString = uri.toString();
+    const uriString = dashboardIssue.fileUri;
     const current = diagnosticsByUri.get(uriString) ?? [];
     current.push(diagnostic);
     diagnosticsByUri.set(uriString, current);
 
-    dashboardIssues.push({
-      key: issue.key,
-      rule: issue.rule,
-      ruleName: issue.ruleName || issue.rule,
-      severity,
-      severityRank: issueSeverityRank(severity),
-      type: issue.type || 'ISSUE',
-      message: issue.message,
-      relativePath: [...baseSegments, ...relativePath.split('/')].join('/'),
-      fileUri: uriString,
-      line: Math.max(1, issue.textRange?.startLine ?? issue.line ?? 1)
-    });
+    dashboardIssues.push(dashboardIssue);
 
     published += 1;
   }

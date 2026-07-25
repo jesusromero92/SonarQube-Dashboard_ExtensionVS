@@ -40,6 +40,8 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
         void this.dashboardPanel.showPage(page);
       } else if (message?.type === 'refresh') {
         void this.dashboardPanel.refresh();
+      } else if (message?.type === 'qualityGate') {
+        void this.dashboardPanel.showQualityGate();
       }
     });
 
@@ -280,6 +282,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
       font-size: 10px;
       font-weight: 600;
       text-align: center;
+      cursor: pointer;
     }
     .gate-status.ok { background: var(--gate-ok); }
     .gate-status.warn { color: #1f1f1f; background: var(--gate-warn); }
@@ -377,7 +380,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
         <div class="section-title">Quality Gate · último análisis</div>
         <div class="quality-gate">
           <span>Estado</span>
-          <span id="qualityGate" class="gate-status">NO DISP.</span>
+          <button id="qualityGate" class="gate-status" type="button">NO DISP.</button>
         </div>
       </div>
       <div id="ratings" class="ratings">
@@ -515,6 +518,9 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
     });
     reload.addEventListener('click', () => {
       vscode.postMessage({ type: 'refresh' });
+    });
+    qualityGate.addEventListener('click', () => {
+      vscode.postMessage({ type: 'qualityGate' });
     });
 
     window.addEventListener('message', event => {

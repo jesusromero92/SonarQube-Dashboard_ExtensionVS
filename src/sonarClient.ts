@@ -6,7 +6,11 @@ import {
   SonarIssue,
   SonarIssuesResponse,
   SonarCurrentMeasure,
+  SonarComponent,
   SonarHistoryMeasure,
+  SonarHotspot,
+  SonarHotspotDetailResponse,
+  SonarHotspotsResponse,
   SonarMeasuresHistoryResponse,
   SonarMeasuresComponentResponse,
   SonarProject,
@@ -16,6 +20,7 @@ import {
   SonarSettingsResponse,
   QualityGateStatus,
   QualityGateSummary,
+  DashboardHotspotDetail,
   DefectTypeSummary,
   RatingGrade,
   RatingsSummary
@@ -33,7 +38,16 @@ const EVOLUTION_METRICS = [
   'critical_violations',
   'major_violations',
   'minor_violations',
-  'info_violations'
+  'info_violations',
+  'new_bugs',
+  'new_code_smells',
+  'new_vulnerabilities',
+  'new_security_hotspots',
+  'new_blocker_violations',
+  'new_critical_violations',
+  'new_major_violations',
+  'new_minor_violations',
+  'new_info_violations'
 ] as const;
 const SUMMARY_METRICS = [
   'sqale_rating',
@@ -47,7 +61,11 @@ const SUMMARY_METRICS = [
   'bugs',
   'code_smells',
   'vulnerabilities',
-  'security_hotspots'
+  'security_hotspots',
+  'new_bugs',
+  'new_code_smells',
+  'new_vulnerabilities',
+  'new_security_hotspots'
 ] as const;
 
 function normalizeServerUrl(serverUrl: string): string {
@@ -264,7 +282,16 @@ function evolutionMetricProperty(metric: string): keyof Omit<EvolutionPoint, 'da
     critical_violations: 'criticalViolations',
     major_violations: 'majorViolations',
     minor_violations: 'minorViolations',
-    info_violations: 'infoViolations'
+    info_violations: 'infoViolations',
+    new_bugs: 'newBugs',
+    new_code_smells: 'newCodeSmells',
+    new_vulnerabilities: 'newVulnerabilities',
+    new_security_hotspots: 'newSecurityHotspots',
+    new_blocker_violations: 'newBlockerViolations',
+    new_critical_violations: 'newCriticalViolations',
+    new_major_violations: 'newMajorViolations',
+    new_minor_violations: 'newMinorViolations',
+    new_info_violations: 'newInfoViolations'
   };
   return properties[metric];
 }
@@ -281,7 +308,16 @@ function emptyEvolutionPoint(date: string): EvolutionPoint {
     criticalViolations: 0,
     majorViolations: 0,
     minorViolations: 0,
-    infoViolations: 0
+    infoViolations: 0,
+    newBugs: 0,
+    newCodeSmells: 0,
+    newVulnerabilities: 0,
+    newSecurityHotspots: 0,
+    newBlockerViolations: 0,
+    newCriticalViolations: 0,
+    newMajorViolations: 0,
+    newMinorViolations: 0,
+    newInfoViolations: 0
   };
 }
 
@@ -390,13 +426,24 @@ async function fetchQualityGate(
   try {
     const payload = await requestJson<SonarQualityGateResponse>(url, config.token, signal);
     return {
-      status: normalizeQualityGateStatus(payload.projectStatus?.status)
+      status: normalizeQualityGateStatus(payload.projectStatus?.status),
+      conditions: (payload.projectStatus?.conditions ?? []).map(condition => ({
+        status: normalizeQualityGateStatus(condition.status),
+        metricKey: condition.metricKey ?? '',
+        comparator: condition.comparator ?? '',
+        errorThreshold: condition.errorThreshold ?? '',
+        actualValue: condition.actualValue ?? '',
+        scope: condition.periodIndex !== undefined || condition.metricKey?.startsWith('new_')
+          ? 'newCode'
+          : 'overall',
+        projectKey: config.projectKey
+      }))
     };
   } catch (error) {
     if (signal?.aborted) {
       throw error;
     }
-    return { status: 'NONE' };
+    return { status: 'NONE', conditions: [] };
   }
 }
 
@@ -425,7 +472,11 @@ function normalizeRating(value?: string): RatingGrade {
 async function fetchSummaryMetrics(
   config: FolderSonarConfig,
   signal?: AbortSignal
-): Promise<{ ratings: RatingsSummary; types: DefectTypeSummary }> {
+): Promise<{
+  ratings: RatingsSummary;
+  types: DefectTypeSummary;
+  newTypes: DefectTypeSummary;
+}> {
   const requestMetrics = async (metrics: readonly string[]): Promise<SonarMeasuresComponentResponse> => {
     const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component`);
     url.searchParams.set('component', config.projectKey);
@@ -486,17 +537,23 @@ async function fetchSummaryMetrics(
       codeSmells: Number(values.get('code_smells')) || 0,
       vulnerabilities: Number(values.get('vulnerabilities')) || 0,
       securityHotspots: Number(values.get('security_hotspots')) || 0
+    },
+    newTypes: {
+      bugs: Number(values.get('new_bugs')) || 0,
+      codeSmells: Number(values.get('new_code_smells')) || 0,
+      vulnerabilities: Number(values.get('new_vulnerabilities')) || 0,
+      securityHotspots: Number(values.get('new_security_hotspots')) || 0
     }
   };
 }
 
-export async function fetchAllIssues(
+async function fetchIssueSet(
   config: FolderSonarConfig,
+  onlyNewCode: boolean,
   signal?: AbortSignal
-): Promise<LoadedIssues> {
+): Promise<{ issues: SonarIssue[]; components: SonarComponent[] }> {
   const issues: SonarIssue[] = [];
-  const componentPaths = new Map<string, string>();
-  const configuredMode = await fetchInstanceMode(config, signal);
+  const components = new Map<string, SonarComponent>();
   let page = 1;
   let total = Number.POSITIVE_INFINITY;
 
@@ -506,7 +563,9 @@ export async function fetchAllIssues(
     url.searchParams.set('resolved', 'false');
     url.searchParams.set('p', String(page));
     url.searchParams.set('ps', String(PAGE_SIZE));
-
+    if (onlyNewCode) {
+      url.searchParams.set('inNewCodePeriod', 'true');
+    }
     if (config.branch?.trim()) {
       url.searchParams.set('branch', config.branch.trim());
     }
@@ -514,23 +573,130 @@ export async function fetchAllIssues(
     const payload = await requestJson<SonarIssuesResponse>(url, config.token, signal);
     total = getTotal(payload);
     issues.push(...payload.issues);
-
     for (const component of payload.components ?? []) {
-      if (component.path) {
-        componentPaths.set(component.key, component.path);
-      }
+      components.set(component.key, component);
     }
-
     if (payload.issues.length === 0) {
       break;
     }
-
     page += 1;
   }
 
-  const ruleKeys = [...new Set(issues.map(issue => issue.rule).filter(Boolean))];
+  return { issues, components: [...components.values()] };
+}
+
+async function fetchNewIssueSet(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<{ issues: SonarIssue[]; components: SonarComponent[] }> {
+  try {
+    return await fetchIssueSet(config, true, signal);
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    return { issues: [], components: [] };
+  }
+}
+
+function hotspotItems(payload: SonarHotspotsResponse): SonarHotspot[] {
+  return payload.hotspots ?? payload.issues ?? payload.items ?? [];
+}
+
+async function fetchHotspotSet(
+  config: FolderSonarConfig,
+  onlyNewCode: boolean,
+  signal?: AbortSignal
+): Promise<SonarHotspot[]> {
+  const hotspots: SonarHotspot[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  try {
+    while (hotspots.length < total) {
+      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/hotspots/search`);
+      url.searchParams.set('projectKey', config.projectKey);
+      url.searchParams.set('p', String(page));
+      url.searchParams.set('ps', String(PAGE_SIZE));
+      if (onlyNewCode) {
+        url.searchParams.set('inNewCodePeriod', 'true');
+      }
+      if (config.branch?.trim()) {
+        url.searchParams.set('branch', config.branch.trim());
+      }
+      const payload = await requestJson<SonarHotspotsResponse>(url, config.token, signal);
+      const pageItems = hotspotItems(payload);
+      hotspots.push(...pageItems);
+      total = payload.paging?.total ?? hotspots.length;
+      if (pageItems.length === 0) {
+        break;
+      }
+      page += 1;
+    }
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+  }
+
+  return hotspots;
+}
+
+export async function fetchHotspotDetail(
+  config: FolderSonarConfig,
+  hotspotKey: string,
+  signal?: AbortSignal
+): Promise<DashboardHotspotDetail> {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/hotspots/show`);
+  url.searchParams.set('hotspot', hotspotKey);
+  const payload = await requestJson<SonarHotspotDetailResponse>(
+    url,
+    config.token,
+    signal
+  );
+  const rule = payload.rule ?? {};
+  return {
+    key: payload.key ?? hotspotKey,
+    ruleKey: rule.key ?? '',
+    ruleName: rule.name ?? rule.key ?? 'Security Hotspot',
+    message: payload.message ?? '',
+    status: payload.status ?? '',
+    resolution: payload.resolution ?? '',
+    priority: payload.vulnerabilityProbability ?? '',
+    riskDescription: rule.riskDescription ?? '',
+    vulnerabilityDescription: rule.vulnerabilityDescription ?? '',
+    fixRecommendations: rule.fixRecommendations ?? ''
+  };
+}
+
+export async function fetchAllIssues(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<LoadedIssues> {
+  const componentPaths = new Map<string, string>();
+  const [
+    configuredMode,
+    overallResult,
+    newCodeResult,
+    hotspots,
+    newHotspots
+  ] = await Promise.all([
+    fetchInstanceMode(config, signal),
+    fetchIssueSet(config, false, signal),
+    fetchNewIssueSet(config, signal),
+    fetchHotspotSet(config, false, signal),
+    fetchHotspotSet(config, true, signal)
+  ]);
+  for (const component of [...overallResult.components, ...newCodeResult.components]) {
+    if (component.path) {
+      componentPaths.set(component.key, component.path);
+    }
+  }
+
+  const allIssues = [...overallResult.issues, ...newCodeResult.issues];
+  const ruleKeys = [...new Set(allIssues.map(issue => issue.rule).filter(Boolean))];
   const ruleNames = await fetchRuleNames(config, ruleKeys, signal);
-  for (const issue of issues) {
+  for (const issue of allIssues) {
     issue.ruleName = ruleNames.get(issue.rule);
   }
   const [evolution, qualityGate, summaryMetrics] = await Promise.all([
@@ -540,12 +706,16 @@ export async function fetchAllIssues(
   ]);
 
   return {
-    issues,
+    issues: overallResult.issues,
+    newIssues: newCodeResult.issues,
+    hotspots,
+    newHotspots,
     componentPaths,
-    instanceMode: inferInstanceMode(configuredMode, issues),
+    instanceMode: inferInstanceMode(configuredMode, overallResult.issues),
     evolution,
     qualityGate,
     ratings: summaryMetrics.ratings,
-    types: summaryMetrics.types
+    types: summaryMetrics.types,
+    newTypes: summaryMetrics.newTypes
   };
 }

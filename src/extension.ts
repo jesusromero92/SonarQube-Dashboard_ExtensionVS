@@ -8,7 +8,12 @@ import {
   DASHBOARD_PANEL_VIEW_TYPE,
   DashboardPanel
 } from './dashboardPanel';
-import { issueSeverityRank, publishFolderDiagnostics } from './diagnostics';
+import {
+  issueSeverityRank,
+  mapFolderHotspots,
+  mapFolderIssues,
+  publishFolderDiagnostics
+} from './diagnostics';
 import { fetchAllIssues } from './sonarClient';
 import {
   DashboardIssue,
@@ -29,12 +34,17 @@ function emptySummary(): RefreshSummary {
   return {
     configuredFolders: 0,
     published: 0,
+    newPublished: 0,
     skipped: 0,
     errors: [],
     issues: [],
+    newIssues: [],
+    hotspots: [],
+    newHotspots: [],
     severity: [],
+    newSeverity: [],
     evolution: [],
-    qualityGate: { status: 'NONE' },
+    qualityGate: { status: 'NONE', conditions: [] },
     ratings: {
       overall: {
         maintainability: 'NONE',
@@ -50,6 +60,12 @@ function emptySummary(): RefreshSummary {
       }
     },
     types: {
+      bugs: 0,
+      codeSmells: 0,
+      vulnerabilities: 0,
+      securityHotspots: 0
+    },
+    newTypes: {
       bugs: 0,
       codeSmells: 0,
       vulnerabilities: 0,
@@ -121,6 +137,15 @@ function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
     current.majorViolations += point.majorViolations;
     current.minorViolations += point.minorViolations;
     current.infoViolations += point.infoViolations;
+    current.newBugs += point.newBugs;
+    current.newCodeSmells += point.newCodeSmells;
+    current.newVulnerabilities += point.newVulnerabilities;
+    current.newSecurityHotspots += point.newSecurityHotspots;
+    current.newBlockerViolations += point.newBlockerViolations;
+    current.newCriticalViolations += point.newCriticalViolations;
+    current.newMajorViolations += point.newMajorViolations;
+    current.newMinorViolations += point.newMinorViolations;
+    current.newInfoViolations += point.newInfoViolations;
   }
   return [...byLabel.values()]
     .sort((left, right) => left.label.localeCompare(right.label))
@@ -170,15 +195,29 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
       summary.published += result.published;
       summary.skipped += result.skipped;
       summary.issues.push(...result.issues);
+      const [newIssues, hotspots, newHotspots] = await Promise.all([
+        mapFolderIssues(folder, config.projectKey, config.baseDir, loaded, loaded.newIssues),
+        mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.hotspots),
+        mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.newHotspots)
+      ]);
+      summary.newIssues.push(...newIssues);
+      summary.newPublished += newIssues.length;
+      summary.hotspots.push(...hotspots);
+      summary.newHotspots.push(...newHotspots);
       summary.evolution.push(...loaded.evolution);
       summary.types.bugs += loaded.types.bugs;
       summary.types.codeSmells += loaded.types.codeSmells;
       summary.types.vulnerabilities += loaded.types.vulnerabilities;
       summary.types.securityHotspots += loaded.types.securityHotspots;
+      summary.newTypes.bugs += loaded.newTypes.bugs;
+      summary.newTypes.codeSmells += loaded.newTypes.codeSmells;
+      summary.newTypes.vulnerabilities += loaded.newTypes.vulnerabilities;
+      summary.newTypes.securityHotspots += loaded.newTypes.securityHotspots;
       summary.qualityGate.status = worstQualityGateStatus(
         summary.qualityGate.status,
         loaded.qualityGate.status
       );
+      summary.qualityGate.conditions.push(...loaded.qualityGate.conditions);
       for (const scope of ['overall', 'newCode'] as const) {
         for (const rating of [
           'maintainability',
@@ -202,6 +241,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   }
 
   summary.severity = aggregateSeverity(summary.issues);
+  summary.newSeverity = aggregateSeverity(summary.newIssues);
   summary.evolution = aggregateEvolution(summary.evolution);
   summary.issues.sort((left, right) =>
     right.severityRank - left.severityRank ||
@@ -209,6 +249,20 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
     left.line - right.line ||
     left.ruleName.localeCompare(right.ruleName, 'es', { sensitivity: 'base' })
   );
+  summary.newIssues.sort((left, right) =>
+    right.severityRank - left.severityRank ||
+    left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||
+    left.line - right.line ||
+    left.ruleName.localeCompare(right.ruleName, 'es', { sensitivity: 'base' })
+  );
+  const hotspotRank = (priority: string) =>
+    ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[priority.toUpperCase()] ?? 0);
+  const sortHotspots = (left: typeof summary.hotspots[number], right: typeof summary.hotspots[number]) =>
+    hotspotRank(right.priority) - hotspotRank(left.priority) ||
+    left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||
+    left.line - right.line;
+  summary.hotspots.sort(sortHotspots);
+  summary.newHotspots.sort(sortHotspots);
 
   dashboardPanel?.setRefreshSummary(
     summary,

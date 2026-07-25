@@ -49,7 +49,17 @@ export interface SonarMeasuresHistoryResponse {
 export interface SonarQualityGateResponse {
   projectStatus?: {
     status?: string;
+    conditions?: SonarQualityGateCondition[];
   };
+}
+
+export interface SonarQualityGateCondition {
+  status?: string;
+  metricKey?: string;
+  comparator?: string;
+  errorThreshold?: string;
+  actualValue?: string;
+  periodIndex?: number;
 }
 
 export interface SonarCurrentMeasure {
@@ -85,6 +95,53 @@ export interface SonarIssuesResponse {
   };
   issues: SonarIssue[];
   components?: SonarComponent[];
+}
+
+export interface SonarHotspot {
+  key: string;
+  rule?: string;
+  ruleKey?: string;
+  component: string;
+  project?: string;
+  line?: number;
+  textRange?: SonarTextRange;
+  message?: string;
+  status?: string;
+  resolution?: string;
+  vulnerabilityProbability?: string;
+  securityReviewPriority?: string;
+  securitySeverity?: string;
+  priority?: string;
+}
+
+export interface SonarHotspotsResponse {
+  paging?: {
+    pageIndex: number;
+    pageSize: number;
+    total: number;
+  };
+  hotspots?: SonarHotspot[];
+  issues?: SonarHotspot[];
+  items?: SonarHotspot[];
+}
+
+export interface SonarHotspotDetailResponse {
+  key?: string;
+  message?: string;
+  component?: string;
+  project?: string;
+  line?: number;
+  textRange?: SonarTextRange;
+  status?: string;
+  resolution?: string;
+  vulnerabilityProbability?: string;
+  rule?: {
+    key?: string;
+    name?: string;
+    riskDescription?: string;
+    vulnerabilityDescription?: string;
+    fixRecommendations?: string;
+  };
 }
 
 export interface SonarProject {
@@ -136,12 +193,16 @@ export interface FolderSonarFormConfig {
 
 export interface LoadedIssues {
   issues: SonarIssue[];
+  newIssues: SonarIssue[];
+  hotspots: SonarHotspot[];
+  newHotspots: SonarHotspot[];
   componentPaths: Map<string, string>;
   instanceMode: SonarInstanceMode;
   evolution: EvolutionPoint[];
   qualityGate: QualityGateSummary;
   ratings: RatingsSummary;
   types: DefectTypeSummary;
+  newTypes: DefectTypeSummary;
 }
 
 export type DashboardSeverity = string;
@@ -150,6 +211,17 @@ export type RatingGrade = 'A' | 'B' | 'C' | 'D' | 'E' | 'NONE';
 
 export interface QualityGateSummary {
   status: QualityGateStatus;
+  conditions: QualityGateCondition[];
+}
+
+export interface QualityGateCondition {
+  status: QualityGateStatus;
+  metricKey: string;
+  comparator: string;
+  errorThreshold: string;
+  actualValue: string;
+  scope: 'overall' | 'newCode';
+  projectKey: string;
 }
 
 export interface CodeQualityRatings {
@@ -184,6 +256,32 @@ export interface DashboardIssue {
   line: number;
 }
 
+export interface DashboardHotspot {
+  key: string;
+  ruleKey: string;
+  message: string;
+  status: string;
+  resolution: string;
+  priority: string;
+  relativePath: string;
+  fileUri: string;
+  folderUri: string;
+  line: number;
+}
+
+export interface DashboardHotspotDetail {
+  key: string;
+  ruleKey: string;
+  ruleName: string;
+  message: string;
+  status: string;
+  resolution: string;
+  priority: string;
+  riskDescription: string;
+  vulnerabilityDescription: string;
+  fixRecommendations: string;
+}
+
 export interface SeverityCount {
   name: DashboardSeverity;
   count: number;
@@ -202,6 +300,15 @@ export interface EvolutionPoint {
   majorViolations: number;
   minorViolations: number;
   infoViolations: number;
+  newBugs: number;
+  newCodeSmells: number;
+  newVulnerabilities: number;
+  newSecurityHotspots: number;
+  newBlockerViolations: number;
+  newCriticalViolations: number;
+  newMajorViolations: number;
+  newMinorViolations: number;
+  newInfoViolations: number;
 }
 
 export interface PublishResult {
@@ -213,12 +320,18 @@ export interface PublishResult {
 export interface RefreshSummary {
   configuredFolders: number;
   published: number;
+  newPublished: number;
   skipped: number;
   errors: string[];
   issues: DashboardIssue[];
+  newIssues: DashboardIssue[];
+  hotspots: DashboardHotspot[];
+  newHotspots: DashboardHotspot[];
   severity: SeverityCount[];
+  newSeverity: SeverityCount[];
   evolution: EvolutionPoint[];
   qualityGate: QualityGateSummary;
   ratings: RatingsSummary;
   types: DefectTypeSummary;
+  newTypes: DefectTypeSummary;
 }

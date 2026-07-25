@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import {
+  getFolderConfig,
   getFolderFormConfig,
   saveFolderConfig,
   tokenKey
 } from './configuration';
-import { fetchVisibleProjects } from './sonarClient';
+import { fetchHotspotDetail, fetchVisibleProjects } from './sonarClient';
 import { RefreshSummary } from './types';
 
 export const DASHBOARD_PANEL_VIEW_TYPE = 'sonarQubeDashboard.panel';
@@ -63,18 +64,24 @@ interface WebviewMessage {
   fileUri?: string;
   line?: number;
   page?: DashboardPage;
+  hotspotKey?: string;
 }
 
 function emptySummary(): RefreshSummary {
   return {
     configuredFolders: 0,
     published: 0,
+    newPublished: 0,
     skipped: 0,
     errors: [],
     issues: [],
+    newIssues: [],
+    hotspots: [],
+    newHotspots: [],
     severity: [],
+    newSeverity: [],
     evolution: [],
-    qualityGate: { status: 'NONE' },
+    qualityGate: { status: 'NONE', conditions: [] },
     ratings: {
       overall: {
         maintainability: 'NONE',
@@ -90,6 +97,12 @@ function emptySummary(): RefreshSummary {
       }
     },
     types: {
+      bugs: 0,
+      codeSmells: 0,
+      vulnerabilities: 0,
+      securityHotspots: 0
+    },
+    newTypes: {
       bugs: 0,
       codeSmells: 0,
       vulnerabilities: 0,
@@ -203,6 +216,11 @@ export class DashboardPanel {
     await this.refreshFromPanel();
   }
 
+  async showQualityGate(): Promise<void> {
+    await this.show('data');
+    this.postMessage({ type: 'showQualityGate' });
+  }
+
   private navigate(page: DashboardPage): void {
     this.currentPage = page;
     this.postMessage({ type: 'navigate', page });
@@ -272,6 +290,9 @@ export class DashboardPanel {
         if (message.page) {
           await this.showPage(message.page);
         }
+        break;
+      case 'loadHotspotDetail':
+        await this.loadHotspotDetail(message);
         break;
       case 'loadProjects':
         await this.loadProjects(message);
@@ -483,6 +504,46 @@ export class DashboardPanel {
     }
   }
 
+  private async loadHotspotDetail(message: WebviewMessage): Promise<void> {
+    const hotspotKey = message.hotspotKey?.trim();
+    const folderUri = message.folderUri?.trim();
+    if (!hotspotKey || !folderUri) {
+      this.postMessage({
+        type: 'hotspotDetailError',
+        message: 'No se pudo identificar el Security Hotspot.'
+      });
+      return;
+    }
+    const folder = vscode.workspace.workspaceFolders?.find(
+      item => item.uri.toString() === folderUri
+    );
+    if (!folder) {
+      this.postMessage({
+        type: 'hotspotDetailError',
+        message: 'La carpeta del Security Hotspot ya no está abierta.'
+      });
+      return;
+    }
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      this.postMessage({
+        type: 'hotspotDetailError',
+        message: 'La carpeta no tiene una conexión válida con SonarQube.'
+      });
+      return;
+    }
+    this.postMessage({ type: 'hotspotDetailLoading', hotspotKey });
+    try {
+      const detail = await fetchHotspotDetail(config, hotspotKey);
+      this.postMessage({ type: 'hotspotDetail', detail });
+    } catch (error) {
+      this.postMessage({
+        type: 'hotspotDetailError',
+        message: `No se pudo cargar el detalle: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
   private async openIssue(message: WebviewMessage): Promise<void> {
     if (!message.fileUri) {
       return;
@@ -566,6 +627,23 @@ export class DashboardPanel {
       --dashboard-severity-minor: ${DASHBOARD_COLORS.severities.MINOR};
       --dashboard-severity-low: ${DASHBOARD_COLORS.severities.LOW};
       --dashboard-severity-info: ${DASHBOARD_COLORS.severities.INFO};
+      --dashboard-quality-gate-ok: ${DASHBOARD_COLORS.qualityGate.OK};
+      --dashboard-quality-gate-warn: ${DASHBOARD_COLORS.qualityGate.WARN};
+      --dashboard-quality-gate-error: ${DASHBOARD_COLORS.qualityGate.ERROR};
+      --dashboard-rating-a: ${DASHBOARD_COLORS.ratings.A.foreground};
+      --dashboard-rating-a-bg: ${DASHBOARD_COLORS.ratings.A.background};
+      --dashboard-rating-b: ${DASHBOARD_COLORS.ratings.B.foreground};
+      --dashboard-rating-b-bg: ${DASHBOARD_COLORS.ratings.B.background};
+      --dashboard-rating-c: ${DASHBOARD_COLORS.ratings.C.foreground};
+      --dashboard-rating-c-bg: ${DASHBOARD_COLORS.ratings.C.background};
+      --dashboard-rating-d: ${DASHBOARD_COLORS.ratings.D.foreground};
+      --dashboard-rating-d-bg: ${DASHBOARD_COLORS.ratings.D.background};
+      --dashboard-rating-e: ${DASHBOARD_COLORS.ratings.E.foreground};
+      --dashboard-rating-e-bg: ${DASHBOARD_COLORS.ratings.E.background};
+    }
+    html {
+      overflow-y: scroll;
+      scrollbar-gutter: stable;
     }
     * { box-sizing: border-box; }
     body {
@@ -792,6 +870,39 @@ export class DashboardPanel {
     }
     .metric-delta.increase { color: var(--vscode-testing-iconFailed); }
     .metric-delta.decrease { color: var(--vscode-testing-iconPassed); }
+    .dashboard-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .segmented {
+      display: inline-flex;
+      padding: 2px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editor-background);
+    }
+    .segmented button {
+      min-height: 28px;
+      padding: 4px 12px;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+    }
+    .segmented button.active {
+      color: var(--vscode-foreground);
+      background: var(--vscode-list-activeSelectionBackground);
+    }
+    .scope-control { margin-left: auto; }
+    .quality-gate-button {
+      min-height: 32px;
+      padding: 5px 11px;
+    }
+    .quality-gate-button.ok { background: var(--dashboard-quality-gate-ok); }
+    .quality-gate-button.warn { color: #111827; background: var(--dashboard-quality-gate-warn); }
+    .quality-gate-button.error { background: var(--dashboard-quality-gate-error); }
     .table-toolbar {
       display: flex;
       align-items: center;
@@ -820,6 +931,28 @@ export class DashboardPanel {
       font-size: 12px;
       font-weight: 600;
     }
+    .sort-button {
+      display: inline-flex;
+      width: 100%;
+      align-items: center;
+      gap: 5px;
+      padding: 0;
+      border: 0;
+      color: inherit;
+      background: transparent;
+      text-align: inherit;
+    }
+    .sort-button:hover {
+      color: var(--vscode-foreground);
+      background: transparent;
+    }
+    .sort-indicator {
+      width: 10px;
+      color: var(--vscode-foreground);
+      font-size: 10px;
+      line-height: 1;
+    }
+    .count-cell .sort-button { justify-content: flex-end; }
     tbody tr { cursor: pointer; }
     tbody tr:hover { background: var(--vscode-list-hoverBackground); }
     .badge {
@@ -840,6 +973,26 @@ export class DashboardPanel {
     .badge.minor { color: #111827; background: var(--dashboard-severity-minor); }
     .badge.low { color: #111827; background: var(--dashboard-severity-low); }
     .badge.info { background: var(--dashboard-severity-info); }
+    .hotspot-priority {
+      display: inline-flex;
+      min-width: 66px;
+      justify-content: center;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .hotspot-priority.high { color: #fff; background: var(--dashboard-type-security-hotspot); }
+    .hotspot-priority.medium { color: #111827; background: var(--dashboard-severity-major); }
+    .hotspot-priority.low { color: #111827; background: var(--dashboard-severity-minor); }
+    .hotspot-status { color: var(--vscode-descriptionForeground); }
+    .pending-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .pending-filter input { width: auto; margin: 0; }
     .path { min-width: 220px; max-width: 370px; }
     .file-name {
       display: block;
@@ -890,15 +1043,22 @@ export class DashboardPanel {
     }
     .rule-dialog {
       width: min(620px, calc(100vw - 48px));
+      max-height: calc(100vh - 48px);
       padding: 0;
+      overflow: hidden;
       border: 1px solid var(--vscode-panel-border);
       color: var(--vscode-foreground);
       background: var(--vscode-editorWidget-background);
       box-shadow: 0 8px 28px var(--vscode-widget-shadow);
     }
+    .rule-dialog[open] {
+      display: flex;
+      flex-direction: column;
+    }
     .rule-dialog::backdrop { background: rgba(0, 0, 0, .55); }
     .rule-dialog-header {
       display: flex;
+      flex: 0 0 auto;
       align-items: center;
       gap: 16px;
       padding: 14px 16px;
@@ -915,8 +1075,104 @@ export class DashboardPanel {
     }
     .rule-dialog-body {
       padding: 18px 16px 20px;
+      overflow-y: auto;
       line-height: 1.55;
       white-space: pre-wrap;
+    }
+    .dialog-scroll-body {
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    .dialog-scroll-body .table-wrap {
+      max-height: none;
+      overflow: visible;
+    }
+    .wide-dialog { width: min(820px, calc(100vw - 48px)); }
+    .dialog-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .dialog-section:last-child { border-bottom: 0; }
+    .dialog-section h3 { margin: 0 0 9px; font-size: 13px; }
+    .dialog-section p { margin: 0; color: var(--vscode-descriptionForeground); white-space: pre-wrap; }
+    .dialog-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .gate-condition-table { table-layout: fixed; }
+    .gate-condition-table th { position: static; }
+    .gate-condition-table .condition-metric { width: 34%; }
+    .gate-condition-table .condition-scope { width: 100px; }
+    .gate-condition-table .condition-status { width: 86px; }
+    .condition-state {
+      display: inline-flex;
+      min-width: 58px;
+      justify-content: center;
+      padding: 2px 6px;
+      border-radius: 10px;
+      color: #fff;
+      background: var(--vscode-disabledForeground);
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .condition-state.ok { background: var(--dashboard-quality-gate-ok); }
+    .condition-state.warn { color: #111827; background: var(--dashboard-quality-gate-warn); }
+    .condition-state.error { background: var(--dashboard-quality-gate-error); }
+    .ratings-comparison {
+      display: grid;
+      grid-template-columns: minmax(130px, 1fr) 80px 90px;
+      gap: 7px 10px;
+      align-items: center;
+    }
+    .ratings-comparison strong { text-align: center; }
+    .rating-badge {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      margin: 0 auto;
+      place-items: center;
+      border: 1px dashed var(--vscode-panel-border);
+      border-radius: 2px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .rating-badge.a {
+      color: var(--dashboard-rating-a);
+      background: var(--dashboard-rating-a-bg);
+      border-color: transparent;
+    }
+    .rating-badge.b {
+      color: var(--dashboard-rating-b);
+      background: var(--dashboard-rating-b-bg);
+      border-color: transparent;
+    }
+    .rating-badge.c {
+      color: var(--dashboard-rating-c);
+      background: var(--dashboard-rating-c-bg);
+      border-color: transparent;
+    }
+    .rating-badge.d {
+      color: var(--dashboard-rating-d);
+      background: var(--dashboard-rating-d-bg);
+      border-color: transparent;
+    }
+    .rating-badge.e {
+      color: var(--dashboard-rating-e);
+      background: var(--dashboard-rating-e-bg);
+      border-color: transparent;
+    }
+    .dialog-actions {
+      display: flex;
+      flex: 0 0 auto;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--vscode-panel-border);
     }
     .col-severity { width: 92px; }
     .col-type { width: 58px; text-align: center; }
@@ -1039,7 +1295,13 @@ export class DashboardPanel {
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-    .chart-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 12px;
+      margin-top: 12px;
+    }
     .chart-legend button {
       display: inline-flex;
       align-items: center;
@@ -1059,6 +1321,8 @@ export class DashboardPanel {
       .connection-row, .project-row, .advanced-grid, .rank-grid, .evolution-grid { grid-template-columns: 1fr; }
       .table-toolbar { flex-wrap: wrap; }
       .table-toolbar input { width: 100%; margin-left: 0; }
+      .dashboard-controls { flex-wrap: wrap; }
+      .scope-control { margin-left: 0; }
     }
   </style>
 </head>
@@ -1090,6 +1354,23 @@ export class DashboardPanel {
         </section>
 
         <section id="results" hidden>
+          <div class="dashboard-controls">
+            <nav class="segmented" aria-label="Vista de datos">
+              <button id="issuesViewTab" class="active" type="button">Defectos</button>
+              <button id="hotspotsViewTab" type="button">
+                Security Hotspots <span id="hotspotsTabCount">0</span>
+              </button>
+            </nav>
+            <nav class="segmented scope-control" aria-label="Ámbito del análisis">
+              <button id="overallScope" class="active" type="button">Overall</button>
+              <button id="newCodeScope" type="button">New Code</button>
+            </nav>
+            <button id="qualityGateButton" class="quality-gate-button secondary" type="button">
+              Quality Gate
+            </button>
+          </div>
+
+          <div id="issuesView">
           <div id="metricsSummary" class="metrics-summary" aria-label="Resumen de defectos"></div>
 
           <section class="panel">
@@ -1124,9 +1405,21 @@ export class DashboardPanel {
                 <table aria-label="Top Archivos">
                   <thead>
                     <tr>
-                      <th>Archivo</th>
-                      <th class="severity-cell">Máxima</th>
-                      <th class="count-cell">Defectos</th>
+                      <th data-sort-header="files" data-sort-key="key">
+                        <button class="sort-button" type="button">
+                          Archivo <span class="sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
+                      <th class="severity-cell" data-sort-header="files" data-sort-key="severityRank">
+                        <button class="sort-button" type="button">
+                          Severidad <span class="sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
+                      <th class="count-cell" data-sort-header="files" data-sort-key="count">
+                        <button class="sort-button" type="button">
+                          Defectos <span class="sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody id="filesBody"></tbody>
@@ -1144,9 +1437,21 @@ export class DashboardPanel {
                 <table aria-label="Top Reglas">
                   <thead>
                     <tr>
-                      <th>Regla</th>
-                      <th class="severity-cell">Máxima</th>
-                      <th class="count-cell">Defectos</th>
+                      <th data-sort-header="rules" data-sort-key="key">
+                        <button class="sort-button" type="button">
+                          Regla <span class="sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
+                      <th class="severity-cell" data-sort-header="rules" data-sort-key="severityRank">
+                        <button class="sort-button" type="button">
+                          Severidad <span class="sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
+                      <th class="count-cell" data-sort-header="rules" data-sort-key="count">
+                        <button class="sort-button" type="button">
+                          Defectos <span class="sort-indicator" aria-hidden="true"></span>
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody id="rulesBody"></tbody>
@@ -1178,6 +1483,33 @@ export class DashboardPanel {
                 <div id="severityChart" class="chart-stage"></div>
                 <div id="severityLegend" class="chart-legend"></div>
               </section>
+            </div>
+          </section>
+          </div>
+
+          <section id="hotspotsView" class="panel" hidden>
+            <div class="table-toolbar">
+              <h2>Security Hotspots</h2>
+              <span id="hotspotsCount" class="muted">0 hotspots</span>
+              <label class="pending-filter">
+                <input id="pendingHotspotsOnly" type="checkbox">
+                Solo pendientes
+              </label>
+              <input id="hotspotFilter" type="search" placeholder="Filtrar por archivo, regla o descripción">
+            </div>
+            <div class="table-wrap">
+              <table class="issues-table" aria-label="Security Hotspots">
+                <thead>
+                  <tr>
+                    <th style="width:90px">Prioridad</th>
+                    <th style="width:120px">Estado</th>
+                    <th class="col-file">Archivo</th>
+                    <th>Regla o descripción</th>
+                  </tr>
+                </thead>
+                <tbody id="hotspotsBody"></tbody>
+              </table>
+              <div id="noHotspots" class="no-results">No se han encontrado Security Hotspots.</div>
             </div>
           </section>
         </section>
@@ -1269,6 +1601,81 @@ export class DashboardPanel {
     <div id="ruleDialogDescription" class="rule-dialog-body"></div>
   </dialog>
 
+  <dialog id="qualityGateDialog" class="rule-dialog wide-dialog" aria-labelledby="qualityGateDialogTitle">
+    <div class="rule-dialog-header">
+      <h2 id="qualityGateDialogTitle">Detalle del Quality Gate</h2>
+      <button id="qualityGateDialogClose" class="rule-dialog-close secondary" type="button" aria-label="Cerrar">×</button>
+    </div>
+    <div class="dialog-scroll-body">
+      <div class="dialog-section">
+        <div class="dialog-meta">
+          <strong>Estado: <span id="qualityGateDialogStatus">NO DISPONIBLE</span></strong>
+          <span id="qualityGateConditionCount">0 condiciones</span>
+        </div>
+      </div>
+      <div class="dialog-section">
+        <h3>Condiciones</h3>
+        <div class="table-wrap">
+          <table class="gate-condition-table" aria-label="Condiciones del Quality Gate">
+            <thead>
+              <tr>
+                <th class="condition-metric">Métrica</th>
+                <th>Valor actual</th>
+                <th>Límite</th>
+                <th class="condition-scope">Ámbito</th>
+                <th class="condition-status">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="qualityGateConditions"></tbody>
+          </table>
+          <div id="noQualityGateConditions" class="no-results">No hay condiciones disponibles.</div>
+        </div>
+      </div>
+      <div class="dialog-section">
+        <h3>Ratings y Security Hotspots</h3>
+        <div id="qualityGateRatings" class="ratings-comparison"></div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button id="qualityGateDialogFooterClose" type="button">Cerrar</button>
+    </div>
+  </dialog>
+
+  <dialog id="hotspotDialog" class="rule-dialog wide-dialog" aria-labelledby="hotspotDialogTitle">
+    <div class="rule-dialog-header">
+      <h2 id="hotspotDialogTitle">Security Hotspot</h2>
+      <button id="hotspotDialogClose" class="rule-dialog-close secondary" type="button" aria-label="Cerrar">×</button>
+    </div>
+    <div class="dialog-scroll-body">
+      <div id="hotspotDialogLoading" class="dialog-section">Cargando detalle…</div>
+      <div id="hotspotDialogContent" hidden>
+        <div class="dialog-section">
+          <div id="hotspotDialogMeta" class="dialog-meta"></div>
+        </div>
+        <div class="dialog-section">
+          <h3>Descripción</h3>
+          <p id="hotspotDialogMessage"></p>
+        </div>
+        <div class="dialog-section">
+          <h3>¿Cuál es el riesgo?</h3>
+          <p id="hotspotRisk"></p>
+        </div>
+        <div class="dialog-section">
+          <h3>Vulnerabilidad</h3>
+          <p id="hotspotVulnerability"></p>
+        </div>
+        <div class="dialog-section">
+          <h3>Recomendaciones</h3>
+          <p id="hotspotRecommendations"></p>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button id="openHotspotFile" class="secondary" type="button">Abrir archivo</button>
+      <button id="closeHotspotDialog" type="button">Cerrar</button>
+    </div>
+  </dialog>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const dashboardColors = ${JSON.stringify(DASHBOARD_COLORS)};
@@ -1303,6 +1710,14 @@ export class DashboardPanel {
       clear: document.getElementById('clear'),
       configState: document.getElementById('configState'),
       results: document.getElementById('results'),
+      issuesViewTab: document.getElementById('issuesViewTab'),
+      hotspotsViewTab: document.getElementById('hotspotsViewTab'),
+      hotspotsTabCount: document.getElementById('hotspotsTabCount'),
+      overallScope: document.getElementById('overallScope'),
+      newCodeScope: document.getElementById('newCodeScope'),
+      qualityGateButton: document.getElementById('qualityGateButton'),
+      issuesView: document.getElementById('issuesView'),
+      hotspotsView: document.getElementById('hotspotsView'),
       metricsSummary: document.getElementById('metricsSummary'),
       tableCount: document.getElementById('tableCount'),
       filter: document.getElementById('filter'),
@@ -1319,10 +1734,35 @@ export class DashboardPanel {
       typeLegend: document.getElementById('typeLegend'),
       severityChart: document.getElementById('severityChart'),
       severityLegend: document.getElementById('severityLegend'),
+      hotspotsCount: document.getElementById('hotspotsCount'),
+      pendingHotspotsOnly: document.getElementById('pendingHotspotsOnly'),
+      hotspotFilter: document.getElementById('hotspotFilter'),
+      hotspotsBody: document.getElementById('hotspotsBody'),
+      noHotspots: document.getElementById('noHotspots'),
       ruleDialog: document.getElementById('ruleDialog'),
       ruleDialogTitle: document.getElementById('ruleDialogTitle'),
       ruleDialogDescription: document.getElementById('ruleDialogDescription'),
-      ruleDialogClose: document.getElementById('ruleDialogClose')
+      ruleDialogClose: document.getElementById('ruleDialogClose'),
+      qualityGateDialog: document.getElementById('qualityGateDialog'),
+      qualityGateDialogClose: document.getElementById('qualityGateDialogClose'),
+      qualityGateDialogFooterClose: document.getElementById('qualityGateDialogFooterClose'),
+      qualityGateDialogStatus: document.getElementById('qualityGateDialogStatus'),
+      qualityGateConditionCount: document.getElementById('qualityGateConditionCount'),
+      qualityGateConditions: document.getElementById('qualityGateConditions'),
+      noQualityGateConditions: document.getElementById('noQualityGateConditions'),
+      qualityGateRatings: document.getElementById('qualityGateRatings'),
+      hotspotDialog: document.getElementById('hotspotDialog'),
+      hotspotDialogTitle: document.getElementById('hotspotDialogTitle'),
+      hotspotDialogClose: document.getElementById('hotspotDialogClose'),
+      closeHotspotDialog: document.getElementById('closeHotspotDialog'),
+      hotspotDialogLoading: document.getElementById('hotspotDialogLoading'),
+      hotspotDialogContent: document.getElementById('hotspotDialogContent'),
+      hotspotDialogMeta: document.getElementById('hotspotDialogMeta'),
+      hotspotDialogMessage: document.getElementById('hotspotDialogMessage'),
+      hotspotRisk: document.getElementById('hotspotRisk'),
+      hotspotVulnerability: document.getElementById('hotspotVulnerability'),
+      hotspotRecommendations: document.getElementById('hotspotRecommendations'),
+      openHotspotFile: document.getElementById('openHotspotFile')
     };
 
     let currentPage = 'data';
@@ -1330,6 +1770,14 @@ export class DashboardPanel {
     let currentSummary = { published: 0, issues: [], severity: [], evolution: [] };
     let summaryVisible = false;
     let currentIssues = [];
+    let currentHotspots = [];
+    let currentScope = 'overall';
+    let currentDataView = 'issues';
+    const topSort = {
+      files: { key: 'count', direction: 'desc' },
+      rules: { key: 'count', direction: 'desc' }
+    };
+    let selectedHotspot = null;
     let loadedProjects = [];
     let selectedProjectKey = '';
     let currentFolderUri = '';
@@ -1582,27 +2030,54 @@ export class DashboardPanel {
       return evolution.length > 1 ? evolution[evolution.length - 2] : null;
     }
 
+    function scopeData(summary) {
+      const isNewCode = currentScope === 'newCode';
+      return {
+        published: isNewCode ? summary.newPublished : summary.published,
+        issues: isNewCode ? summary.newIssues : summary.issues,
+        hotspots: isNewCode ? summary.newHotspots : summary.hotspots,
+        severity: isNewCode ? summary.newSeverity : summary.severity,
+        types: isNewCode ? summary.newTypes : summary.types
+      };
+    }
+
     function previousIssueTotal(point) {
       if (!point) return null;
-      return (point.bugs || 0) + (point.codeSmells || 0) + (point.vulnerabilities || 0);
+      if (currentScope === 'newCode') {
+        return (point.newBugs || 0) +
+          (point.newCodeSmells || 0) +
+          (point.newVulnerabilities || 0);
+      }
+      return (point.bugs || 0) +
+        (point.codeSmells || 0) +
+        (point.vulnerabilities || 0);
     }
 
     function previousSeverityValue(point, severity) {
       if (!point) return null;
-      const keys = {
+      const overallKeys = {
         BLOCKER: 'blockerViolations',
         CRITICAL: 'criticalViolations',
         MAJOR: 'majorViolations',
         MINOR: 'minorViolations',
         INFO: 'infoViolations'
       };
+      const newCodeKeys = {
+        BLOCKER: 'newBlockerViolations',
+        CRITICAL: 'newCriticalViolations',
+        MAJOR: 'newMajorViolations',
+        MINOR: 'newMinorViolations',
+        INFO: 'newInfoViolations'
+      };
+      const keys = currentScope === 'newCode' ? newCodeKeys : overallKeys;
       const key = keys[String(severity || '').toUpperCase()];
       return key ? Number(point[key] || 0) : null;
     }
 
     function renderMetricsSummary(summary) {
+      const scoped = scopeData(summary);
       const previous = previousAnalysis(summary);
-      const total = Number(summary.published || 0);
+      const total = Number(scoped.published || 0);
       const previousTotal = previousIssueTotal(previous);
       elements.metricsSummary.textContent = '';
       elements.metricsSummary.appendChild(
@@ -1614,7 +2089,7 @@ export class DashboardPanel {
         )
       );
 
-      for (const severity of summary.severity || []) {
+      for (const severity of scoped.severity || []) {
         const count = Number(severity.count || 0);
         const previousCount = previousSeverityValue(previous, severity.name);
         elements.metricsSummary.appendChild(
@@ -1771,6 +2246,243 @@ export class DashboardPanel {
       }
     }
 
+    function hotspotDisplayStatus(hotspot) {
+      const resolution = String(hotspot.resolution || '').toUpperCase();
+      if (resolution) return resolution.replace(/_/g, ' ');
+      const status = String(hotspot.status || 'TO_REVIEW').toUpperCase();
+      return status.replace(/_/g, ' ');
+    }
+
+    function isPendingHotspot(hotspot) {
+      const status = String(hotspot.status || '').toUpperCase();
+      const resolution = String(hotspot.resolution || '').toUpperCase();
+      return status === 'TO_REVIEW' ||
+        resolution === 'ACKNOWLEDGED' ||
+        (!resolution && status !== 'REVIEWED');
+    }
+
+    function showHotspotDialog(hotspot) {
+      selectedHotspot = hotspot;
+      elements.hotspotDialogTitle.textContent = hotspot.message || hotspot.ruleKey || 'Security Hotspot';
+      elements.hotspotDialogLoading.textContent = 'Cargando detalle…';
+      elements.hotspotDialogLoading.hidden = false;
+      elements.hotspotDialogContent.hidden = true;
+      elements.openHotspotFile.disabled = false;
+      if (!elements.hotspotDialog.open) {
+        elements.hotspotDialog.showModal();
+      }
+      vscode.postMessage({
+        type: 'loadHotspotDetail',
+        hotspotKey: hotspot.key,
+        folderUri: hotspot.folderUri
+      });
+    }
+
+    function renderHotspots() {
+      const query = elements.hotspotFilter.value.trim().toLowerCase();
+      const pendingOnly = elements.pendingHotspotsOnly.checked;
+      const filtered = currentHotspots.filter(hotspot => {
+        if (pendingOnly && !isPendingHotspot(hotspot)) return false;
+        if (!query) return true;
+        return [
+          hotspot.relativePath,
+          hotspot.ruleKey,
+          hotspot.message,
+          hotspot.priority,
+          hotspot.status,
+          hotspot.resolution
+        ].join(' ').toLowerCase().includes(query);
+      });
+
+      elements.hotspotsBody.textContent = '';
+      elements.hotspotsCount.textContent = String(filtered.length) +
+        (filtered.length === 1 ? ' hotspot' : ' hotspots');
+      elements.noHotspots.hidden = filtered.length > 0;
+      elements.noHotspots.textContent = currentHotspots.length
+        ? 'No hay Security Hotspots que coincidan con el filtro.'
+        : 'No se han encontrado Security Hotspots en este ámbito.';
+
+      for (const hotspot of filtered) {
+        const row = document.createElement('tr');
+        row.tabIndex = 0;
+        row.title = 'Ver detalle del Security Hotspot';
+        const open = () => showHotspotDialog(hotspot);
+        row.addEventListener('click', open);
+        row.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            open();
+          }
+        });
+
+        const priorityCell = document.createElement('td');
+        const priority = document.createElement('span');
+        const priorityName = String(hotspot.priority || 'UNKNOWN').toUpperCase();
+        priority.className = 'hotspot-priority ' + priorityName.toLowerCase();
+        priority.textContent = priorityName;
+        priorityCell.appendChild(priority);
+        row.appendChild(priorityCell);
+        row.appendChild(createCell(hotspotDisplayStatus(hotspot), 'hotspot-status'));
+        row.appendChild(fileCellUtils.create(hotspot.relativePath, hotspot.line));
+        row.appendChild(createCell(hotspot.message || hotspot.ruleKey || 'Security Hotspot'));
+        elements.hotspotsBody.appendChild(row);
+      }
+    }
+
+    function renderHotspotDetail(detail) {
+      const plainText = value => {
+        if (!value) return '';
+        return new DOMParser()
+          .parseFromString(String(value), 'text/html')
+          .body.textContent
+          ?.trim() || '';
+      };
+      elements.hotspotDialogLoading.hidden = true;
+      elements.hotspotDialogContent.hidden = false;
+      elements.hotspotDialogTitle.textContent = detail.ruleName || detail.ruleKey || 'Security Hotspot';
+      elements.hotspotDialogMeta.textContent = '';
+      for (const text of [
+        'Prioridad: ' + (detail.priority || selectedHotspot?.priority || 'No disponible'),
+        'Estado: ' + hotspotDisplayStatus(detail),
+        detail.ruleKey ? 'Regla: ' + detail.ruleKey : ''
+      ].filter(Boolean)) {
+        const item = document.createElement('span');
+        item.textContent = text;
+        elements.hotspotDialogMeta.appendChild(item);
+      }
+      elements.hotspotDialogMessage.textContent =
+        plainText(detail.message || selectedHotspot?.message) || 'No hay descripción disponible.';
+      elements.hotspotRisk.textContent =
+        plainText(detail.riskDescription) || 'SonarQube no ha proporcionado la descripción del riesgo.';
+      elements.hotspotVulnerability.textContent =
+        plainText(detail.vulnerabilityDescription) || 'SonarQube no ha proporcionado información adicional.';
+      elements.hotspotRecommendations.textContent =
+        plainText(detail.fixRecommendations) || 'SonarQube no ha proporcionado recomendaciones.';
+    }
+
+    const qualityMetricNames = {
+      new_coverage: 'Cobertura en New Code',
+      coverage: 'Cobertura',
+      new_duplicated_lines_density: 'Duplicación en New Code',
+      duplicated_lines_density: 'Duplicación',
+      new_reliability_rating: 'Reliability Rating en New Code',
+      reliability_rating: 'Reliability Rating',
+      new_security_rating: 'Security Rating en New Code',
+      security_rating: 'Security Rating',
+      new_software_quality_reliability_rating: 'Reliability Rating en New Code',
+      software_quality_reliability_rating: 'Reliability Rating',
+      new_software_quality_security_rating: 'Security Rating en New Code',
+      software_quality_security_rating: 'Security Rating',
+      new_software_quality_maintainability_rating: 'Maintainability Rating en New Code',
+      software_quality_maintainability_rating: 'Maintainability Rating',
+      new_maintainability_rating: 'Maintainability Rating en New Code',
+      sqale_rating: 'Maintainability Rating',
+      new_security_review_rating: 'Security Review Rating en New Code',
+      security_review_rating: 'Security Review Rating',
+      new_security_hotspots_reviewed: 'Hotspots revisados en New Code',
+      security_hotspots_reviewed: 'Hotspots revisados',
+      new_violations: 'Issues en New Code',
+      violations: 'Issues'
+    };
+
+    function conditionLimit(condition) {
+      const comparator = {
+        GT: '>',
+        LT: '<',
+        GTE: '≥',
+        LTE: '≤',
+        EQ: '=',
+        NE: '≠'
+      }[condition.comparator] || condition.comparator || '';
+      return (comparator + ' ' + (condition.errorThreshold || '—')).trim();
+    }
+
+    function renderQualityGateButton() {
+      const gate = currentSummary.qualityGate || {};
+      const status = String(gate.status || 'NONE').toUpperCase();
+      const labels = { OK: 'Aprobado', WARN: 'Aviso', ERROR: 'Fallido', NONE: 'No disponible' };
+      elements.qualityGateButton.className =
+        'quality-gate-button ' + (status === 'NONE' ? 'secondary' : status.toLowerCase());
+      elements.qualityGateButton.textContent = 'Quality Gate · ' + labels[status];
+    }
+
+    function appendRatingComparison(label, overall, newCode, useRatingBadge = true) {
+      const name = document.createElement('span');
+      name.textContent = label;
+      const createValue = value => {
+        const normalized = ['A', 'B', 'C', 'D', 'E'].includes(value) ? value : 'NONE';
+        const element = document.createElement('strong');
+        element.textContent = normalized === 'NONE' && useRatingBadge ? '—' : value;
+        if (useRatingBadge) {
+          element.className = 'rating-badge ' + normalized.toLowerCase();
+          element.title = normalized === 'NONE' ? 'Rating no disponible' : 'Rating ' + normalized;
+        }
+        return element;
+      };
+      const overallValue = createValue(overall);
+      const newCodeValue = createValue(newCode);
+      elements.qualityGateRatings.append(name, overallValue, newCodeValue);
+    }
+
+    function showQualityGateDialog() {
+      const gate = currentSummary.qualityGate || {};
+      const conditions = [...(gate.conditions || [])].sort((left, right) => {
+        const rank = { ERROR: 3, WARN: 2, OK: 1, NONE: 0 };
+        return (rank[right.status] || 0) - (rank[left.status] || 0);
+      });
+      const failedConditions = conditions.filter(condition => condition.status === 'ERROR').length;
+      elements.qualityGateDialogStatus.textContent = gate.status || 'NO DISPONIBLE';
+      elements.qualityGateConditionCount.textContent =
+        String(failedConditions) +
+        (failedConditions === 1 ? ' condición fallida' : ' condiciones fallidas') +
+        ' · ' +
+        String(conditions.length) +
+        (conditions.length === 1 ? ' configurada' : ' configuradas');
+      elements.qualityGateConditions.textContent = '';
+      elements.noQualityGateConditions.hidden = conditions.length > 0;
+
+      for (const condition of conditions) {
+        const row = document.createElement('tr');
+        row.appendChild(createCell(
+          qualityMetricNames[condition.metricKey] || condition.metricKey || 'Métrica'
+        ));
+        row.appendChild(createCell(condition.actualValue || '—'));
+        row.appendChild(createCell(conditionLimit(condition)));
+        row.appendChild(createCell(condition.scope === 'newCode' ? 'New Code' : 'Overall'));
+        const statusCell = document.createElement('td');
+        const state = document.createElement('span');
+        state.className = 'condition-state ' + String(condition.status || 'NONE').toLowerCase();
+        state.textContent = condition.status || 'NONE';
+        statusCell.appendChild(state);
+        row.appendChild(statusCell);
+        elements.qualityGateConditions.appendChild(row);
+      }
+
+      const ratings = currentSummary.ratings || {};
+      const overall = ratings.overall || {};
+      const newCode = ratings.newCode || {};
+      elements.qualityGateRatings.textContent = '';
+      const blank = document.createElement('span');
+      const overallHeading = document.createElement('strong');
+      overallHeading.textContent = 'Overall';
+      const newCodeHeading = document.createElement('strong');
+      newCodeHeading.textContent = 'New Code';
+      elements.qualityGateRatings.append(blank, overallHeading, newCodeHeading);
+      appendRatingComparison('Maintainability', overall.maintainability, newCode.maintainability);
+      appendRatingComparison('Reliability', overall.reliability, newCode.reliability);
+      appendRatingComparison('Security', overall.security, newCode.security);
+      appendRatingComparison('Security Review', overall.securityReview, newCode.securityReview);
+      appendRatingComparison(
+        'Security Hotspots',
+        String((currentSummary.types || {}).securityHotspots || 0),
+        String((currentSummary.newTypes || {}).securityHotspots || 0),
+        false
+      );
+      if (!elements.qualityGateDialog.open) {
+        elements.qualityGateDialog.showModal();
+      }
+    }
+
     function aggregateBy(keyName) {
       const groups = new Map();
       for (const issue of currentIssues) {
@@ -1800,9 +2512,45 @@ export class DashboardPanel {
       );
     }
 
+    function sortTopRows(rows, sort) {
+      const direction = sort.direction === 'asc' ? 1 : -1;
+      return [...rows].sort((left, right) => {
+        let comparison;
+        if (sort.key === 'key') {
+          comparison = String(left.key).localeCompare(
+            String(right.key),
+            'es',
+            { sensitivity: 'base' }
+          );
+        } else {
+          comparison = Number(left[sort.key] || 0) - Number(right[sort.key] || 0);
+        }
+        return comparison * direction ||
+          right.count - left.count ||
+          right.severityRank - left.severityRank ||
+          String(left.key).localeCompare(String(right.key), 'es', { sensitivity: 'base' });
+      });
+    }
+
+    function updateTopSortHeaders(tableName) {
+      const sort = topSort[tableName];
+      for (const header of document.querySelectorAll('[data-sort-header="' + tableName + '"]')) {
+        const active = header.dataset.sortKey === sort.key;
+        header.setAttribute(
+          'aria-sort',
+          active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
+        );
+        const indicator = header.querySelector('.sort-indicator');
+        if (indicator) {
+          indicator.textContent = active ? (sort.direction === 'asc' ? '▲' : '▼') : '';
+        }
+      }
+    }
+
     function renderTopFiles() {
-      const allRows = aggregateBy('relativePath');
+      const allRows = sortTopRows(aggregateBy('relativePath'), topSort.files);
       const rows = allRows.slice(0, 15);
+      updateTopSortHeaders('files');
       elements.filesBody.textContent = '';
       elements.filesCount.textContent = allRows.length > rows.length
         ? String(rows.length) + ' de ' + String(allRows.length) + ' archivos'
@@ -1822,8 +2570,9 @@ export class DashboardPanel {
     }
 
     function renderTopRules() {
-      const allRows = aggregateBy('rule');
+      const allRows = sortTopRows(aggregateBy('rule'), topSort.rules);
       const rows = allRows.slice(0, 15);
+      updateTopSortHeaders('rules');
       elements.rulesBody.textContent = '';
       elements.rulesCount.textContent = allRows.length > rows.length
         ? String(rows.length) + ' de ' + String(allRows.length) + ' reglas'
@@ -2105,22 +2854,56 @@ export class DashboardPanel {
 
     function renderEvolutionCharts() {
       document.querySelector('.chart-tooltip')?.remove();
-      const data = currentSummary.evolution || [];
+      const source = currentSummary.evolution || [];
+      const data = currentScope === 'newCode'
+        ? source.map(point => ({
+            ...point,
+            bugs: point.newBugs || 0,
+            codeSmells: point.newCodeSmells || 0,
+            vulnerabilities: point.newVulnerabilities || 0,
+            securityHotspots: point.newSecurityHotspots || 0,
+            blockerViolations: point.newBlockerViolations || 0,
+            criticalViolations: point.newCriticalViolations || 0,
+            majorViolations: point.newMajorViolations || 0,
+            minorViolations: point.newMinorViolations || 0,
+            infoViolations: point.newInfoViolations || 0
+          }))
+        : source;
       elements.evolutionCount.textContent = String(data.length) +
         (data.length === 1 ? ' análisis' : ' análisis');
       renderLineChart('types', elements.typeChart, elements.typeLegend, data);
       renderLineChart('severity', elements.severityChart, elements.severityLegend, data);
     }
 
-    function renderSummary(summary, visible) {
-      currentSummary = summary || { published: 0, issues: [], severity: [], evolution: [] };
-      summaryVisible = Boolean(visible);
-      currentIssues = currentSummary.issues || [];
+    function renderDataView() {
+      const showIssues = currentDataView === 'issues';
+      elements.issuesView.hidden = !showIssues;
+      elements.hotspotsView.hidden = showIssues;
+      elements.issuesViewTab.classList.toggle('active', showIssues);
+      elements.hotspotsViewTab.classList.toggle('active', !showIssues);
+    }
+
+    function applyScope() {
+      const scoped = scopeData(currentSummary);
+      currentIssues = scoped.issues || [];
+      currentHotspots = scoped.hotspots || [];
+      elements.overallScope.classList.toggle('active', currentScope === 'overall');
+      elements.newCodeScope.classList.toggle('active', currentScope === 'newCode');
+      elements.hotspotsTabCount.textContent = String(currentHotspots.length);
       renderMetricsSummary(currentSummary);
       renderIssues();
       renderTopFiles();
       renderTopRules();
+      renderHotspots();
       renderEvolutionCharts();
+      renderQualityGateButton();
+      renderDataView();
+    }
+
+    function renderSummary(summary, visible) {
+      currentSummary = summary || { published: 0, issues: [], severity: [], evolution: [] };
+      summaryVisible = Boolean(visible);
+      applyScope();
       renderEmptyState();
     }
 
@@ -2166,12 +2949,71 @@ export class DashboardPanel {
 
     elements.refresh.addEventListener('click', requestRefresh);
     elements.clear.addEventListener('click', () => vscode.postMessage({ type: 'clear' }));
+    elements.issuesViewTab.addEventListener('click', () => {
+      currentDataView = 'issues';
+      renderDataView();
+    });
+    elements.hotspotsViewTab.addEventListener('click', () => {
+      currentDataView = 'hotspots';
+      renderDataView();
+    });
+    elements.overallScope.addEventListener('click', () => {
+      currentScope = 'overall';
+      applyScope();
+    });
+    elements.newCodeScope.addEventListener('click', () => {
+      currentScope = 'newCode';
+      applyScope();
+    });
+    elements.qualityGateButton.addEventListener('click', showQualityGateDialog);
     elements.filter.addEventListener('input', renderIssues);
+    elements.hotspotFilter.addEventListener('input', renderHotspots);
+    elements.pendingHotspotsOnly.addEventListener('change', renderHotspots);
+    for (const header of document.querySelectorAll('[data-sort-header]')) {
+      header.querySelector('button')?.addEventListener('click', () => {
+        const tableName = header.dataset.sortHeader;
+        const key = header.dataset.sortKey;
+        const sort = topSort[tableName];
+        if (sort.key === key) {
+          sort.direction = sort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          sort.key = key;
+          sort.direction = key === 'key' ? 'asc' : 'desc';
+        }
+        if (tableName === 'files') {
+          renderTopFiles();
+        } else {
+          renderTopRules();
+        }
+      });
+    }
     elements.ruleDialogClose.addEventListener('click', () => elements.ruleDialog.close());
     elements.ruleDialog.addEventListener('click', event => {
       if (event.target === elements.ruleDialog) {
         elements.ruleDialog.close();
       }
+    });
+    const closeQualityGateDialog = () => elements.qualityGateDialog.close();
+    elements.qualityGateDialogClose.addEventListener('click', closeQualityGateDialog);
+    elements.qualityGateDialogFooterClose.addEventListener('click', closeQualityGateDialog);
+    elements.qualityGateDialog.addEventListener('click', event => {
+      if (event.target === elements.qualityGateDialog) {
+        elements.qualityGateDialog.close();
+      }
+    });
+    const closeHotspotDialog = () => elements.hotspotDialog.close();
+    elements.hotspotDialogClose.addEventListener('click', closeHotspotDialog);
+    elements.closeHotspotDialog.addEventListener('click', closeHotspotDialog);
+    elements.hotspotDialog.addEventListener('click', event => {
+      if (event.target === elements.hotspotDialog) closeHotspotDialog();
+    });
+    elements.openHotspotFile.addEventListener('click', () => {
+      if (!selectedHotspot) return;
+      vscode.postMessage({
+        type: 'openIssue',
+        fileUri: selectedHotspot.fileUri,
+        line: selectedHotspot.line
+      });
     });
 
     window.addEventListener('message', event => {
@@ -2207,6 +3049,22 @@ export class DashboardPanel {
           break;
         case 'loading':
           setDashboardLoading(message.loading);
+          break;
+        case 'showQualityGate':
+          showQualityGateDialog();
+          break;
+        case 'hotspotDetailLoading':
+          elements.hotspotDialogLoading.textContent = 'Cargando detalle…';
+          elements.hotspotDialogLoading.hidden = false;
+          elements.hotspotDialogContent.hidden = true;
+          break;
+        case 'hotspotDetail':
+          renderHotspotDetail(message.detail || {});
+          break;
+        case 'hotspotDetailError':
+          elements.hotspotDialogLoading.textContent = message.message || 'No se pudo cargar el detalle.';
+          elements.hotspotDialogLoading.hidden = false;
+          elements.hotspotDialogContent.hidden = true;
           break;
       }
     });
