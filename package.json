@@ -2,8 +2,17 @@
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
   "description": "Dashboard de SonarQube integrado en VS Code con páginas de datos y configuración, Problems, defectos, top de archivos y top de reglas.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "local-development",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues"
+  },
+  "homepage": "https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS#readme",
   "engines": {
     "vscode": "^1.96.0"
   },

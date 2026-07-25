@@ -19,6 +19,11 @@ export const CHART_STYLES = `    .rank-grid {
       height: 290px;
       max-height: 290px;
     }
+    .compact-table .body-scroll-table thead tr,
+    .compact-table .body-scroll-table tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 92px 82px;
+    }
     .compact-table th, .compact-table td { padding: 8px 10px; }
     .count-cell { width: 82px; text-align: right; font-variant-numeric: tabular-nums; }
     .severity-cell { width: 92px; }

@@ -1,0 +1,44 @@
+SonarQube Dashboard Source-Available License 1.0
+
+Copyright (c) 2026 Jesús Romero
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to:
+
+1. use the Software, in unmodified form, for personal, educational, internal,
+   or commercial purposes;
+2. inspect and study the source code;
+3. make exact, unmodified copies of the Software for backup or installation;
+4. redistribute exact, unmodified copies of the Software, provided that this
+   license and the above copyright notice are included with every copy.
+
+The following activities are not permitted without prior written permission
+from the copyright holder:
+
+1. modifying, adapting, translating, merging, or creating derivative works
+   based on the Software;
+2. distributing, publishing, sublicensing, or making available any modified
+   version or derivative work of the Software;
+3. removing or altering copyright, attribution, authorship, trademark, or
+   license notices;
+4. selling, licensing for a fee, or otherwise commercially redistributing
+   copies of the Software itself;
+5. using the name, logo, or trademarks of the copyright holder to endorse or
+   promote products derived from the Software.
+
+This license does not grant any patent or trademark rights.
+
+Any permission not expressly granted by this license is reserved by the
+copyright holder. This license terminates automatically if you breach any of
+its terms. Upon termination, you must stop using and distributing the
+Software and destroy all copies under your control, except where retention is
+required by law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT
+SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
