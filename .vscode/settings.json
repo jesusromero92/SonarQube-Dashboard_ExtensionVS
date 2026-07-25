@@ -1,0 +1,6 @@
+{
+    "issueDashboard.sonar.serverUrl": "https://sonarqube.sandboxromero.es",
+    "issueDashboard.sonar.projectKey": "MTP_Jenkins_IA_IC-pptx-caser-gemini",
+    "issueDashboard.sonar.branch": "",
+    "issueDashboard.sonar.baseDir": ""
+}

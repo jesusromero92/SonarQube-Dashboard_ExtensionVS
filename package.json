@@ -1,0 +1,116 @@
+{
+  "name": "vscode-issue-dashboard",
+  "displayName": "Issue Dashboard",
+  "description": "Dashboard de SonarQube integrado en VS Code con configuración, Problems y top de issues por criticidad.",
+  "version": "0.4.0",
+  "publisher": "local-development",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:issueDashboard.launcher",
+    "onWebviewPanel:issueDashboard.panel",
+    "onCommand:issueDashboard.open",
+    "onCommand:issueDashboard.refresh",
+    "onCommand:issueDashboard.clear"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "issueDashboardContainer",
+          "title": "Issue Dashboard",
+          "icon": "media/issue-dashboard.svg"
+        }
+      ]
+    },
+    "views": {
+      "issueDashboardContainer": [
+        {
+          "type": "webview",
+          "id": "issueDashboard.launcher",
+          "name": "Dashboard",
+          "visibility": "visible",
+          "contextualTitle": "Issue Dashboard"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "issueDashboard.open",
+        "title": "Issue Dashboard: Abrir dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "issueDashboard.refresh",
+        "title": "Issue Dashboard: Actualizar issues",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "issueDashboard.clear",
+        "title": "Issue Dashboard: Limpiar Problems",
+        "icon": "$(clear-all)"
+      }
+    ],
+    "configuration": {
+      "title": "Issue Dashboard",
+      "properties": {
+        "issueDashboard.sonar.serverUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "URL de SonarQube. Se gestiona desde el dashboard de Issue Dashboard."
+        },
+        "issueDashboard.sonar.projectKey": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Proyecto de SonarQube. Se gestiona desde el dashboard de Issue Dashboard."
+        },
+        "issueDashboard.sonar.branch": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Rama de SonarQube. Se gestiona desde el dashboard de Issue Dashboard."
+        },
+        "issueDashboard.sonar.baseDir": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Subcarpeta local asociada a la raíz del proyecto. Se gestiona desde el dashboard."
+        },
+        "issueDashboard.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Actualiza los issues automáticamente al abrir o cambiar el workspace."
+        },
+        "issueDashboard.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "scope": "window",
+          "description": "Intervalo de actualización. 0 desactiva la actualización periódica."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx --yes @vscode/vsce package",
+    "package:vsix": "powershell -ExecutionPolicy Bypass -File ./generar-vsix.ps1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.96.0",
+    "typescript": "^5.7.2"
+  }
+}
