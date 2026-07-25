@@ -77,16 +77,19 @@ function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
 async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSummary> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   const summary = emptySummary();
+  dashboardPanel?.setLoading(true);
 
   if (folders.length === 0) {
     diagnostics.clear();
     dashboardPanel?.setRefreshSummary(summary);
+    dashboardPanel?.setLoading(false);
     return summary;
   }
 
   activeRefresh?.abort();
   activeRefresh = new AbortController();
-  const signal = activeRefresh.signal;
+  const refreshController = activeRefresh;
+  const signal = refreshController.signal;
 
   diagnostics.clear();
 
@@ -151,6 +154,9 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
     );
   }
 
+  if (activeRefresh === refreshController) {
+    dashboardPanel?.setLoading(false);
+  }
   return summary;
 }
 

@@ -10,7 +10,7 @@ import { RefreshSummary } from './types';
 
 export const DASHBOARD_PANEL_VIEW_TYPE = 'sonarQubeDashboard.panel';
 
-const DASHBOARD_COLORS = {
+export const DASHBOARD_COLORS = {
   types: {
     BUG: '#00aa00',
     CODE_SMELL: '#eabf00',
@@ -37,6 +37,7 @@ const DASHBOARD_TYPE_ICON_FILES = {
 
 type RefreshCallback = () => Promise<RefreshSummary>;
 type ClearCallback = () => void;
+type DashboardPage = 'data' | 'configuration';
 
 interface WebviewMessage {
   type?: string;
@@ -48,6 +49,7 @@ interface WebviewMessage {
   baseDir?: string;
   fileUri?: string;
   line?: number;
+  page?: DashboardPage;
 }
 
 function emptySummary(): RefreshSummary {
@@ -69,7 +71,16 @@ export class DashboardPanel {
   private lastSummary: RefreshSummary = emptySummary();
   private resultsVisible = false;
   private savingConfig = false;
+  private loading = false;
+  private currentPage: DashboardPage = 'data';
   private panelDisposables: vscode.Disposable[] = [];
+  private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
+  private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
+  private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
+
+  readonly onDidChangeSummary = this.summaryEmitter.event;
+  readonly onDidChangeLoading = this.loadingEmitter.event;
+  readonly onDidChangePage = this.pageEmitter.event;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -77,12 +88,12 @@ export class DashboardPanel {
     private readonly clearCallback: ClearCallback
   ) {}
 
-  async show(): Promise<void> {
+  async show(page: DashboardPage = this.currentPage): Promise<void> {
     if (this.panel) {
       this.panel.reveal(vscode.ViewColumn.One, false);
       await this.sendState();
       this.setRefreshSummary(this.lastSummary);
-      this.postMessage({ type: 'navigate', page: 'data' });
+      this.navigate(page);
       return;
     }
 
@@ -99,13 +110,14 @@ export class DashboardPanel {
     this.attachPanel(panel);
     await this.sendState();
     this.setRefreshSummary(this.lastSummary);
+    this.navigate(page);
   }
 
   async revive(panel: vscode.WebviewPanel): Promise<void> {
     this.attachPanel(panel);
     await this.sendState();
     this.setRefreshSummary(this.lastSummary);
-    this.postMessage({ type: 'navigate', page: 'data' });
+    this.navigate(this.currentPage);
   }
 
   async refreshWorkspaceState(): Promise<void> {
@@ -125,6 +137,42 @@ export class DashboardPanel {
       summary,
       visible: this.resultsVisible
     });
+    this.summaryEmitter.fire(summary);
+  }
+
+  getRefreshSummary(): RefreshSummary {
+    return this.lastSummary;
+  }
+
+  isLoading(): boolean {
+    return this.loading;
+  }
+
+  setLoading(loading: boolean): void {
+    if (this.loading === loading) {
+      return;
+    }
+    this.loading = loading;
+    this.postMessage({ type: 'loading', loading });
+    this.loadingEmitter.fire(loading);
+  }
+
+  getCurrentPage(): DashboardPage {
+    return this.currentPage;
+  }
+
+  async showPage(page: DashboardPage): Promise<void> {
+    await this.show(page);
+  }
+
+  async refresh(): Promise<void> {
+    await this.refreshFromPanel();
+  }
+
+  private navigate(page: DashboardPage): void {
+    this.currentPage = page;
+    this.postMessage({ type: 'navigate', page });
+    this.pageEmitter.fire(page);
   }
 
   dispose(): void {
@@ -132,6 +180,9 @@ export class DashboardPanel {
     this.disposePanelListeners();
     this.panel?.dispose();
     this.panel = undefined;
+    this.summaryEmitter.dispose();
+    this.loadingEmitter.dispose();
+    this.pageEmitter.dispose();
   }
 
   private attachPanel(panel: vscode.WebviewPanel): void {
@@ -176,11 +227,17 @@ export class DashboardPanel {
       case 'ready':
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
-        this.postMessage({ type: 'navigate', page: 'data' });
+        this.postMessage({ type: 'loading', loading: this.loading });
+        this.navigate(this.currentPage);
         break;
       case 'selectFolder':
         this.selectedFolderUri = message.folderUri;
         await this.sendState();
+        break;
+      case 'navigate':
+        if (message.page) {
+          await this.showPage(message.page);
+        }
         break;
       case 'loadProjects':
         await this.loadProjects(message);
@@ -367,7 +424,7 @@ export class DashboardPanel {
           'success',
           `${summary.published} issues publicados en Problems.`
         );
-        this.postMessage({ type: 'navigate', page: 'data' });
+        this.navigate('data');
       }
     } catch (error) {
       this.postStatus('error', this.errorMessage(error));
@@ -383,12 +440,12 @@ export class DashboardPanel {
 
     if (summary.configuredFolders === 0) {
       this.postStatus('error', 'Guarda primero la conexión y el proyecto.');
-      this.postMessage({ type: 'navigate', page: 'configuration' });
+      this.navigate('configuration');
     } else if (summary.errors.length > 0) {
       this.postStatus('error', summary.errors.join(' | '));
     } else {
       this.postStatus('success', `${summary.published} issues publicados en Problems.`);
-      this.postMessage({ type: 'navigate', page: 'data' });
+      this.navigate('data');
     }
   }
 
@@ -411,6 +468,7 @@ export class DashboardPanel {
         new vscode.Range(position, position),
         vscode.TextEditorRevealType.InCenterIfOutsideViewport
       );
+      await vscode.commands.executeCommand('workbench.action.closeSidebar');
     } catch (error) {
       this.postStatus('error', `No se pudo abrir el archivo: ${this.errorMessage(error)}`);
     }
@@ -612,6 +670,25 @@ export class DashboardPanel {
       background: var(--vscode-editorWidget-background);
       text-align: center;
     }
+    .dashboard-loading {
+      display: grid;
+      min-height: 360px;
+      place-items: center;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editorWidget-background);
+      color: var(--vscode-descriptionForeground);
+      text-align: center;
+    }
+    .dashboard-spinner {
+      width: 38px;
+      height: 38px;
+      margin: 0 auto 12px;
+      border: 4px solid var(--vscode-panel-border);
+      border-top-color: var(--vscode-progressBar-background);
+      border-radius: 50%;
+      animation: dashboard-spin .8s linear infinite;
+    }
+    @keyframes dashboard-spin { to { transform: rotate(360deg); } }
     .empty-state-inner { max-width: 560px; }
     .empty-icon {
       display: grid;
@@ -930,28 +1007,14 @@ export class DashboardPanel {
 </head>
 <body>
   <div class="shell">
-    <header class="topbar">
-      <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M9.4 2.2a1 1 0 0 1 1.4.2L12 4l1.2-1.6a1 1 0 1 1 1.6 1.2L13.75 5H15a4 4 0 0 1 4 4v1h2a1 1 0 1 1 0 2h-2v2h2a1 1 0 1 1 0 2h-2v1a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-1H3a1 1 0 1 1 0-2h2v-2H3a1 1 0 1 1 0-2h2V9a4 4 0 0 1 4-4h1.25L9.2 3.6a1 1 0 0 1 .2-1.4ZM7 12v5a2 2 0 0 0 2 2h2v-7H7Zm6 7h2a2 2 0 0 0 2-2v-5h-4v7ZM9 7a2 2 0 0 0-2 2v1h10V9a2 2 0 0 0-2-2H9Z"/>
-        </svg>
-      </div>
-      <div class="brand">
-        <h1>SonarQube Dashboard</h1>
-        <p>Defectos de SonarQube asociados a la carpeta abierta.</p>
-      </div>
-      <nav class="navigation" aria-label="Secciones del dashboard">
-        <button id="navData" class="nav-button active" type="button">Datos</button>
-        <button id="navConfiguration" class="nav-button" type="button">Configuración</button>
-      </nav>
-      <div class="top-actions">
-        <button id="openProblems" class="secondary" type="button">Abrir Problems</button>
-        <button id="refreshTop" type="button">Actualizar</button>
-      </div>
-    </header>
-
     <main class="content">
       <section id="dataPage" class="page">
+        <section id="dataLoading" class="dashboard-loading" hidden>
+          <div>
+            <div class="dashboard-spinner" aria-hidden="true"></div>
+            <strong>Sincronizando datos de SonarQube…</strong>
+          </div>
+        </section>
         <section id="dataEmpty" class="empty-state">
           <div class="empty-state-inner">
             <div class="empty-icon" aria-hidden="true">
@@ -1158,10 +1221,9 @@ export class DashboardPanel {
       VULNERABILITY: 'vulnerability'
     };
     const elements = {
-      navData: document.getElementById('navData'),
-      navConfiguration: document.getElementById('navConfiguration'),
       dataPage: document.getElementById('dataPage'),
       configurationPage: document.getElementById('configurationPage'),
+      dataLoading: document.getElementById('dataLoading'),
       dataEmpty: document.getElementById('dataEmpty'),
       emptyProject: document.getElementById('emptyProject'),
       emptyTitle: document.getElementById('emptyTitle'),
@@ -1181,9 +1243,7 @@ export class DashboardPanel {
       loadProjects: document.getElementById('loadProjects'),
       save: document.getElementById('save'),
       refresh: document.getElementById('refresh'),
-      refreshTop: document.getElementById('refreshTop'),
       clear: document.getElementById('clear'),
-      openProblems: document.getElementById('openProblems'),
       configState: document.getElementById('configState'),
       results: document.getElementById('results'),
       cards: document.getElementById('cards'),
@@ -1217,6 +1277,7 @@ export class DashboardPanel {
     let selectedProjectKey = '';
     let currentFolderUri = '';
     let hasWorkspace = false;
+    let dashboardLoading = false;
     const hiddenChartSeries = {
       types: new Set(),
       severity: new Set()
@@ -1226,8 +1287,6 @@ export class DashboardPanel {
       currentPage = page === 'configuration' ? 'configuration' : 'data';
       elements.dataPage.hidden = currentPage !== 'data';
       elements.configurationPage.hidden = currentPage !== 'configuration';
-      elements.navData.classList.toggle('active', currentPage === 'data');
-      elements.navConfiguration.classList.toggle('active', currentPage === 'configuration');
     }
 
     function isConfigured() {
@@ -1253,7 +1312,6 @@ export class DashboardPanel {
       elements.loadProjects.disabled = busy;
       elements.save.disabled = busy;
       elements.refresh.disabled = busy;
-      elements.refreshTop.disabled = busy;
       elements.syncEmpty.disabled = busy;
     }
 
@@ -1296,6 +1354,12 @@ export class DashboardPanel {
     }
 
     function renderEmptyState() {
+      elements.dataLoading.hidden = !dashboardLoading;
+      if (dashboardLoading) {
+        elements.results.hidden = true;
+        elements.dataEmpty.hidden = true;
+        return;
+      }
       const configured = isConfigured();
       const showResults = hasWorkspace && configured && summaryVisible;
       elements.results.hidden = !showResults;
@@ -1323,6 +1387,12 @@ export class DashboardPanel {
         elements.emptyText.textContent = 'Sincroniza para cargar los defectos, el top de archivos y el top de reglas.';
         elements.goConfiguration.textContent = 'Revisar configuración';
       }
+    }
+
+    function setDashboardLoading(loading) {
+      dashboardLoading = Boolean(loading);
+      setBusy(dashboardLoading);
+      renderEmptyState();
     }
 
     function renderState(message) {
@@ -1951,9 +2021,9 @@ export class DashboardPanel {
       vscode.postMessage({ type: 'refresh' });
     }
 
-    elements.navData.addEventListener('click', () => navigate('data'));
-    elements.navConfiguration.addEventListener('click', () => navigate('configuration'));
-    elements.goConfiguration.addEventListener('click', () => navigate('configuration'));
+    elements.goConfiguration.addEventListener('click', () => {
+      vscode.postMessage({ type: 'navigate', page: 'configuration' });
+    });
     elements.syncEmpty.addEventListener('click', requestRefresh);
 
     elements.folder.addEventListener('change', () => {
@@ -1982,9 +2052,7 @@ export class DashboardPanel {
     });
 
     elements.refresh.addEventListener('click', requestRefresh);
-    elements.refreshTop.addEventListener('click', requestRefresh);
     elements.clear.addEventListener('click', () => vscode.postMessage({ type: 'clear' }));
-    elements.openProblems.addEventListener('click', () => vscode.postMessage({ type: 'openProblems' }));
     elements.filter.addEventListener('input', renderIssues);
     elements.ruleDialogClose.addEventListener('click', () => elements.ruleDialog.close());
     elements.ruleDialog.addEventListener('click', event => {
@@ -2023,6 +2091,9 @@ export class DashboardPanel {
           break;
         case 'summary':
           renderSummary(message.summary || {}, Boolean(message.visible));
+          break;
+        case 'loading':
+          setDashboardLoading(message.loading);
           break;
       }
     });
