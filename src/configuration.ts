@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { FolderSonarConfig, FolderSonarFormConfig } from './types';
 
-const TOKEN_KEY_PREFIX = 'issueDashboard.sonar.token:';
+const TOKEN_KEY_PREFIX = 'sonarQubeDashboard.sonar.token:';
 
 export function tokenKey(folder: vscode.WorkspaceFolder): string {
   return `${TOKEN_KEY_PREFIX}${folder.uri.toString()}`;
@@ -12,7 +12,7 @@ export async function getFolderFormConfig(
   folder: vscode.WorkspaceFolder
 ): Promise<FolderSonarFormConfig> {
   const configuration = vscode.workspace.getConfiguration(
-    'issueDashboard.sonar',
+    'sonarQubeDashboard.sonar',
     folder.uri
   );
 
@@ -57,7 +57,7 @@ export async function saveFolderConfig(
   }
 ): Promise<void> {
   const configuration = vscode.workspace.getConfiguration(
-    'issueDashboard.sonar',
+    'sonarQubeDashboard.sonar',
     folder.uri
   );
 

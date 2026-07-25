@@ -6,6 +6,7 @@ import {
   SonarIssuesResponse,
   SonarProject,
   SonarProjectsResponse,
+  SonarRuleResponse,
   SonarSettingsResponse
 } from './types';
 
@@ -182,6 +183,40 @@ function inferInstanceMode(
   return 'STANDARD';
 }
 
+async function fetchRuleNames(
+  config: FolderSonarConfig,
+  ruleKeys: string[],
+  signal?: AbortSignal
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < ruleKeys.length) {
+      const ruleKey = ruleKeys[nextIndex++];
+      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/rules/show`);
+      url.searchParams.set('key', ruleKey);
+
+      try {
+        const payload = await requestJson<SonarRuleResponse>(url, config.token, signal);
+        const name = payload.rule?.name?.trim();
+        if (name) {
+          names.set(ruleKey, name);
+        }
+      } catch (error) {
+        if (signal?.aborted) {
+          throw error;
+        }
+        // La sincronización puede continuar mostrando el ruleKey como respaldo.
+      }
+    }
+  }
+
+  const workerCount = Math.min(6, ruleKeys.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return names;
+}
+
 export async function fetchAllIssues(
   config: FolderSonarConfig,
   signal?: AbortSignal
@@ -218,6 +253,12 @@ export async function fetchAllIssues(
     }
 
     page += 1;
+  }
+
+  const ruleKeys = [...new Set(issues.map(issue => issue.rule).filter(Boolean))];
+  const ruleNames = await fetchRuleNames(config, ruleKeys, signal);
+  for (const issue of issues) {
+    issue.ruleName = ruleNames.get(issue.rule);
   }
 
   return {

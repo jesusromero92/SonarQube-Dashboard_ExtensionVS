@@ -8,7 +8,7 @@ import {
 import { fetchVisibleProjects } from './sonarClient';
 import { RefreshSummary } from './types';
 
-export const DASHBOARD_VIEW_ID = 'issueDashboard.configuration';
+export const DASHBOARD_VIEW_ID = 'sonarQubeDashboard.configuration';
 
 type RefreshCallback = () => Promise<RefreshSummary>;
 type ClearCallback = () => void;
@@ -432,7 +432,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     <p class="subtitle">Configura la carpeta actual y publica sus issues directamente en Problems.</p>
 
     <div id="emptyWorkspace" class="empty" hidden>
-      Abre una carpeta o un workspace para configurar Issue Dashboard.
+      Abre una carpeta o un workspace para configurar SonarQube Dashboard.
     </div>
 
     <section id="formSection">

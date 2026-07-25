@@ -8,7 +8,7 @@ import {
 import { fetchVisibleProjects } from './sonarClient';
 import { RefreshSummary } from './types';
 
-export const DASHBOARD_PANEL_VIEW_TYPE = 'issueDashboard.panel';
+export const DASHBOARD_PANEL_VIEW_TYPE = 'sonarQubeDashboard.panel';
 
 type RefreshCallback = () => Promise<RefreshSummary>;
 type ClearCallback = () => void;
@@ -56,12 +56,13 @@ export class DashboardPanel {
       this.panel.reveal(vscode.ViewColumn.One, false);
       await this.sendState();
       this.setRefreshSummary(this.lastSummary);
+      this.postMessage({ type: 'navigate', page: 'data' });
       return;
     }
 
     const panel = vscode.window.createWebviewPanel(
       DASHBOARD_PANEL_VIEW_TYPE,
-      'Issue Dashboard',
+      'SonarQube Dashboard',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -78,6 +79,7 @@ export class DashboardPanel {
     this.attachPanel(panel);
     await this.sendState();
     this.setRefreshSummary(this.lastSummary);
+    this.postMessage({ type: 'navigate', page: 'data' });
   }
 
   async refreshWorkspaceState(): Promise<void> {
@@ -109,11 +111,11 @@ export class DashboardPanel {
   private attachPanel(panel: vscode.WebviewPanel): void {
     this.disposePanelListeners();
     this.panel = panel;
-    panel.title = 'Issue Dashboard';
+    panel.title = 'SonarQube Dashboard';
     panel.iconPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       'media',
-      'issue-dashboard.svg'
+      'sonarqube-dashboard.svg'
     );
     panel.webview.options = {
       enableScripts: true
@@ -148,6 +150,7 @@ export class DashboardPanel {
       case 'ready':
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
+        this.postMessage({ type: 'navigate', page: 'data' });
         break;
       case 'selectFolder':
         this.selectedFolderUri = message.folderUri;
@@ -338,6 +341,7 @@ export class DashboardPanel {
           'success',
           `${summary.published} issues publicados en Problems.`
         );
+        this.postMessage({ type: 'navigate', page: 'data' });
       }
     } catch (error) {
       this.postStatus('error', this.errorMessage(error));
@@ -353,10 +357,12 @@ export class DashboardPanel {
 
     if (summary.configuredFolders === 0) {
       this.postStatus('error', 'Guarda primero la conexión y el proyecto.');
+      this.postMessage({ type: 'navigate', page: 'configuration' });
     } else if (summary.errors.length > 0) {
       this.postStatus('error', summary.errors.join(' | '));
     } else {
       this.postStatus('success', `${summary.published} issues publicados en Problems.`);
+      this.postMessage({ type: 'navigate', page: 'data' });
     }
   }
 
@@ -407,6 +413,15 @@ export class DashboardPanel {
 
   private getHtml(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString('hex');
+    const bugIconUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'assets', 'bug-svgrepo-com.svg')
+    );
+    const codeSmellIconUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'assets', 'radiation-svgrepo-com.svg')
+    );
+    const vulnerabilityIconUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'assets', 'shield-exclamation-svgrepo-com.svg')
+    );
 
     return `<!DOCTYPE html>
 <html lang="es">
@@ -414,10 +429,10 @@ export class DashboardPanel {
   <meta charset="UTF-8">
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"
+    content="default-src 'none'; img-src ${webview.cspSource}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Issue Dashboard</title>
+  <title>SonarQube Dashboard</title>
   <style nonce="${nonce}">
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
@@ -434,12 +449,12 @@ export class DashboardPanel {
       outline-offset: 1px;
     }
     [hidden] { display: none !important; }
-    .shell { min-width: 720px; }
+    .shell { min-width: 760px; }
     .topbar {
       display: flex;
       align-items: center;
       gap: 14px;
-      min-height: 68px;
+      min-height: 72px;
       padding: 14px 22px;
       border-bottom: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editorGroupHeader-tabsBackground);
@@ -452,76 +467,63 @@ export class DashboardPanel {
       flex: 0 0 auto;
       color: var(--vscode-charts-orange);
     }
-    .brand-mark svg {
-      width: 34px;
-      height: 34px;
-      overflow: visible;
-    }
-    .brand h1 { margin: 0; font-size: 21px; font-weight: 500; }
+    .brand-mark svg { width: 34px; height: 34px; }
+    .brand h1 { margin: 0; font-size: 21px; font-weight: 600; }
     .brand p { margin: 3px 0 0; color: var(--vscode-descriptionForeground); }
+    .navigation {
+      display: flex;
+      gap: 4px;
+      margin-left: 22px;
+      padding: 3px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-editor-background);
+    }
+    .nav-button {
+      min-width: 106px;
+      min-height: 30px;
+      padding: 5px 14px;
+      border: 0;
+      border-radius: 2px;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+      cursor: pointer;
+    }
+    .nav-button:hover { color: var(--vscode-foreground); background: var(--vscode-list-hoverBackground); }
+    .nav-button.active {
+      color: var(--vscode-foreground);
+      background: var(--vscode-list-activeSelectionBackground);
+    }
     .top-actions { display: flex; gap: 8px; margin-left: auto; }
-    .content { padding: 18px 22px 32px; }
+    .content { padding: 18px 22px 34px; }
+    .page { display: block; }
     .panel {
       border: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editorWidget-background);
     }
+    .panel + .panel { margin-top: 16px; }
     .panel-header {
       display: flex;
       align-items: center;
       gap: 12px;
       min-height: 44px;
-      padding: 8px 14px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--vscode-panel-border);
-      background: var(--vscode-sideBarSectionHeader-background);
+      background: var(--vscode-editorGroupHeader-tabsBackground);
     }
-    .panel-header h2 { margin: 0; font-size: 13px; font-weight: 600; }
+    .panel-header h2 { margin: 0; font-size: 13px; }
     .panel-header .muted { margin-left: auto; }
-    .form-grid {
-      display: grid;
-      grid-template-columns: minmax(230px, 1fr) minmax(230px, 1fr) minmax(210px, auto);
-      gap: 14px;
-      padding: 16px;
-      align-items: start;
-    }
-    .field { min-width: 0; }
-    .folder-field { grid-column: 1 / -1; }
-    .project-field { grid-column: span 2; }
-    .action-field button { width: 100%; height: 32px; white-space: nowrap; }
-    label {
-      display: flex;
-      gap: 5px;
-      align-items: center;
-      margin-bottom: 6px;
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-    }
-    .required { color: var(--vscode-inputValidation-errorBorder); }
-    input, select {
-      width: 100%;
-      height: 32px;
-      padding: 5px 9px;
-      border: 1px solid var(--vscode-input-border, transparent);
-      border-radius: 2px;
-      color: var(--vscode-input-foreground);
-      background: var(--vscode-input-background);
-    }
-    input:disabled, select:disabled { opacity: .65; }
-    .hint { margin-top: 5px; color: var(--vscode-descriptionForeground); font-size: 11px; }
-    .form-footer {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      border-top: 1px solid var(--vscode-panel-border);
-    }
+    .panel-body { padding: 16px; }
+    .muted, .hint { color: var(--vscode-descriptionForeground); }
+    .hint { margin-top: 6px; font-size: 12px; line-height: 1.4; }
     button {
-      min-height: 30px;
-      padding: 5px 12px;
+      min-height: 32px;
+      padding: 5px 14px;
       border: 1px solid transparent;
       border-radius: 2px;
-      cursor: pointer;
       color: var(--vscode-button-foreground);
       background: var(--vscode-button-background);
+      cursor: pointer;
     }
     button:hover { background: var(--vscode-button-hoverBackground); }
     button.secondary {
@@ -529,79 +531,105 @@ export class DashboardPanel {
       background: var(--vscode-button-secondaryBackground);
     }
     button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    button.link-button {
+      padding: 4px 8px;
+      color: var(--vscode-textLink-foreground);
+      background: transparent;
+    }
     button:disabled { cursor: default; opacity: .55; }
-    .spacer { flex: 1; }
-    .advanced {
-      margin: 0 16px 16px;
-      border-top: 1px solid var(--vscode-panel-border);
+    input, select {
+      width: 100%;
+      min-height: 32px;
+      padding: 5px 9px;
+      border: 1px solid var(--vscode-input-border, transparent);
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
     }
-    .advanced summary {
-      padding: 11px 0;
-      cursor: pointer;
-      color: var(--vscode-descriptionForeground);
-      user-select: none;
-    }
-    .advanced-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(220px, 1fr));
-      gap: 14px;
-      padding-bottom: 4px;
-    }
-    .status {
-      display: none;
-      margin: 14px 0;
-      padding: 10px 12px;
-      border-left: 3px solid var(--vscode-descriptionForeground);
-      background: var(--vscode-textBlockQuote-background);
-      line-height: 1.4;
-    }
-    .status.visible { display: block; }
-    .status.success { border-left-color: var(--vscode-testing-iconPassed); }
-    .status.error { border-left-color: var(--vscode-testing-iconFailed); }
-    .status.loading { border-left-color: var(--vscode-progressBar-background); }
-    .empty {
-      padding: 20px;
-      color: var(--vscode-descriptionForeground);
-      text-align: center;
-    }
-    .results { margin-top: 18px; }
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .card {
-      min-height: 82px;
-      padding: 12px;
-      border: 1px solid var(--vscode-panel-border);
-      border-top: 3px solid var(--vscode-badge-background);
-      background: var(--vscode-editorWidget-background);
-    }
-    .card strong { display: block; font-size: 24px; font-weight: 500; }
-    .card span { color: var(--vscode-descriptionForeground); font-size: 11px; }
-    .card.blocker, .card.critical, .card.high {
-      border-top-color: var(--vscode-testing-iconFailed);
-    }
-    .card.major, .card.medium {
-      border-top-color: var(--vscode-charts-yellow);
-    }
-    .card.minor, .card.low, .card.info {
-      border-top-color: var(--vscode-charts-blue);
-    }
-    .table-toolbar {
+    label { display: block; margin-bottom: 6px; color: var(--vscode-descriptionForeground); }
+    .required { color: var(--vscode-errorForeground); }
+    .form-grid { display: grid; gap: 14px; }
+    .connection-row { grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) auto; align-items: start; }
+    .project-row { grid-template-columns: minmax(320px, 1fr) auto; align-items: start; margin-top: 14px; }
+    .action-field button { width: 100%; white-space: nowrap; }
+    .workspace-row { margin-bottom: 14px; }
+    .advanced-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+    details { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--vscode-panel-border); }
+    summary { color: var(--vscode-descriptionForeground); cursor: pointer; }
+    .form-footer {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 12px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+    .spacer { flex: 1; }
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 360px;
+      padding: 46px 24px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editorWidget-background);
+      text-align: center;
+    }
+    .empty-state-inner { max-width: 560px; }
+    .empty-icon {
+      display: grid;
+      place-items: center;
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      color: var(--vscode-charts-orange);
+      background: var(--vscode-badge-background);
+    }
+    .empty-icon svg { width: 30px; height: 30px; }
+    .empty-state h2 { margin: 0 0 8px; font-size: 20px; }
+    .empty-state p { margin: 0 auto 20px; color: var(--vscode-descriptionForeground); line-height: 1.55; }
+    .empty-actions { display: flex; justify-content: center; gap: 10px; }
+    .project-summary {
+      display: inline-flex;
+      margin-bottom: 14px;
+      padding: 5px 9px;
+      border-radius: 12px;
+      color: var(--vscode-badge-foreground);
+      background: var(--vscode-badge-background);
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .card {
+      min-height: 92px;
+      padding: 15px 13px;
+      border: 1px solid var(--vscode-panel-border);
+      border-top: 3px solid var(--vscode-charts-blue);
+      background: var(--vscode-editorWidget-background);
+    }
+    .card.blocker { border-top-color: var(--vscode-charts-red); }
+    .card.critical, .card.high { border-top-color: var(--vscode-charts-red); }
+    .card.major, .card.medium { border-top-color: var(--vscode-charts-yellow); }
+    .card.minor, .card.low { border-top-color: var(--vscode-charts-blue); }
+    .card.info { border-top-color: var(--vscode-charts-purple); }
+    .card strong { display: block; margin-bottom: 5px; font-size: 24px; font-weight: 400; }
+    .card span { color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+      padding: 9px 13px;
       border-bottom: 1px solid var(--vscode-panel-border);
     }
     .table-toolbar h2 { margin: 0; font-size: 13px; }
-    .table-toolbar input { width: min(360px, 45vw); margin-left: auto; }
-    .table-wrap { overflow: auto; max-height: 520px; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .table-toolbar input { width: min(360px, 42vw); margin-left: auto; }
+    .table-wrap { overflow: auto; max-height: 410px; }
+    table { width: 100%; border-collapse: collapse; }
+    .issues-table { table-layout: fixed; }
     th, td {
-      padding: 9px 10px;
+      padding: 9px 11px;
       border-bottom: 1px solid var(--vscode-panel-border);
       text-align: left;
       vertical-align: top;
@@ -611,55 +639,135 @@ export class DashboardPanel {
       top: 0;
       z-index: 1;
       color: var(--vscode-descriptionForeground);
-      background: var(--vscode-sideBarSectionHeader-background);
-      font-size: 11px;
+      background: var(--vscode-editorWidget-background);
+      font-size: 12px;
       font-weight: 600;
     }
     tbody tr { cursor: pointer; }
     tbody tr:hover { background: var(--vscode-list-hoverBackground); }
-    .col-severity { width: 116px; }
-    .col-type { width: 118px; }
-    .col-file { width: 25%; }
-    .col-line { width: 70px; }
-    .col-rule { width: 145px; }
     .badge {
-      display: inline-block;
+      display: inline-flex;
       min-width: 70px;
-      padding: 3px 7px;
+      justify-content: center;
+      padding: 2px 7px;
       border-radius: 10px;
-      text-align: center;
-      font-size: 10px;
-      font-weight: 700;
       color: var(--vscode-badge-foreground);
       background: var(--vscode-badge-background);
+      font-size: 11px;
     }
-    .badge.blocker, .badge.critical, .badge.high {
-      background: var(--vscode-testing-iconFailed);
+    .badge.blocker, .badge.critical, .badge.high { background: var(--vscode-charts-red); }
+    .badge.major, .badge.medium { color: var(--vscode-editor-background); background: var(--vscode-charts-yellow); }
+    .badge.minor, .badge.low { background: var(--vscode-charts-blue); }
+    .badge.info { background: var(--vscode-charts-purple); }
+    .path { min-width: 220px; max-width: 370px; }
+    .file-name {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .badge.major, .badge.medium {
-      color: var(--vscode-editor-background);
-      background: var(--vscode-charts-yellow);
-    }
-    .badge.minor, .badge.low, .badge.info {
-      background: var(--vscode-charts-blue);
-    }
-    .path { overflow-wrap: anywhere; }
-    .message { line-height: 1.35; overflow-wrap: anywhere; }
-    .muted { color: var(--vscode-descriptionForeground); }
-    .no-results {
-      padding: 24px;
+    .file-line {
+      display: block;
+      margin-top: 4px;
       color: var(--vscode-descriptionForeground);
-      text-align: center;
+      font-size: 11px;
     }
+    .type-icon-cell { text-align: center; }
+    .type-icon {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      vertical-align: middle;
+    }
+    .type-icon.code-smell {
+      background: var(--vscode-charts-yellow, #cca700);
+      -webkit-mask: url('${codeSmellIconUri}') center / contain no-repeat;
+      mask: url('${codeSmellIconUri}') center / contain no-repeat;
+    }
+    .type-icon.bug {
+      background: var(--vscode-charts-green, #2ea043);
+      -webkit-mask: url('${bugIconUri}') center / contain no-repeat;
+      mask: url('${bugIconUri}') center / contain no-repeat;
+    }
+    .type-icon.vulnerability {
+      background: var(--vscode-charts-red, #f14c4c);
+      -webkit-mask: url('${vulnerabilityIconUri}') center / contain no-repeat;
+      mask: url('${vulnerabilityIconUri}') center / contain no-repeat;
+    }
+    .rule-button {
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      color: var(--vscode-textLink-foreground);
+      background: transparent;
+      text-align: left;
+    }
+    .rule-button:hover {
+      color: var(--vscode-textLink-activeForeground);
+      background: transparent;
+      text-decoration: underline;
+    }
+    .rule-dialog {
+      width: min(620px, calc(100vw - 48px));
+      padding: 0;
+      border: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-foreground);
+      background: var(--vscode-editorWidget-background);
+      box-shadow: 0 8px 28px var(--vscode-widget-shadow);
+    }
+    .rule-dialog::backdrop { background: rgba(0, 0, 0, .55); }
+    .rule-dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+    }
+    .rule-dialog-header h2 { margin: 0; font-size: 15px; }
+    .rule-dialog-close {
+      min-width: 32px;
+      margin-left: auto;
+      padding: 3px 8px;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .rule-dialog-body {
+      padding: 18px 16px 20px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .col-severity { width: 92px; }
+    .col-type { width: 58px; text-align: center; }
+    .col-file { width: 42%; }
+    .col-rule { width: auto; }
+    .no-results { padding: 28px 14px; color: var(--vscode-descriptionForeground); text-align: center; }
+    .rank-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .rank-grid > .panel { margin-top: 0; }
+    .compact-table {
+      display: flex;
+      min-height: 376px;
+      flex-direction: column;
+    }
+    .compact-table .table-wrap {
+      height: 330px;
+      max-height: 330px;
+    }
+    .compact-table th, .compact-table td { padding: 8px 10px; }
+    .count-cell { width: 82px; text-align: right; font-variant-numeric: tabular-nums; }
+    .severity-cell { width: 92px; }
     @media (max-width: 980px) {
-      .shell { min-width: 640px; }
-      .form-grid {
-        grid-template-columns: repeat(2, minmax(220px, 1fr));
-      }
-      .folder-field { grid-column: 1 / -1; }
-      .project-field { grid-column: 1 / -1; }
-      .action-field { grid-column: 1 / -1; }
-      .action-field button { width: auto; }
+      .topbar { flex-wrap: wrap; }
+      .navigation { order: 3; width: 100%; margin-left: 54px; }
+      .nav-button { flex: 1; }
+      .connection-row, .project-row, .advanced-grid, .rank-grid { grid-template-columns: 1fr; }
+      .table-toolbar { flex-wrap: wrap; }
+      .table-toolbar input { width: 100%; margin-left: 0; }
     }
   </style>
 </head>
@@ -667,14 +775,18 @@ export class DashboardPanel {
   <div class="shell">
     <header class="topbar">
       <div class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path fill="currentColor" d="M9.4 2.2a1 1 0 0 1 1.4.2L12 4l1.2-1.6a1 1 0 1 1 1.6 1.2L13.75 5H15a4 4 0 0 1 4 4v1h2a1 1 0 1 1 0 2h-2v2h2a1 1 0 1 1 0 2h-2v1a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-1H3a1 1 0 1 1 0-2h2v-2H3a1 1 0 1 1 0-2h2V9a4 4 0 0 1 4-4h1.25L9.2 3.6a1 1 0 0 1 .2-1.4ZM7 12v5a2 2 0 0 0 2 2h2v-7H7Zm6 7h2a2 2 0 0 0 2-2v-5h-4v7ZM9 7a2 2 0 0 0-2 2v1h10V9a2 2 0 0 0-2-2H9Z"/>
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9.4 2.2a1 1 0 0 1 1.4.2L12 4l1.2-1.6a1 1 0 1 1 1.6 1.2L13.75 5H15a4 4 0 0 1 4 4v1h2a1 1 0 1 1 0 2h-2v2h2a1 1 0 1 1 0 2h-2v1a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-1H3a1 1 0 1 1 0-2h2v-2H3a1 1 0 1 1 0-2h2V9a4 4 0 0 1 4-4h1.25L9.2 3.6a1 1 0 0 1 .2-1.4ZM7 12v5a2 2 0 0 0 2 2h2v-7H7Zm6 7h2a2 2 0 0 0 2-2v-5h-4v7ZM9 7a2 2 0 0 0-2 2v1h10V9a2 2 0 0 0-2-2H9Z"/>
         </svg>
       </div>
       <div class="brand">
-        <h1>Issue Dashboard</h1>
-        <p>Conecta SonarQube, publica los issues en Problems y revisa los defectos más críticos.</p>
+        <h1>SonarQube Dashboard</h1>
+        <p>Defectos de SonarQube asociados a la carpeta abierta.</p>
       </div>
+      <nav class="navigation" aria-label="Secciones del dashboard">
+        <button id="navData" class="nav-button active" type="button">Datos</button>
+        <button id="navConfiguration" class="nav-button" type="button">Configuración</button>
+      </nav>
       <div class="top-actions">
         <button id="openProblems" class="secondary" type="button">Abrir Problems</button>
         <button id="refreshTop" type="button">Actualizar</button>
@@ -682,113 +794,197 @@ export class DashboardPanel {
     </header>
 
     <main class="content">
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Conexión con SonarQube</h2>
-          <span class="muted">La configuración se guarda por carpeta del workspace</span>
-        </div>
-
-        <div id="emptyWorkspace" class="empty" hidden>
-          Abre una carpeta o un workspace para configurar Issue Dashboard.
-        </div>
-
-        <div id="configurationContent">
-          <div class="form-grid">
-            <div id="folderField" class="field folder-field">
-              <label for="folder"><span class="required">*</span> Carpeta</label>
-              <select id="folder"></select>
+      <section id="dataPage" class="page">
+        <section id="dataEmpty" class="empty-state">
+          <div class="empty-state-inner">
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9.4 2.2a1 1 0 0 1 1.4.2L12 4l1.2-1.6a1 1 0 1 1 1.6 1.2L13.75 5H15a4 4 0 0 1 4 4v1h2a1 1 0 1 1 0 2h-2v2h2a1 1 0 1 1 0 2h-2v1a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-1H3a1 1 0 1 1 0-2h2v-2H3a1 1 0 1 1 0-2h2V9a4 4 0 0 1 4-4h1.25L9.2 3.6a1 1 0 0 1 .2-1.4ZM7 12v5a2 2 0 0 0 2 2h2v-7H7Zm6 7h2a2 2 0 0 0 2-2v-5h-4v7ZM9 7a2 2 0 0 0-2 2v1h10V9a2 2 0 0 0-2-2H9Z"/>
+              </svg>
             </div>
-
-            <div class="field">
-              <label for="serverUrl"><span class="required">*</span> Servidor SonarQube</label>
-              <input id="serverUrl" type="url" placeholder="http://localhost:9000" spellcheck="false">
-            </div>
-
-            <div class="field">
-              <label for="token"><span class="required">*</span> Token</label>
-              <input id="token" type="password" autocomplete="off" placeholder="Introduce el token">
-              <div id="tokenHint" class="hint">Se guardará en SecretStorage.</div>
-            </div>
-
-            <div class="field action-field">
-              <label>&nbsp;</label>
-              <button id="loadProjects" type="button">Conectar</button>
-            </div>
-
-            <div class="field project-field">
-              <label for="projectKey"><span class="required">*</span> Proyecto o aplicación visible</label>
-              <select id="projectKey" disabled>
-                <option value="">Introduce servidor y token para cargar la lista</option>
-              </select>
-              <div class="hint">El desplegable incluye únicamente los componentes visibles para el token.</div>
-            </div>
-
-            <div class="field action-field">
-              <label>&nbsp;</label>
-              <button id="save" type="button">Sincronizar</button>
+            <div id="emptyProject" class="project-summary" hidden></div>
+            <h2 id="emptyTitle">Configura SonarQube Dashboard</h2>
+            <p id="emptyText">Vincula la carpeta abierta con un proyecto de SonarQube para consultar sus defectos.</p>
+            <div class="empty-actions">
+              <button id="goConfiguration" type="button">Ir a configuración</button>
+              <button id="syncEmpty" class="secondary" type="button" hidden>Sincronizar datos</button>
             </div>
           </div>
+        </section>
 
-          <details class="advanced">
-            <summary>Configuración avanzada</summary>
-            <div class="advanced-grid">
-              <div class="field">
-                <label for="branch">Rama</label>
-                <input id="branch" type="text" placeholder="main" spellcheck="false">
-                <div class="hint">Vacío utiliza la rama principal configurada en SonarQube.</div>
-              </div>
-              <div class="field">
-                <label for="baseDir">Subcarpeta local</label>
-                <input id="baseDir" type="text" placeholder="packages/backend" spellcheck="false">
-                <div class="hint">Solo es necesaria cuando la raíz analizada está dentro de una subcarpeta.</div>
-              </div>
+        <section id="results" hidden>
+          <div id="cards" class="cards"></div>
+
+          <section class="panel">
+            <div class="table-toolbar">
+              <h2>Defectos</h2>
+              <span id="tableCount" class="muted">0 issues</span>
+              <input id="filter" type="search" placeholder="Filtrar por archivo, regla o descripción">
             </div>
-          </details>
+            <div class="table-wrap">
+              <table class="issues-table" aria-label="Defectos">
+                <thead>
+                  <tr>
+                    <th class="col-severity">Severidad</th>
+                    <th class="col-type">Tipo</th>
+                    <th class="col-file">Archivo</th>
+                    <th class="col-rule">Regla</th>
+                  </tr>
+                </thead>
+                <tbody id="issuesBody"></tbody>
+              </table>
+              <div id="noResults" class="no-results">No se han encontrado defectos para el proyecto seleccionado.</div>
+            </div>
+          </section>
 
-          <div class="form-footer">
-            <button id="refresh" class="secondary" type="button">Actualizar issues</button>
-            <button id="clear" class="secondary" type="button">Limpiar Problems</button>
-            <div class="spacer"></div>
-            <span id="configState" class="muted">Sin configurar</span>
+          <div class="rank-grid">
+            <section class="panel compact-table">
+              <div class="panel-header">
+                <h2>Top Archivos</h2>
+                <span id="filesCount" class="muted">0 archivos</span>
+              </div>
+              <div class="table-wrap">
+                <table aria-label="Top Archivos">
+                  <thead>
+                    <tr>
+                      <th>Archivo</th>
+                      <th class="severity-cell">Máxima</th>
+                      <th class="count-cell">Defectos</th>
+                    </tr>
+                  </thead>
+                  <tbody id="filesBody"></tbody>
+                </table>
+                <div id="noFiles" class="no-results">No hay archivos con defectos.</div>
+              </div>
+            </section>
+
+            <section class="panel compact-table">
+              <div class="panel-header">
+                <h2>Top Reglas</h2>
+                <span id="rulesCount" class="muted">0 reglas</span>
+              </div>
+              <div class="table-wrap">
+                <table aria-label="Top Reglas">
+                  <thead>
+                    <tr>
+                      <th>Regla</th>
+                      <th class="severity-cell">Máxima</th>
+                      <th class="count-cell">Defectos</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rulesBody"></tbody>
+                </table>
+                <div id="noRules" class="no-results">No hay reglas con defectos.</div>
+              </div>
+            </section>
           </div>
-        </div>
+        </section>
       </section>
 
-      <div id="status" class="status" role="status" aria-live="polite"></div>
-
-      <section id="results" class="results" hidden>
-        <div id="cards" class="cards"></div>
-
+      <section id="configurationPage" class="page" hidden>
         <section class="panel">
-          <div class="table-toolbar">
-            <h2>Top de defectos por severidad</h2>
-            <span id="tableCount" class="muted">0 issues</span>
-            <input id="filter" type="search" placeholder="Filtrar por archivo, regla o descripción">
+          <div class="panel-header">
+            <h2>Conexión con SonarQube</h2>
+            <span class="muted">La configuración se guarda por carpeta del workspace</span>
           </div>
-          <div class="table-wrap">
-            <table aria-label="Top de defectos por severidad">
-              <thead>
-                <tr>
-                  <th class="col-severity">Severidad</th>
-                  <th class="col-type">Tipo</th>
-                  <th class="col-file">Archivo</th>
-                  <th class="col-line">Línea</th>
-                  <th class="col-rule">Regla</th>
-                  <th>Descripción</th>
-                </tr>
-              </thead>
-              <tbody id="issuesBody"></tbody>
-            </table>
-            <div id="noResults" class="no-results">No se han encontrado issues para la aplicación seleccionada.</div>
+
+          <div id="emptyWorkspace" class="panel-body" hidden>
+            <strong>No hay ninguna carpeta abierta.</strong>
+            <p class="muted">Abre el proyecto local que corresponde al proyecto de SonarQube.</p>
+          </div>
+
+          <div id="configurationContent">
+            <div class="panel-body">
+              <div id="folderField" class="workspace-row" hidden>
+                <label for="folder">Carpeta del workspace</label>
+                <select id="folder"></select>
+              </div>
+
+              <div class="form-grid connection-row">
+                <div class="field">
+                  <label for="serverUrl"><span class="required">*</span> Servidor SonarQube</label>
+                  <input id="serverUrl" type="url" placeholder="https://sonarqube.example.com" spellcheck="false">
+                </div>
+                <div class="field">
+                  <label for="token"><span class="required">*</span> Token</label>
+                  <input id="token" type="password" placeholder="Introduce el token" autocomplete="off">
+                  <div id="tokenHint" class="hint">El token se guarda de forma segura para esta carpeta.</div>
+                </div>
+                <div class="field action-field">
+                  <label aria-hidden="true">&nbsp;</label>
+                  <button id="loadProjects" type="button">Conectar y cargar aplicaciones</button>
+                </div>
+              </div>
+
+              <div class="form-grid project-row">
+                <div class="field">
+                  <label for="projectKey"><span class="required">*</span> Proyecto o aplicación visible</label>
+                  <select id="projectKey" disabled>
+                    <option value="">Introduce servidor y token para cargar la lista</option>
+                  </select>
+                  <div class="hint">El desplegable incluye únicamente los componentes visibles para el token.</div>
+                </div>
+                <div class="field action-field">
+                  <label aria-hidden="true">&nbsp;</label>
+                  <button id="save" type="button">Guardar y sincronizar</button>
+                </div>
+              </div>
+
+              <details>
+                <summary>Configuración avanzada</summary>
+                <div class="form-grid advanced-grid">
+                  <div class="field">
+                    <label for="branch">Rama</label>
+                    <input id="branch" type="text" placeholder="main" spellcheck="false">
+                    <div class="hint">Déjala vacía para consultar la rama principal.</div>
+                  </div>
+                  <div class="field">
+                    <label for="baseDir">Subcarpeta local</label>
+                    <input id="baseDir" type="text" placeholder="packages/backend" spellcheck="false">
+                    <div class="hint">Solo es necesaria cuando la raíz analizada está dentro de una subcarpeta.</div>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <div class="form-footer">
+              <button id="refresh" class="secondary" type="button">Actualizar issues</button>
+              <button id="clear" class="secondary" type="button">Limpiar Problems</button>
+              <div class="spacer"></div>
+              <span id="configState" class="muted">Sin configurar</span>
+            </div>
           </div>
         </section>
       </section>
     </main>
   </div>
 
+  <dialog id="ruleDialog" class="rule-dialog" aria-labelledby="ruleDialogTitle">
+    <div class="rule-dialog-header">
+      <h2 id="ruleDialogTitle"></h2>
+      <button id="ruleDialogClose" class="rule-dialog-close secondary" type="button" aria-label="Cerrar">×</button>
+    </div>
+    <div id="ruleDialogDescription" class="rule-dialog-body"></div>
+  </dialog>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const typeIconClasses = {
+      BUG: 'bug',
+      CODE_SMELL: 'code-smell',
+      VULNERABILITY: 'vulnerability'
+    };
     const elements = {
+      navData: document.getElementById('navData'),
+      navConfiguration: document.getElementById('navConfiguration'),
+      dataPage: document.getElementById('dataPage'),
+      configurationPage: document.getElementById('configurationPage'),
+      dataEmpty: document.getElementById('dataEmpty'),
+      emptyProject: document.getElementById('emptyProject'),
+      emptyTitle: document.getElementById('emptyTitle'),
+      emptyText: document.getElementById('emptyText'),
+      goConfiguration: document.getElementById('goConfiguration'),
+      syncEmpty: document.getElementById('syncEmpty'),
       emptyWorkspace: document.getElementById('emptyWorkspace'),
       configurationContent: document.getElementById('configurationContent'),
       folderField: document.getElementById('folderField'),
@@ -805,21 +1001,50 @@ export class DashboardPanel {
       refreshTop: document.getElementById('refreshTop'),
       clear: document.getElementById('clear'),
       openProblems: document.getElementById('openProblems'),
-      status: document.getElementById('status'),
       configState: document.getElementById('configState'),
       results: document.getElementById('results'),
       cards: document.getElementById('cards'),
       tableCount: document.getElementById('tableCount'),
       filter: document.getElementById('filter'),
       issuesBody: document.getElementById('issuesBody'),
-      noResults: document.getElementById('noResults')
+      noResults: document.getElementById('noResults'),
+      filesCount: document.getElementById('filesCount'),
+      filesBody: document.getElementById('filesBody'),
+      noFiles: document.getElementById('noFiles'),
+      rulesCount: document.getElementById('rulesCount'),
+      rulesBody: document.getElementById('rulesBody'),
+      noRules: document.getElementById('noRules'),
+      ruleDialog: document.getElementById('ruleDialog'),
+      ruleDialogTitle: document.getElementById('ruleDialogTitle'),
+      ruleDialogDescription: document.getElementById('ruleDialogDescription'),
+      ruleDialogClose: document.getElementById('ruleDialogClose')
     };
 
-    let currentConfig = { projectKey: '', hasToken: false };
+    let currentPage = 'data';
+    let currentConfig = { serverUrl: '', projectKey: '', hasToken: false };
+    let currentSummary = { published: 0, issues: [], severity: [] };
+    let summaryVisible = false;
     let currentIssues = [];
     let loadedProjects = [];
     let selectedProjectKey = '';
     let currentFolderUri = '';
+    let hasWorkspace = false;
+
+    function navigate(page) {
+      currentPage = page === 'configuration' ? 'configuration' : 'data';
+      elements.dataPage.hidden = currentPage !== 'data';
+      elements.configurationPage.hidden = currentPage !== 'configuration';
+      elements.navData.classList.toggle('active', currentPage === 'data');
+      elements.navConfiguration.classList.toggle('active', currentPage === 'configuration');
+    }
+
+    function isConfigured() {
+      return Boolean(
+        currentConfig.serverUrl &&
+        currentConfig.projectKey &&
+        currentConfig.hasToken
+      );
+    }
 
     function values() {
       return {
@@ -837,11 +1062,10 @@ export class DashboardPanel {
       elements.save.disabled = busy;
       elements.refresh.disabled = busy;
       elements.refreshTop.disabled = busy;
+      elements.syncEmpty.disabled = busy;
     }
 
-    function setStatus(kind, message) {
-      elements.status.className = 'status visible ' + kind;
-      elements.status.textContent = message;
+    function setStatus(kind) {
       setBusy(kind === 'loading');
     }
 
@@ -879,14 +1103,46 @@ export class DashboardPanel {
       selectedProjectKey = elements.projectKey.value;
     }
 
+    function renderEmptyState() {
+      const configured = isConfigured();
+      const showResults = hasWorkspace && configured && summaryVisible;
+      elements.results.hidden = !showResults;
+      elements.dataEmpty.hidden = showResults;
+
+      if (showResults) {
+        return;
+      }
+
+      elements.emptyProject.hidden = !configured;
+      elements.emptyProject.textContent = configured ? currentConfig.projectKey : '';
+      elements.syncEmpty.hidden = !configured;
+
+      if (!hasWorkspace) {
+        elements.emptyTitle.textContent = 'No hay ninguna carpeta abierta';
+        elements.emptyText.textContent = 'Abre el proyecto local que quieres vincular con SonarQube y vuelve a SonarQube Dashboard.';
+        elements.goConfiguration.textContent = 'Ver configuración';
+        elements.syncEmpty.hidden = true;
+      } else if (!configured) {
+        elements.emptyTitle.textContent = 'No hay un proyecto vinculado';
+        elements.emptyText.textContent = 'Configura el servidor, el token y el proyecto de SonarQube para cargar sus defectos.';
+        elements.goConfiguration.textContent = 'Configurar proyecto';
+      } else {
+        elements.emptyTitle.textContent = 'El proyecto está vinculado';
+        elements.emptyText.textContent = 'Sincroniza para cargar los defectos, el top de archivos y el top de reglas.';
+        elements.goConfiguration.textContent = 'Revisar configuración';
+      }
+    }
+
     function renderState(message) {
       const folders = message.folders || [];
-      const hasWorkspace = folders.length > 0;
+      hasWorkspace = folders.length > 0;
       elements.emptyWorkspace.hidden = hasWorkspace;
       elements.configurationContent.hidden = !hasWorkspace;
 
       if (!hasWorkspace) {
+        currentConfig = { serverUrl: '', projectKey: '', branch: '', baseDir: '', hasToken: false };
         elements.configState.textContent = 'Sin carpeta abierta';
+        renderEmptyState();
         return;
       }
 
@@ -903,38 +1159,39 @@ export class DashboardPanel {
       elements.folder.value = message.selectedFolderUri;
       elements.folderField.hidden = folders.length === 1;
 
-      currentConfig = message.config;
-      elements.serverUrl.value = message.config.serverUrl || '';
+      currentConfig = message.config || {};
+      elements.serverUrl.value = currentConfig.serverUrl || '';
       elements.token.value = '';
-      elements.token.placeholder = message.config.hasToken
+      elements.token.placeholder = currentConfig.hasToken
         ? 'Token guardado · escribe otro para sustituirlo'
         : 'Introduce el token';
-      elements.tokenHint.textContent = message.config.hasToken
+      elements.tokenHint.textContent = currentConfig.hasToken
         ? 'Hay un token guardado de forma segura para esta carpeta.'
         : 'El token se guardará en SecretStorage, no en settings.json.';
-      elements.branch.value = message.config.branch || '';
-      elements.baseDir.value = message.config.baseDir || '';
-      elements.configState.textContent = message.config.projectKey
-        ? 'Configurado: ' + message.config.projectKey
+      elements.branch.value = currentConfig.branch || '';
+      elements.baseDir.value = currentConfig.baseDir || '';
+      elements.configState.textContent = currentConfig.projectKey
+        ? 'Configurado: ' + currentConfig.projectKey
         : 'Sin configurar';
 
       if (folderChanged) {
         loadedProjects = [];
         selectedProjectKey = '';
+        summaryVisible = false;
       }
 
-      selectedProjectKey = message.config.projectKey || selectedProjectKey;
+      selectedProjectKey = currentConfig.projectKey || selectedProjectKey;
 
       if (loadedProjects.length && !folderChanged) {
         setProjectOptions(loadedProjects, selectedProjectKey);
-      } else if (message.config.projectKey) {
+      } else if (currentConfig.projectKey) {
         setProjectOptions([
           {
-            key: message.config.projectKey,
-            name: message.config.projectKey,
+            key: currentConfig.projectKey,
+            name: currentConfig.projectKey,
             qualifier: 'TRK'
           }
-        ], message.config.projectKey);
+        ], currentConfig.projectKey);
       } else {
         elements.projectKey.textContent = '';
         const option = document.createElement('option');
@@ -943,6 +1200,8 @@ export class DashboardPanel {
         elements.projectKey.appendChild(option);
         elements.projectKey.disabled = true;
       }
+
+      renderEmptyState();
     }
 
     function renderConfigurationSaved(config) {
@@ -955,10 +1214,18 @@ export class DashboardPanel {
       elements.token.value = '';
       elements.token.placeholder = 'Token guardado · escribe otro para sustituirlo';
       elements.tokenHint.textContent = 'Hay un token guardado de forma segura para esta carpeta.';
+      renderEmptyState();
     }
 
     function severityClass(severity) {
       return String(severity || 'UNKNOWN').toLowerCase();
+    }
+
+    function createBadge(severity) {
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + severityClass(severity);
+      badge.textContent = severity || 'UNKNOWN';
+      return badge;
     }
 
     function createCard(value, label, className) {
@@ -995,77 +1262,243 @@ export class DashboardPanel {
       return cell;
     }
 
+    function createTypeCell(type) {
+      const normalizedType = String(type || 'ISSUE').toUpperCase();
+      const cell = document.createElement('td');
+      cell.className = 'type-icon-cell';
+      cell.title = normalizedType;
+
+      const iconClass = typeIconClasses[normalizedType];
+      if (iconClass) {
+        const icon = document.createElement('span');
+        icon.className = 'type-icon ' + iconClass;
+        icon.setAttribute('role', 'img');
+        icon.setAttribute('aria-label', normalizedType);
+        cell.appendChild(icon);
+      } else {
+        cell.textContent = normalizedType;
+      }
+      return cell;
+    }
+
+    const fileCellUtils = {
+      fileName(relativePath) {
+        const normalizedPath = String(relativePath || '').replace(/\\\\/g, '/');
+        const pathParts = normalizedPath.split('/');
+        return pathParts[pathParts.length - 1] || normalizedPath;
+      },
+
+      create(relativePath, lineNumber) {
+        const cell = document.createElement('td');
+        cell.className = 'path';
+        cell.title = relativePath;
+
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.textContent = this.fileName(relativePath);
+        cell.appendChild(name);
+
+        if (lineNumber !== undefined && lineNumber !== null) {
+          const line = document.createElement('span');
+          line.className = 'file-line';
+          line.textContent = 'Línea ' + String(lineNumber);
+          cell.appendChild(line);
+        }
+        return cell;
+      }
+    };
+
+    function showRuleDialog(issue) {
+      elements.ruleDialogTitle.textContent = issue.ruleName || issue.rule;
+      elements.ruleDialogDescription.textContent = issue.message;
+      elements.ruleDialog.showModal();
+    }
+
+    function createRuleCell(issue) {
+      const cell = document.createElement('td');
+      const button = document.createElement('button');
+      button.className = 'rule-button';
+      button.type = 'button';
+      button.textContent = issue.ruleName || issue.rule;
+      button.title = 'Ver descripción' +
+        (issue.ruleName && issue.ruleName !== issue.rule ? ' · ' + issue.rule : '');
+      button.setAttribute('aria-haspopup', 'dialog');
+
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        showRuleDialog(issue);
+      });
+
+      cell.appendChild(button);
+      return cell;
+    }
+
+    function bindOpen(row, issue) {
+      if (!issue) {
+        return;
+      }
+      row.tabIndex = 0;
+      row.title = 'Abrir ' + issue.relativePath + ':' + issue.line;
+      const open = () => vscode.postMessage({
+        type: 'openIssue',
+        fileUri: issue.fileUri,
+        line: issue.line
+      });
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          open();
+        }
+      });
+    }
+
     function renderIssues() {
       const query = elements.filter.value.trim().toLowerCase();
       const filtered = currentIssues.filter(issue => {
         if (!query) {
           return true;
         }
-        return [issue.relativePath, issue.rule, issue.message, issue.type, issue.severity]
+        return [
+          issue.relativePath,
+          issue.ruleName,
+          issue.rule,
+          issue.message,
+          issue.type,
+          issue.severity
+        ]
           .join(' ')
           .toLowerCase()
           .includes(query);
       });
-
       elements.issuesBody.textContent = '';
       elements.tableCount.textContent = String(filtered.length) + ' issues';
       elements.noResults.hidden = filtered.length > 0;
 
       if (!filtered.length) {
         elements.noResults.textContent = currentIssues.length
-          ? 'No hay issues que coincidan con el filtro.'
-          : 'No se han encontrado issues para la aplicación seleccionada.';
+          ? 'No hay defectos que coincidan con el filtro.'
+          : 'No se han encontrado defectos para el proyecto seleccionado.';
         return;
       }
 
       for (const issue of filtered) {
         const row = document.createElement('tr');
-        row.tabIndex = 0;
-        row.title = 'Abrir ' + issue.relativePath + ':' + issue.line;
+        bindOpen(row, issue);
 
         const severityCell = document.createElement('td');
-        const badge = document.createElement('span');
-        badge.className = 'badge ' + severityClass(issue.severity);
-        badge.textContent = issue.severity;
-        severityCell.appendChild(badge);
+        severityCell.appendChild(createBadge(issue.severity));
         row.appendChild(severityCell);
-        row.appendChild(createCell(issue.type || 'ISSUE'));
-        row.appendChild(createCell(issue.relativePath, 'path'));
-        row.appendChild(createCell(String(issue.line)));
-        row.appendChild(createCell(issue.rule));
-        row.appendChild(createCell(issue.message, 'message'));
-
-        const open = () => vscode.postMessage({
-          type: 'openIssue',
-          fileUri: issue.fileUri,
-          line: issue.line
-        });
-        row.addEventListener('click', open);
-        row.addEventListener('keydown', event => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            open();
-          }
-        });
+        row.appendChild(createTypeCell(issue.type));
+        row.appendChild(fileCellUtils.create(issue.relativePath, issue.line));
+        row.appendChild(createRuleCell(issue));
         elements.issuesBody.appendChild(row);
       }
     }
 
+    function aggregateBy(keyName) {
+      const groups = new Map();
+      for (const issue of currentIssues) {
+        const key = issue[keyName] || 'UNKNOWN';
+        let group = groups.get(key);
+        if (!group) {
+          group = {
+            key,
+            count: 0,
+            severity: issue.severity,
+            severityRank: issue.severityRank || 0,
+            issue
+          };
+          groups.set(key, group);
+        }
+        group.count += 1;
+        if ((issue.severityRank || 0) > group.severityRank) {
+          group.severity = issue.severity;
+          group.severityRank = issue.severityRank || 0;
+          group.issue = issue;
+        }
+      }
+      return Array.from(groups.values()).sort((left, right) =>
+        right.count - left.count ||
+        right.severityRank - left.severityRank ||
+        String(left.key).localeCompare(String(right.key), 'es', { sensitivity: 'base' })
+      );
+    }
+
+    function renderTopFiles() {
+      const allRows = aggregateBy('relativePath');
+      const rows = allRows.slice(0, 15);
+      elements.filesBody.textContent = '';
+      elements.filesCount.textContent = allRows.length > rows.length
+        ? String(rows.length) + ' de ' + String(allRows.length) + ' archivos'
+        : String(rows.length) + (rows.length === 1 ? ' archivo' : ' archivos');
+      elements.noFiles.hidden = rows.length > 0;
+
+      for (const item of rows) {
+        const row = document.createElement('tr');
+        bindOpen(row, item.issue);
+        row.appendChild(fileCellUtils.create(item.key));
+        const severityCell = document.createElement('td');
+        severityCell.appendChild(createBadge(item.severity));
+        row.appendChild(severityCell);
+        row.appendChild(createCell(String(item.count), 'count-cell'));
+        elements.filesBody.appendChild(row);
+      }
+    }
+
+    function renderTopRules() {
+      const allRows = aggregateBy('rule');
+      const rows = allRows.slice(0, 15);
+      elements.rulesBody.textContent = '';
+      elements.rulesCount.textContent = allRows.length > rows.length
+        ? String(rows.length) + ' de ' + String(allRows.length) + ' reglas'
+        : String(rows.length) + (rows.length === 1 ? ' regla' : ' reglas');
+      elements.noRules.hidden = rows.length > 0;
+
+      for (const item of rows) {
+        const row = document.createElement('tr');
+        bindOpen(row, item.issue);
+        row.appendChild(createRuleCell(item.issue));
+        const severityCell = document.createElement('td');
+        severityCell.appendChild(createBadge(item.severity));
+        row.appendChild(severityCell);
+        row.appendChild(createCell(String(item.count), 'count-cell'));
+        elements.rulesBody.appendChild(row);
+      }
+    }
+
     function renderSummary(summary, visible) {
-      elements.results.hidden = !visible;
-      if (!visible) {
+      currentSummary = summary || { published: 0, issues: [], severity: [] };
+      summaryVisible = Boolean(visible);
+      currentIssues = currentSummary.issues || [];
+      renderCards(currentSummary);
+      renderIssues();
+      renderTopFiles();
+      renderTopRules();
+      renderEmptyState();
+    }
+
+    function requestRefresh() {
+      if (!isConfigured()) {
+        navigate('configuration');
+        setStatus('error', 'Configura primero la conexión y el proyecto.');
         return;
       }
-
-      renderCards(summary);
-      currentIssues = summary.issues || [];
-      renderIssues();
+      setStatus('loading', 'Actualizando issues…');
+      vscode.postMessage({ type: 'refresh' });
     }
+
+    elements.navData.addEventListener('click', () => navigate('data'));
+    elements.navConfiguration.addEventListener('click', () => navigate('configuration'));
+    elements.goConfiguration.addEventListener('click', () => navigate('configuration'));
+    elements.syncEmpty.addEventListener('click', requestRefresh);
 
     elements.folder.addEventListener('change', () => {
       currentFolderUri = elements.folder.value;
       loadedProjects = [];
       selectedProjectKey = '';
+      summaryVisible = false;
+      renderEmptyState();
       vscode.postMessage({ type: 'selectFolder', folderUri: elements.folder.value });
     });
 
@@ -1085,20 +1518,24 @@ export class DashboardPanel {
       vscode.postMessage({ type: 'save', ...values() });
     });
 
-    function requestRefresh() {
-      setStatus('loading', 'Actualizando issues…');
-      vscode.postMessage({ type: 'refresh' });
-    }
-
     elements.refresh.addEventListener('click', requestRefresh);
     elements.refreshTop.addEventListener('click', requestRefresh);
     elements.clear.addEventListener('click', () => vscode.postMessage({ type: 'clear' }));
     elements.openProblems.addEventListener('click', () => vscode.postMessage({ type: 'openProblems' }));
     elements.filter.addEventListener('input', renderIssues);
+    elements.ruleDialogClose.addEventListener('click', () => elements.ruleDialog.close());
+    elements.ruleDialog.addEventListener('click', event => {
+      if (event.target === elements.ruleDialog) {
+        elements.ruleDialog.close();
+      }
+    });
 
     window.addEventListener('message', event => {
       const message = event.data;
       switch (message.type) {
+        case 'navigate':
+          navigate(message.page);
+          break;
         case 'state':
           renderState(message);
           break;
@@ -1127,6 +1564,7 @@ export class DashboardPanel {
       }
     });
 
+    navigate('data');
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>

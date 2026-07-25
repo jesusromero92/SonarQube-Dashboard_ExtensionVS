@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
-Write-Host '== Issue Dashboard: generando VSIX ==' -ForegroundColor Cyan
+Write-Host '== SonarQube Dashboard: generando VSIX ==' -ForegroundColor Cyan
 
 if (-not $SinInstalarDependencias) {
   if (Test-Path 'package-lock.json') {
@@ -33,7 +33,7 @@ if ($LASTEXITCODE -ne 0) {
   throw 'No se pudo leer la versión de package.json.'
 }
 
-$output = "issue-dashboard-$version.vsix"
+$output = "sonarqube-dashboard-$version.vsix"
 if (Test-Path $output) {
   Remove-Item $output -Force
 }

@@ -1,8 +1,8 @@
 {
-  "name": "vscode-issue-dashboard",
-  "displayName": "Issue Dashboard",
-  "description": "Dashboard de SonarQube integrado en VS Code con configuración, Problems y top de issues por criticidad.",
-  "version": "0.4.0",
+  "name": "vscode-sonarqube-dashboard",
+  "displayName": "SonarQube Dashboard",
+  "description": "Dashboard de SonarQube integrado en VS Code con páginas de datos y configuración, Problems, defectos, top de archivos y top de reglas.",
+  "version": "0.5.0",
   "publisher": "local-development",
   "engines": {
     "vscode": "^1.96.0"
@@ -13,85 +13,85 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onView:issueDashboard.launcher",
-    "onWebviewPanel:issueDashboard.panel",
-    "onCommand:issueDashboard.open",
-    "onCommand:issueDashboard.refresh",
-    "onCommand:issueDashboard.clear"
+    "onView:sonarQubeDashboard.launcher",
+    "onWebviewPanel:sonarQubeDashboard.panel",
+    "onCommand:sonarQubeDashboard.open",
+    "onCommand:sonarQubeDashboard.refresh",
+    "onCommand:sonarQubeDashboard.clear"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "issueDashboardContainer",
-          "title": "Issue Dashboard",
-          "icon": "media/issue-dashboard.svg"
+          "id": "sonarQubeDashboardContainer",
+          "title": "SonarQube Dashboard",
+          "icon": "media/sonarqube-dashboard.svg"
         }
       ]
     },
     "views": {
-      "issueDashboardContainer": [
+      "sonarQubeDashboardContainer": [
         {
           "type": "webview",
-          "id": "issueDashboard.launcher",
+          "id": "sonarQubeDashboard.launcher",
           "name": "Dashboard",
           "visibility": "visible",
-          "contextualTitle": "Issue Dashboard"
+          "contextualTitle": "SonarQube Dashboard"
         }
       ]
     },
     "commands": [
       {
-        "command": "issueDashboard.open",
-        "title": "Issue Dashboard: Abrir dashboard",
+        "command": "sonarQubeDashboard.open",
+        "title": "SonarQube Dashboard: Abrir dashboard",
         "icon": "$(dashboard)"
       },
       {
-        "command": "issueDashboard.refresh",
-        "title": "Issue Dashboard: Actualizar issues",
+        "command": "sonarQubeDashboard.refresh",
+        "title": "SonarQube Dashboard: Actualizar issues",
         "icon": "$(refresh)"
       },
       {
-        "command": "issueDashboard.clear",
-        "title": "Issue Dashboard: Limpiar Problems",
+        "command": "sonarQubeDashboard.clear",
+        "title": "SonarQube Dashboard: Limpiar Problems",
         "icon": "$(clear-all)"
       }
     ],
     "configuration": {
-      "title": "Issue Dashboard",
+      "title": "SonarQube Dashboard",
       "properties": {
-        "issueDashboard.sonar.serverUrl": {
+        "sonarQubeDashboard.sonar.serverUrl": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "URL de SonarQube. Se gestiona desde el dashboard de Issue Dashboard."
+          "description": "URL de SonarQube. Se gestiona desde SonarQube Dashboard."
         },
-        "issueDashboard.sonar.projectKey": {
+        "sonarQubeDashboard.sonar.projectKey": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Proyecto de SonarQube. Se gestiona desde el dashboard de Issue Dashboard."
+          "description": "Proyecto de SonarQube. Se gestiona desde SonarQube Dashboard."
         },
-        "issueDashboard.sonar.branch": {
+        "sonarQubeDashboard.sonar.branch": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Rama de SonarQube. Se gestiona desde el dashboard de Issue Dashboard."
+          "description": "Rama de SonarQube. Se gestiona desde SonarQube Dashboard."
         },
-        "issueDashboard.sonar.baseDir": {
+        "sonarQubeDashboard.sonar.baseDir": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "description": "Subcarpeta local asociada a la raíz del proyecto. Se gestiona desde el dashboard."
         },
-        "issueDashboard.autoRefresh": {
+        "sonarQubeDashboard.autoRefresh": {
           "type": "boolean",
           "default": true,
           "scope": "window",
           "description": "Actualiza los issues automáticamente al abrir o cambiar el workspace."
         },
-        "issueDashboard.refreshIntervalMinutes": {
+        "sonarQubeDashboard.refreshIntervalMinutes": {
           "type": "number",
           "default": 0,
           "minimum": 0,

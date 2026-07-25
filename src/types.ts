@@ -13,6 +13,7 @@ export interface SonarImpact {
 export interface SonarIssue {
   key: string;
   rule: string;
+  ruleName?: string;
   severity?: string;
   component: string;
   project?: string;
@@ -22,6 +23,13 @@ export interface SonarIssue {
   status: string;
   type?: string;
   impacts?: SonarImpact[];
+}
+
+export interface SonarRuleResponse {
+  rule?: {
+    key: string;
+    name?: string;
+  };
 }
 
 export interface SonarComponent {
@@ -103,6 +111,7 @@ export type DashboardSeverity = string;
 export interface DashboardIssue {
   key: string;
   rule: string;
+  ruleName: string;
   severity: DashboardSeverity;
   severityRank: number;
   type: string;

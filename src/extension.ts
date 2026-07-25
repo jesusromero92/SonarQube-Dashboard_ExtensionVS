@@ -103,19 +103,22 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
     right.severityRank - left.severityRank ||
     left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||
     left.line - right.line ||
-    left.rule.localeCompare(right.rule, 'es', { sensitivity: 'base' })
+    left.ruleName.localeCompare(right.ruleName, 'es', { sensitivity: 'base' })
   );
 
-  dashboardPanel?.setRefreshSummary(summary);
+  dashboardPanel?.setRefreshSummary(
+    summary,
+    summary.configuredFolders > 0
+  );
 
   if (summary.errors.length > 0) {
     void vscode.window.setStatusBarMessage(
-      `Issue Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
+      `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
       6000
     );
   } else if (summary.configuredFolders > 0) {
     void vscode.window.setStatusBarMessage(
-      `Issue Dashboard: ${summary.published} issues en Problems` +
+      `SonarQube Dashboard: ${summary.published} issues en Problems` +
         (summary.skipped ? `, ${summary.skipped} omitidos` : ''),
       5000
     );
@@ -131,7 +134,7 @@ function configureRefreshTimer(context: vscode.ExtensionContext): void {
   }
 
   const minutes = vscode.workspace
-    .getConfiguration('issueDashboard')
+    .getConfiguration('sonarQubeDashboard')
     .get<number>('refreshIntervalMinutes', 0);
 
   if (minutes > 0) {
@@ -153,7 +156,7 @@ function scheduleWorkspaceStateRefresh(): void {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  diagnostics = vscode.languages.createDiagnosticCollection('issue-dashboard');
+  diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
   context.subscriptions.push(diagnostics);
 
   dashboardPanel = new DashboardPanel(
@@ -184,18 +187,18 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.commands.registerCommand(
-      'issueDashboard.open',
+      'sonarQubeDashboard.open',
       () => dashboardPanel?.show()
     ),
     vscode.commands.registerCommand(
-      'issueDashboard.refresh',
+      'sonarQubeDashboard.refresh',
       async () => {
         const summary = await refreshAll(context);
         dashboardPanel?.setRefreshSummary(summary, summary.configuredFolders > 0);
       }
     ),
     vscode.commands.registerCommand(
-      'issueDashboard.clear',
+      'sonarQubeDashboard.clear',
       () => {
         diagnostics.clear();
         dashboardPanel?.setRefreshSummary(emptySummary());
@@ -205,7 +208,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void dashboardPanel?.refreshWorkspaceState();
       if (
         vscode.workspace
-          .getConfiguration('issueDashboard')
+          .getConfiguration('sonarQubeDashboard')
           .get<boolean>('autoRefresh', true)
       ) {
         void refreshAll(context);
@@ -214,8 +217,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration(
       (event: vscode.ConfigurationChangeEvent) => {
         if (
-          event.affectsConfiguration('issueDashboard') ||
-          event.affectsConfiguration('issueDashboard.sonar')
+          event.affectsConfiguration('sonarQubeDashboard') ||
+          event.affectsConfiguration('sonarQubeDashboard.sonar')
         ) {
           configureRefreshTimer(context);
           scheduleWorkspaceStateRefresh();
@@ -240,7 +243,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   if (
     vscode.workspace
-      .getConfiguration('issueDashboard')
+      .getConfiguration('sonarQubeDashboard')
       .get<boolean>('autoRefresh', true)
   ) {
     void refreshAll(context);

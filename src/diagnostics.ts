@@ -182,11 +182,11 @@ export async function publishFolderDiagnostics(
     const severity = issueSeverityLabel(issue, loaded.instanceMode);
     const diagnostic = new vscode.Diagnostic(
       issueRange(issue),
-      `[${issue.rule}] ${issue.message}`,
+      `[${issue.ruleName || issue.rule}] ${issue.message}`,
       vscodeSeverity(issue, loaded.instanceMode)
     );
 
-    diagnostic.source = 'Issue Dashboard';
+    diagnostic.source = 'SonarQube Dashboard';
     diagnostic.code = issue.key;
 
     const uriString = uri.toString();
@@ -197,6 +197,7 @@ export async function publishFolderDiagnostics(
     dashboardIssues.push({
       key: issue.key,
       rule: issue.rule,
+      ruleName: issue.ruleName || issue.rule,
       severity,
       severityRank: issueSeverityRank(severity),
       type: issue.type || 'ISSUE',

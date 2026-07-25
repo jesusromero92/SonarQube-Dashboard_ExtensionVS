@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { DashboardPanel } from './dashboardPanel';
 
-export const DASHBOARD_VIEW_ID = 'issueDashboard.launcher';
+export const DASHBOARD_VIEW_ID = 'sonarQubeDashboard.launcher';
 
 export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider {
   constructor(
@@ -81,7 +81,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
 </head>
 <body>
   <div class="launcher">
-    <h2>Issue Dashboard</h2>
+    <h2>SonarQube Dashboard</h2>
     <p>El dashboard se abre como una pestaña dentro de esta misma ventana de VS Code.</p>
     <button id="open" type="button">Abrir dashboard</button>
   </div>
