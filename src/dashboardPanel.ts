@@ -10,6 +10,31 @@ import { RefreshSummary } from './types';
 
 export const DASHBOARD_PANEL_VIEW_TYPE = 'sonarQubeDashboard.panel';
 
+const DASHBOARD_COLORS = {
+  types: {
+    BUG: '#00aa00',
+    CODE_SMELL: '#eabf00',
+    VULNERABILITY: '#a40014',
+    SECURITY_HOTSPOT: '#d4333f'
+  },
+  severities: {
+    BLOCKER: '#a40014',
+    CRITICAL: '#d4333f',
+    HIGH: '#d4333f',
+    MAJOR: '#ed7d20',
+    MEDIUM: '#ed7d20',
+    MINOR: '#eabf00',
+    LOW: '#eabf00',
+    INFO: '#2563eb'
+  }
+} as const;
+
+const DASHBOARD_TYPE_ICON_FILES = {
+  BUG: 'bug-svgrepo-com.svg',
+  CODE_SMELL: 'radiation-svgrepo-com.svg',
+  VULNERABILITY: 'shield-exclamation-svgrepo-com.svg'
+} as const;
+
 type RefreshCallback = () => Promise<RefreshSummary>;
 type ClearCallback = () => void;
 
@@ -32,7 +57,8 @@ function emptySummary(): RefreshSummary {
     skipped: 0,
     errors: [],
     issues: [],
-    severity: []
+    severity: [],
+    evolution: []
   };
 }
 
@@ -414,13 +440,13 @@ export class DashboardPanel {
   private getHtml(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString('hex');
     const bugIconUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'assets', 'bug-svgrepo-com.svg')
+      vscode.Uri.joinPath(this.context.extensionUri, 'assets', DASHBOARD_TYPE_ICON_FILES.BUG)
     );
     const codeSmellIconUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'assets', 'radiation-svgrepo-com.svg')
+      vscode.Uri.joinPath(this.context.extensionUri, 'assets', DASHBOARD_TYPE_ICON_FILES.CODE_SMELL)
     );
     const vulnerabilityIconUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'assets', 'shield-exclamation-svgrepo-com.svg')
+      vscode.Uri.joinPath(this.context.extensionUri, 'assets', DASHBOARD_TYPE_ICON_FILES.VULNERABILITY)
     );
 
     return `<!DOCTYPE html>
@@ -434,7 +460,21 @@ export class DashboardPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SonarQube Dashboard</title>
   <style nonce="${nonce}">
-    :root { color-scheme: light dark; }
+    :root {
+      color-scheme: light dark;
+      --dashboard-type-bug: ${DASHBOARD_COLORS.types.BUG};
+      --dashboard-type-code-smell: ${DASHBOARD_COLORS.types.CODE_SMELL};
+      --dashboard-type-vulnerability: ${DASHBOARD_COLORS.types.VULNERABILITY};
+      --dashboard-type-security-hotspot: ${DASHBOARD_COLORS.types.SECURITY_HOTSPOT};
+      --dashboard-severity-blocker: ${DASHBOARD_COLORS.severities.BLOCKER};
+      --dashboard-severity-critical: ${DASHBOARD_COLORS.severities.CRITICAL};
+      --dashboard-severity-high: ${DASHBOARD_COLORS.severities.HIGH};
+      --dashboard-severity-major: ${DASHBOARD_COLORS.severities.MAJOR};
+      --dashboard-severity-medium: ${DASHBOARD_COLORS.severities.MEDIUM};
+      --dashboard-severity-minor: ${DASHBOARD_COLORS.severities.MINOR};
+      --dashboard-severity-low: ${DASHBOARD_COLORS.severities.LOW};
+      --dashboard-severity-info: ${DASHBOARD_COLORS.severities.INFO};
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -608,11 +648,14 @@ export class DashboardPanel {
       border-top: 3px solid var(--vscode-charts-blue);
       background: var(--vscode-editorWidget-background);
     }
-    .card.blocker { border-top-color: var(--vscode-charts-red); }
-    .card.critical, .card.high { border-top-color: var(--vscode-charts-red); }
-    .card.major, .card.medium { border-top-color: var(--vscode-charts-yellow); }
-    .card.minor, .card.low { border-top-color: var(--vscode-charts-blue); }
-    .card.info { border-top-color: var(--vscode-charts-purple); }
+    .card.blocker { border-top-color: var(--dashboard-severity-blocker); }
+    .card.critical { border-top-color: var(--dashboard-severity-critical); }
+    .card.high { border-top-color: var(--dashboard-severity-high); }
+    .card.major { border-top-color: var(--dashboard-severity-major); }
+    .card.medium { border-top-color: var(--dashboard-severity-medium); }
+    .card.minor { border-top-color: var(--dashboard-severity-minor); }
+    .card.low { border-top-color: var(--dashboard-severity-low); }
+    .card.info { border-top-color: var(--dashboard-severity-info); }
     .card strong { display: block; margin-bottom: 5px; font-size: 24px; font-weight: 400; }
     .card span { color: var(--vscode-descriptionForeground); font-size: 12px; }
     .table-toolbar {
@@ -655,10 +698,14 @@ export class DashboardPanel {
       background: var(--vscode-badge-background);
       font-size: 11px;
     }
-    .badge.blocker, .badge.critical, .badge.high { background: var(--vscode-charts-red); }
-    .badge.major, .badge.medium { color: var(--vscode-editor-background); background: var(--vscode-charts-yellow); }
-    .badge.minor, .badge.low { background: var(--vscode-charts-blue); }
-    .badge.info { background: var(--vscode-charts-purple); }
+    .badge.blocker { background: var(--dashboard-severity-blocker); }
+    .badge.critical { background: var(--dashboard-severity-critical); }
+    .badge.high { background: var(--dashboard-severity-high); }
+    .badge.major { background: var(--dashboard-severity-major); }
+    .badge.medium { background: var(--dashboard-severity-medium); }
+    .badge.minor { color: #111827; background: var(--dashboard-severity-minor); }
+    .badge.low { color: #111827; background: var(--dashboard-severity-low); }
+    .badge.info { background: var(--dashboard-severity-info); }
     .path { min-width: 220px; max-width: 370px; }
     .file-name {
       display: block;
@@ -680,17 +727,17 @@ export class DashboardPanel {
       vertical-align: middle;
     }
     .type-icon.code-smell {
-      background: var(--vscode-charts-yellow, #cca700);
+      background: var(--dashboard-type-code-smell);
       -webkit-mask: url('${codeSmellIconUri}') center / contain no-repeat;
       mask: url('${codeSmellIconUri}') center / contain no-repeat;
     }
     .type-icon.bug {
-      background: var(--vscode-charts-green, #2ea043);
+      background: var(--dashboard-type-bug);
       -webkit-mask: url('${bugIconUri}') center / contain no-repeat;
       mask: url('${bugIconUri}') center / contain no-repeat;
     }
     .type-icon.vulnerability {
-      background: var(--vscode-charts-red, #f14c4c);
+      background: var(--dashboard-type-vulnerability);
       -webkit-mask: url('${vulnerabilityIconUri}') center / contain no-repeat;
       mask: url('${vulnerabilityIconUri}') center / contain no-repeat;
     }
@@ -761,11 +808,121 @@ export class DashboardPanel {
     .compact-table th, .compact-table td { padding: 8px 10px; }
     .count-cell { width: 82px; text-align: right; font-variant-numeric: tabular-nums; }
     .severity-cell { width: 92px; }
+    .evolution-section { margin-top: 20px; }
+    .evolution-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .evolution-heading h2 { margin: 0; font-size: 15px; }
+    .evolution-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .evolution-grid > .panel { margin-top: 0; }
+    .chart-card { padding: 16px; }
+    .chart-card-header h3 { margin: 0; font-size: 13px; }
+    .chart-card-header p {
+      min-height: 34px;
+      margin: 5px 0 12px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .chart-stage {
+      position: relative;
+      height: 280px;
+      border: 1px dashed var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+    }
+    .chart-stage > .chart-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .chart-empty {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+    }
+    .chart-tooltip {
+      position: fixed;
+      z-index: 99999;
+      width: max-content;
+      min-width: 150px;
+      max-width: 280px;
+      padding: 8px 10px;
+      overflow: hidden;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #ffffff;
+      background: #020617;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .38);
+      pointer-events: none;
+      font-size: 11px;
+      line-height: 16px;
+    }
+    .chart-tooltip-title {
+      overflow: hidden;
+      color: #ffffff;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chart-tooltip-subtitle {
+      overflow: hidden;
+      margin-bottom: 6px;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chart-tooltip-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .chart-tooltip-bar {
+      width: 4px;
+      height: 12px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+    }
+    .chart-tooltip-name {
+      min-width: 0;
+      max-width: 180px;
+      flex: 1;
+      overflow: hidden;
+      color: #cbd5e1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chart-tooltip-value {
+      margin-left: 12px;
+      color: #ffffff;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
+    .chart-legend button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      padding: 2px 5px;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+      font-size: 11px;
+    }
+    .chart-legend button.hidden-series { opacity: .45; text-decoration: line-through; }
+    .chart-legend-dot { width: 8px; height: 8px; flex: 0 0 auto; }
     @media (max-width: 980px) {
       .topbar { flex-wrap: wrap; }
       .navigation { order: 3; width: 100%; margin-left: 54px; }
       .nav-button { flex: 1; }
-      .connection-row, .project-row, .advanced-grid, .rank-grid { grid-template-columns: 1fr; }
+      .connection-row, .project-row, .advanced-grid, .rank-grid, .evolution-grid { grid-template-columns: 1fr; }
       .table-toolbar { flex-wrap: wrap; }
       .table-toolbar input { width: 100%; margin-left: 0; }
     }
@@ -878,6 +1035,31 @@ export class DashboardPanel {
               </div>
             </section>
           </div>
+
+          <section class="evolution-section">
+            <div class="evolution-heading">
+              <h2>Evolución respecto a análisis anteriores</h2>
+              <span id="evolutionCount" class="muted">0 análisis</span>
+            </div>
+            <div class="evolution-grid">
+              <section class="panel chart-card">
+                <div class="chart-card-header">
+                  <h3>Issues por tipo</h3>
+                  <p>Evolución semanal de bugs, code smells, vulnerabilidades y security hotspots.</p>
+                </div>
+                <div id="typeChart" class="chart-stage"></div>
+                <div id="typeLegend" class="chart-legend"></div>
+              </section>
+              <section class="panel chart-card">
+                <div class="chart-card-header">
+                  <h3>Issues por criticidad</h3>
+                  <p>Evolución semanal de issues por nivel de criticidad.</p>
+                </div>
+                <div id="severityChart" class="chart-stage"></div>
+                <div id="severityLegend" class="chart-legend"></div>
+              </section>
+            </div>
+          </section>
         </section>
       </section>
 
@@ -969,6 +1151,7 @@ export class DashboardPanel {
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const dashboardColors = ${JSON.stringify(DASHBOARD_COLORS)};
     const typeIconClasses = {
       BUG: 'bug',
       CODE_SMELL: 'code-smell',
@@ -1014,6 +1197,11 @@ export class DashboardPanel {
       rulesCount: document.getElementById('rulesCount'),
       rulesBody: document.getElementById('rulesBody'),
       noRules: document.getElementById('noRules'),
+      evolutionCount: document.getElementById('evolutionCount'),
+      typeChart: document.getElementById('typeChart'),
+      typeLegend: document.getElementById('typeLegend'),
+      severityChart: document.getElementById('severityChart'),
+      severityLegend: document.getElementById('severityLegend'),
       ruleDialog: document.getElementById('ruleDialog'),
       ruleDialogTitle: document.getElementById('ruleDialogTitle'),
       ruleDialogDescription: document.getElementById('ruleDialogDescription'),
@@ -1022,13 +1210,17 @@ export class DashboardPanel {
 
     let currentPage = 'data';
     let currentConfig = { serverUrl: '', projectKey: '', hasToken: false };
-    let currentSummary = { published: 0, issues: [], severity: [] };
+    let currentSummary = { published: 0, issues: [], severity: [], evolution: [] };
     let summaryVisible = false;
     let currentIssues = [];
     let loadedProjects = [];
     let selectedProjectKey = '';
     let currentFolderUri = '';
     let hasWorkspace = false;
+    const hiddenChartSeries = {
+      types: new Set(),
+      severity: new Set()
+    };
 
     function navigate(page) {
       currentPage = page === 'configuration' ? 'configuration' : 'data';
@@ -1467,14 +1659,285 @@ export class DashboardPanel {
       }
     }
 
+    const evolutionSeries = {
+      types: [
+        { key: 'bugs', name: 'Bugs', color: dashboardColors.types.BUG },
+        { key: 'codeSmells', name: 'Code Smells', color: dashboardColors.types.CODE_SMELL },
+        { key: 'vulnerabilities', name: 'Vulnerabilidades', color: dashboardColors.types.VULNERABILITY },
+        { key: 'securityHotspots', name: 'Security Hotspots', color: dashboardColors.types.SECURITY_HOTSPOT }
+      ],
+      severity: [
+        { key: 'blockerViolations', name: 'Blocker', color: dashboardColors.severities.BLOCKER },
+        { key: 'criticalViolations', name: 'Critical', color: dashboardColors.severities.CRITICAL },
+        { key: 'majorViolations', name: 'Major', color: dashboardColors.severities.MAJOR },
+        { key: 'minorViolations', name: 'Minor', color: dashboardColors.severities.MINOR },
+        { key: 'infoViolations', name: 'Info', color: dashboardColors.severities.INFO }
+      ]
+    };
+
+    function createSvgElement(name, attributes) {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+      for (const [key, value] of Object.entries(attributes || {})) {
+        element.setAttribute(key, String(value));
+      }
+      return element;
+    }
+
+    function formatEvolutionDate(value) {
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) {
+        return String(value || '');
+      }
+      return new Intl.DateTimeFormat('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        year: '2-digit'
+      }).format(date);
+    }
+
+    function formatChartValue(value) {
+      return new Intl.NumberFormat('es-ES', {
+        maximumFractionDigits: 1
+      }).format(Number(value) || 0);
+    }
+
+    function renderChartLegend(chartKey, legendElement, data) {
+      legendElement.textContent = '';
+      for (const series of evolutionSeries[chartKey]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.classList.toggle('hidden-series', hiddenChartSeries[chartKey].has(series.key));
+        button.disabled = data.length === 0;
+
+        const dot = createSvgElement('svg', {
+          class: 'chart-legend-dot',
+          viewBox: '0 0 8 8',
+          width: 8,
+          height: 8,
+          'aria-hidden': 'true'
+        });
+        dot.appendChild(createSvgElement('circle', {
+          cx: 4,
+          cy: 4,
+          r: 4,
+          fill: series.color
+        }));
+        button.appendChild(dot);
+        button.appendChild(document.createTextNode(series.name));
+        button.addEventListener('click', () => {
+          const hidden = hiddenChartSeries[chartKey];
+          if (hidden.has(series.key)) {
+            hidden.delete(series.key);
+          } else {
+            hidden.add(series.key);
+          }
+          renderEvolutionCharts();
+        });
+        legendElement.appendChild(button);
+      }
+    }
+
+    function clamp(value, minimum, maximum) {
+      return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    function positionChartTooltip(tooltip, mouseX, mouseY) {
+      const gap = 12;
+      const padding = 8;
+      const rect = tooltip.getBoundingClientRect();
+      const openRight = mouseX + gap + rect.width + padding <= window.innerWidth;
+      const openBottom = mouseY + gap + rect.height + padding <= window.innerHeight;
+      const left = openRight ? mouseX + gap : mouseX - gap - rect.width;
+      const top = openBottom ? mouseY + gap : mouseY - gap - rect.height;
+      tooltip.style.left = clamp(left, padding, window.innerWidth - rect.width - padding) + 'px';
+      tooltip.style.top = clamp(top, padding, window.innerHeight - rect.height - padding) + 'px';
+    }
+
+    function showChartTooltip(point, series, mouseX, mouseY) {
+      const tooltipKey = String(point.date || point.label) + ':' +
+        series.map(item => item.key).join(',');
+      const currentTooltip = document.querySelector('.chart-tooltip');
+      if (currentTooltip?.dataset.tooltipKey === tooltipKey) {
+        positionChartTooltip(currentTooltip, mouseX, mouseY);
+        return;
+      }
+      currentTooltip?.remove();
+      const tooltip = document.createElement('div');
+      tooltip.className = 'chart-tooltip';
+      tooltip.dataset.tooltipKey = tooltipKey;
+
+      const title = document.createElement('div');
+      title.className = 'chart-tooltip-title';
+      title.textContent = formatEvolutionDate(point.date || point.label);
+      tooltip.appendChild(title);
+
+      const subtitle = document.createElement('div');
+      subtitle.className = 'chart-tooltip-subtitle';
+      subtitle.textContent = 'Último análisis: ' + formatEvolutionDate(point.date || point.label);
+      tooltip.appendChild(subtitle);
+
+      for (const item of series) {
+        const row = document.createElement('div');
+        row.className = 'chart-tooltip-row';
+        const bar = document.createElement('span');
+        bar.className = 'chart-tooltip-bar';
+        bar.style.backgroundColor = item.color;
+        row.appendChild(bar);
+        const name = document.createElement('span');
+        name.className = 'chart-tooltip-name';
+        name.textContent = item.name;
+        row.appendChild(name);
+        const value = document.createElement('strong');
+        value.className = 'chart-tooltip-value';
+        value.textContent = formatChartValue(point[item.key]);
+        row.appendChild(value);
+        tooltip.appendChild(row);
+      }
+      document.body.appendChild(tooltip);
+      positionChartTooltip(tooltip, mouseX, mouseY);
+    }
+
+    function renderLineChart(chartKey, container, legendElement, data) {
+      container.textContent = '';
+      const series = evolutionSeries[chartKey].filter(
+        item => !hiddenChartSeries[chartKey].has(item.key)
+      );
+      renderChartLegend(chartKey, legendElement, data);
+
+      if (!data.length) {
+        const empty = document.createElement('div');
+        empty.className = 'chart-empty';
+        empty.textContent = 'No hay análisis históricos disponibles.';
+        container.appendChild(empty);
+        return;
+      }
+      if (!series.length) {
+        const empty = document.createElement('div');
+        empty.className = 'chart-empty';
+        empty.textContent = 'Todas las líneas están ocultas.';
+        container.appendChild(empty);
+        return;
+      }
+
+      const width = 640;
+      const height = 280;
+      const margin = { top: 18, right: 18, bottom: 42, left: 48 };
+      const plotWidth = width - margin.left - margin.right;
+      const plotHeight = height - margin.top - margin.bottom;
+      const values = data.flatMap(point => series.map(item => Number(point[item.key]) || 0));
+      const maximum = Math.max(1, ...values);
+      const svg = createSvgElement('svg', {
+        class: 'chart-svg',
+        viewBox: '0 0 ' + width + ' ' + height,
+        preserveAspectRatio: 'none',
+        'aria-label': chartKey === 'types'
+          ? 'Evolución de issues por tipo'
+          : 'Evolución de issues por criticidad'
+      });
+
+      for (let index = 0; index <= 4; index += 1) {
+        const y = margin.top + (plotHeight * index / 4);
+        const value = maximum * (1 - index / 4);
+        svg.appendChild(createSvgElement('line', {
+          x1: margin.left,
+          y1: y,
+          x2: width - margin.right,
+          y2: y,
+          stroke: 'var(--vscode-panel-border)',
+          'stroke-dasharray': '3 3'
+        }));
+        const label = createSvgElement('text', {
+          x: margin.left - 8,
+          y: y + 4,
+          fill: 'var(--vscode-descriptionForeground)',
+          'font-size': 10,
+          'text-anchor': 'end'
+        });
+        label.textContent = formatChartValue(value);
+        svg.appendChild(label);
+      }
+
+      const xFor = index => margin.left +
+        (data.length === 1 ? plotWidth / 2 : plotWidth * index / (data.length - 1));
+      const yFor = value => margin.top + plotHeight -
+        ((Number(value) || 0) / maximum) * plotHeight;
+      const labelStep = Math.max(1, Math.ceil(data.length / 5));
+
+      data.forEach((point, index) => {
+        if (index % labelStep !== 0 && index !== data.length - 1) {
+          return;
+        }
+        const label = createSvgElement('text', {
+          x: xFor(index),
+          y: height - 15,
+          fill: 'var(--vscode-descriptionForeground)',
+          'font-size': 10,
+          'text-anchor': 'middle'
+        });
+        label.textContent = formatEvolutionDate(point.label);
+        svg.appendChild(label);
+      });
+
+      for (const item of series) {
+        const points = data.map((point, index) =>
+          xFor(index) + ',' + yFor(point[item.key])
+        ).join(' ');
+        svg.appendChild(createSvgElement('polyline', {
+          points,
+          fill: 'none',
+          stroke: item.color,
+          'stroke-width': 2,
+          'vector-effect': 'non-scaling-stroke'
+        }));
+        data.forEach((point, index) => {
+          svg.appendChild(createSvgElement('circle', {
+            cx: xFor(index),
+            cy: yFor(point[item.key]),
+            r: 3,
+            fill: item.color,
+            stroke: item.color,
+            'vector-effect': 'non-scaling-stroke'
+          }));
+        });
+      }
+
+      svg.addEventListener('mousemove', event => {
+        const rect = svg.getBoundingClientRect();
+        const viewX = ((event.clientX - rect.left) / rect.width) * width;
+        const ratio = clamp((viewX - margin.left) / plotWidth, 0, 1);
+        const pointIndex = Math.round(ratio * Math.max(0, data.length - 1));
+        showChartTooltip(
+          data[pointIndex],
+          series,
+          event.clientX,
+          event.clientY
+        );
+      });
+
+      svg.addEventListener('mouseleave', () =>
+        document.querySelector('.chart-tooltip')?.remove()
+      );
+      container.appendChild(svg);
+    }
+
+    function renderEvolutionCharts() {
+      document.querySelector('.chart-tooltip')?.remove();
+      const data = currentSummary.evolution || [];
+      elements.evolutionCount.textContent = String(data.length) +
+        (data.length === 1 ? ' análisis' : ' análisis');
+      renderLineChart('types', elements.typeChart, elements.typeLegend, data);
+      renderLineChart('severity', elements.severityChart, elements.severityLegend, data);
+    }
+
     function renderSummary(summary, visible) {
-      currentSummary = summary || { published: 0, issues: [], severity: [] };
+      currentSummary = summary || { published: 0, issues: [], severity: [], evolution: [] };
       summaryVisible = Boolean(visible);
       currentIssues = currentSummary.issues || [];
       renderCards(currentSummary);
       renderIssues();
       renderTopFiles();
       renderTopRules();
+      renderEvolutionCharts();
       renderEmptyState();
     }
 

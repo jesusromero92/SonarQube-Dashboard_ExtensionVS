@@ -1,4 +1,4 @@
-# SonarQube Dashboard 0.5.0
+# SonarQube Dashboard 0.6.0
 
 Extensión de Visual Studio Code que conecta una carpeta del workspace con SonarQube, publica los issues en **Problems** y muestra un dashboard integrado.
 
@@ -16,6 +16,10 @@ Extensión de Visual Studio Code que conecta una carpeta del workspace con Sonar
 - Las filas de Defectos y Top Archivos abren el archivo afectado. Las filas de Top Reglas abren un defecto representativo de la regla.
 - Las tarjetas y tablas solo aparecen después de una sincronización explícita.
 - Las severidades mostradas son las devueltas por el modo activo del servidor SonarQube.
+- Debajo de los tops se muestra la evolución semanal de los últimos 15 análisis:
+  - issues por tipo;
+  - issues por criticidad.
+- Las gráficas incluyen tooltip por análisis y leyendas interactivas para mostrar u ocultar series.
 
 ## Uso
 
@@ -53,7 +57,7 @@ El script realiza:
 1. `npm ci` o `npm install`.
 2. `npm run compile`.
 3. `npx @vscode/vsce package`.
-4. Genera `sonarqube-dashboard-0.5.0.vsix` en la raíz.
+4. Genera `sonarqube-dashboard-0.6.0.vsix` en la raíz.
 
 Cuando las dependencias ya estén instaladas:
 

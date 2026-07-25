@@ -108,7 +108,8 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           skipped: 0,
           errors: [],
           issues: [],
-          severity: []
+          severity: [],
+          evolution: []
         });
         break;
     }

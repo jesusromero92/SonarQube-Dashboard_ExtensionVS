@@ -32,6 +32,20 @@ export interface SonarRuleResponse {
   };
 }
 
+export interface SonarMeasureHistoryEntry {
+  date: string;
+  value?: string;
+}
+
+export interface SonarHistoryMeasure {
+  metric: string;
+  history?: SonarMeasureHistoryEntry[];
+}
+
+export interface SonarMeasuresHistoryResponse {
+  measures?: SonarHistoryMeasure[];
+}
+
 export interface SonarComponent {
   key: string;
   name?: string;
@@ -104,6 +118,7 @@ export interface LoadedIssues {
   issues: SonarIssue[];
   componentPaths: Map<string, string>;
   instanceMode: SonarInstanceMode;
+  evolution: EvolutionPoint[];
 }
 
 export type DashboardSeverity = string;
@@ -127,6 +142,20 @@ export interface SeverityCount {
   rank: number;
 }
 
+export interface EvolutionPoint {
+  date: string;
+  label: string;
+  bugs: number;
+  codeSmells: number;
+  vulnerabilities: number;
+  securityHotspots: number;
+  blockerViolations: number;
+  criticalViolations: number;
+  majorViolations: number;
+  minorViolations: number;
+  infoViolations: number;
+}
+
 export interface PublishResult {
   published: number;
   skipped: number;
@@ -140,4 +169,5 @@ export interface RefreshSummary {
   errors: string[];
   issues: DashboardIssue[];
   severity: SeverityCount[];
+  evolution: EvolutionPoint[];
 }

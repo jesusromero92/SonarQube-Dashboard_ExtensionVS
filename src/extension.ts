@@ -10,7 +10,7 @@ import {
 } from './dashboardPanel';
 import { issueSeverityRank, publishFolderDiagnostics } from './diagnostics';
 import { fetchAllIssues } from './sonarClient';
-import { DashboardIssue, RefreshSummary, SeverityCount } from './types';
+import { DashboardIssue, EvolutionPoint, RefreshSummary, SeverityCount } from './types';
 
 let diagnostics: vscode.DiagnosticCollection;
 let refreshTimer: NodeJS.Timeout | undefined;
@@ -25,7 +25,8 @@ function emptySummary(): RefreshSummary {
     skipped: 0,
     errors: [],
     issues: [],
-    severity: []
+    severity: [],
+    evolution: []
   };
 }
 
@@ -47,6 +48,30 @@ function aggregateSeverity(issues: DashboardIssue[]): SeverityCount[] {
       right.rank - left.rank ||
       left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
     );
+}
+
+function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
+  const byLabel = new Map<string, EvolutionPoint>();
+  for (const point of points) {
+    const current = byLabel.get(point.label);
+    if (!current) {
+      byLabel.set(point.label, { ...point });
+      continue;
+    }
+    current.date = Date.parse(point.date) > Date.parse(current.date) ? point.date : current.date;
+    current.bugs += point.bugs;
+    current.codeSmells += point.codeSmells;
+    current.vulnerabilities += point.vulnerabilities;
+    current.securityHotspots += point.securityHotspots;
+    current.blockerViolations += point.blockerViolations;
+    current.criticalViolations += point.criticalViolations;
+    current.majorViolations += point.majorViolations;
+    current.minorViolations += point.minorViolations;
+    current.infoViolations += point.infoViolations;
+  }
+  return [...byLabel.values()]
+    .sort((left, right) => left.label.localeCompare(right.label))
+    .slice(-15);
 }
 
 async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSummary> {
@@ -89,6 +114,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
       summary.published += result.published;
       summary.skipped += result.skipped;
       summary.issues.push(...result.issues);
+      summary.evolution.push(...loaded.evolution);
     } catch (error) {
       if (signal.aborted) {
         break;
@@ -99,6 +125,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   }
 
   summary.severity = aggregateSeverity(summary.issues);
+  summary.evolution = aggregateEvolution(summary.evolution);
   summary.issues.sort((left, right) =>
     right.severityRank - left.severityRank ||
     left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||

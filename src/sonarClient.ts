@@ -1,9 +1,12 @@
 import {
   FolderSonarConfig,
+  EvolutionPoint,
   LoadedIssues,
   SonarInstanceMode,
   SonarIssue,
   SonarIssuesResponse,
+  SonarHistoryMeasure,
+  SonarMeasuresHistoryResponse,
   SonarProject,
   SonarProjectsResponse,
   SonarRuleResponse,
@@ -12,6 +15,18 @@ import {
 
 const PAGE_SIZE = 500;
 const MODE_SETTING_KEY = 'sonar.multi-quality-mode.enabled';
+const EVOLUTION_LIMIT = 15;
+const EVOLUTION_METRICS = [
+  'bugs',
+  'code_smells',
+  'vulnerabilities',
+  'security_hotspots',
+  'blocker_violations',
+  'critical_violations',
+  'major_violations',
+  'minor_violations',
+  'info_violations'
+] as const;
 
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.trim().replace(/\/+$/, '');
@@ -217,6 +232,121 @@ async function fetchRuleNames(
   return names;
 }
 
+function evolutionMetricProperty(metric: string): keyof Omit<EvolutionPoint, 'date' | 'label'> | undefined {
+  const properties: Record<string, keyof Omit<EvolutionPoint, 'date' | 'label'>> = {
+    bugs: 'bugs',
+    code_smells: 'codeSmells',
+    vulnerabilities: 'vulnerabilities',
+    security_hotspots: 'securityHotspots',
+    blocker_violations: 'blockerViolations',
+    critical_violations: 'criticalViolations',
+    major_violations: 'majorViolations',
+    minor_violations: 'minorViolations',
+    info_violations: 'infoViolations'
+  };
+  return properties[metric];
+}
+
+function emptyEvolutionPoint(date: string): EvolutionPoint {
+  return {
+    date,
+    label: date.slice(0, 10),
+    bugs: 0,
+    codeSmells: 0,
+    vulnerabilities: 0,
+    securityHotspots: 0,
+    blockerViolations: 0,
+    criticalViolations: 0,
+    majorViolations: 0,
+    minorViolations: 0,
+    infoViolations: 0
+  };
+}
+
+function weekBucket(date: string): string {
+  const parsed = new Date(date);
+  if (!Number.isFinite(parsed.getTime())) {
+    return date.slice(0, 10);
+  }
+  const day = parsed.getUTCDay() || 7;
+  parsed.setUTCDate(parsed.getUTCDate() - day + 1);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[] {
+  const byDate = new Map<string, EvolutionPoint>();
+
+  for (const measure of measures) {
+    const property = evolutionMetricProperty(measure.metric);
+    if (!property) {
+      continue;
+    }
+    for (const history of measure.history ?? []) {
+      const point = byDate.get(history.date) ?? emptyEvolutionPoint(history.date);
+      point[property] = Number(history.value) || 0;
+      byDate.set(history.date, point);
+    }
+  }
+
+  const byWeek = new Map<string, EvolutionPoint>();
+  for (const point of [...byDate.values()].sort((left, right) =>
+    Date.parse(left.date) - Date.parse(right.date)
+  )) {
+    const bucket = weekBucket(point.date);
+    byWeek.set(bucket, { ...point, label: bucket });
+  }
+
+  return [...byWeek.values()].slice(-EVOLUTION_LIMIT);
+}
+
+async function fetchEvolution(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<EvolutionPoint[]> {
+  const requestMetrics = async (metrics: readonly string[]): Promise<SonarHistoryMeasure[]> => {
+    const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/search_history`);
+    url.searchParams.set('component', config.projectKey);
+    url.searchParams.set('metrics', metrics.join(','));
+    url.searchParams.set('ps', String(PAGE_SIZE));
+    if (config.branch?.trim()) {
+      url.searchParams.set('branch', config.branch.trim());
+    }
+    const payload = await requestJson<SonarMeasuresHistoryResponse>(url, config.token, signal);
+    return payload.measures ?? [];
+  };
+
+  try {
+    return buildEvolution(await requestMetrics(EVOLUTION_METRICS));
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    const measures: Array<SonarHistoryMeasure | undefined> =
+      new Array(EVOLUTION_METRICS.length);
+    let nextMetricIndex = 0;
+    const worker = async (): Promise<void> => {
+      while (nextMetricIndex < EVOLUTION_METRICS.length) {
+        const metricIndex = nextMetricIndex++;
+        const metric = EVOLUTION_METRICS[metricIndex];
+        try {
+          measures[metricIndex] = (await requestMetrics([metric]))[0];
+        } catch (metricError) {
+          if (signal?.aborted) {
+            throw metricError;
+          }
+        }
+      }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(4, EVOLUTION_METRICS.length) },
+        () => worker()
+      )
+    );
+    return buildEvolution(measures.filter((measure): measure is SonarHistoryMeasure => Boolean(measure)));
+  }
+}
+
 export async function fetchAllIssues(
   config: FolderSonarConfig,
   signal?: AbortSignal
@@ -260,10 +390,12 @@ export async function fetchAllIssues(
   for (const issue of issues) {
     issue.ruleName = ruleNames.get(issue.rule);
   }
+  const evolution = await fetchEvolution(config, signal);
 
   return {
     issues,
     componentPaths,
-    instanceMode: inferInstanceMode(configuredMode, issues)
+    instanceMode: inferInstanceMode(configuredMode, issues),
+    evolution
   };
 }
