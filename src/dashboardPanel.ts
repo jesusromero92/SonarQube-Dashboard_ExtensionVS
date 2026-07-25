@@ -26,13 +26,26 @@ export const DASHBOARD_COLORS = {
     MINOR: '#eabf00',
     LOW: '#eabf00',
     INFO: '#2563eb'
+  },
+  qualityGate: {
+    OK: '#22a447',
+    WARN: '#eabf00',
+    ERROR: '#d4333f'
+  },
+  ratings: {
+    A: { foreground: '#00aa00', background: '#e6f7e8' },
+    B: { foreground: '#7fa000', background: '#f1f8d7' },
+    C: { foreground: '#b88a00', background: '#fff4cc' },
+    D: { foreground: '#ed7d20', background: '#fff0df' },
+    E: { foreground: '#d4333f', background: '#ffe2e5' }
   }
 } as const;
 
-const DASHBOARD_TYPE_ICON_FILES = {
+export const DASHBOARD_TYPE_ICON_FILES = {
   BUG: 'bug-svgrepo-com.svg',
   CODE_SMELL: 'radiation-svgrepo-com.svg',
-  VULNERABILITY: 'shield-exclamation-svgrepo-com.svg'
+  VULNERABILITY: 'shield-exclamation-svgrepo-com.svg',
+  SECURITY_HOTSPOT: 'hotspot-svgrepo-com.svg'
 } as const;
 
 type RefreshCallback = () => Promise<RefreshSummary>;
@@ -60,7 +73,28 @@ function emptySummary(): RefreshSummary {
     errors: [],
     issues: [],
     severity: [],
-    evolution: []
+    evolution: [],
+    qualityGate: { status: 'NONE' },
+    ratings: {
+      overall: {
+        maintainability: 'NONE',
+        reliability: 'NONE',
+        security: 'NONE',
+        securityReview: 'NONE'
+      },
+      newCode: {
+        maintainability: 'NONE',
+        reliability: 'NONE',
+        security: 'NONE',
+        securityReview: 'NONE'
+      }
+    },
+    types: {
+      bugs: 0,
+      codeSmells: 0,
+      vulnerabilities: 0,
+      securityHotspots: 0
+    }
   };
 }
 
@@ -422,7 +456,7 @@ export class DashboardPanel {
       } else {
         this.postStatus(
           'success',
-          `${summary.published} issues publicados en Problems.`
+          `${summary.published} issues encontrados.`
         );
         this.navigate('data');
       }
@@ -444,7 +478,7 @@ export class DashboardPanel {
     } else if (summary.errors.length > 0) {
       this.postStatus('error', summary.errors.join(' | '));
     } else {
-      this.postStatus('success', `${summary.published} issues publicados en Problems.`);
+      this.postStatus('success', `${summary.published} issues encontrados.`);
       this.navigate('data');
     }
   }
@@ -712,29 +746,52 @@ export class DashboardPanel {
       color: var(--vscode-badge-foreground);
       background: var(--vscode-badge-background);
     }
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 10px;
+    .metrics-summary {
+      display: flex;
+      overflow-x: auto;
       margin-bottom: 16px;
+      border-top: 1px solid var(--vscode-panel-border);
+      border-bottom: 1px solid var(--vscode-panel-border);
     }
-    .card {
-      min-height: 92px;
-      padding: 15px 13px;
-      border: 1px solid var(--vscode-panel-border);
+    .metric-summary {
+      min-width: 150px;
+      flex: 1 0 150px;
+      padding: 13px 15px;
       border-top: 3px solid var(--vscode-charts-blue);
-      background: var(--vscode-editorWidget-background);
+      border-right: 1px solid var(--vscode-panel-border);
     }
-    .card.blocker { border-top-color: var(--dashboard-severity-blocker); }
-    .card.critical { border-top-color: var(--dashboard-severity-critical); }
-    .card.high { border-top-color: var(--dashboard-severity-high); }
-    .card.major { border-top-color: var(--dashboard-severity-major); }
-    .card.medium { border-top-color: var(--dashboard-severity-medium); }
-    .card.minor { border-top-color: var(--dashboard-severity-minor); }
-    .card.low { border-top-color: var(--dashboard-severity-low); }
-    .card.info { border-top-color: var(--dashboard-severity-info); }
-    .card strong { display: block; margin-bottom: 5px; font-size: 24px; font-weight: 400; }
-    .card span { color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .metric-summary:last-child { border-right: 0; }
+    .metric-summary.blocker { border-top-color: var(--dashboard-severity-blocker); }
+    .metric-summary.critical { border-top-color: var(--dashboard-severity-critical); }
+    .metric-summary.high { border-top-color: var(--dashboard-severity-high); }
+    .metric-summary.major { border-top-color: var(--dashboard-severity-major); }
+    .metric-summary.medium { border-top-color: var(--dashboard-severity-medium); }
+    .metric-summary.minor { border-top-color: var(--dashboard-severity-minor); }
+    .metric-summary.low { border-top-color: var(--dashboard-severity-low); }
+    .metric-summary.info { border-top-color: var(--dashboard-severity-info); }
+    .metric-summary strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 24px;
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-label {
+      display: block;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+    }
+    .metric-delta {
+      display: block;
+      min-height: 16px;
+      margin-top: 7px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .metric-delta.increase { color: var(--vscode-testing-iconFailed); }
+    .metric-delta.decrease { color: var(--vscode-testing-iconPassed); }
     .table-toolbar {
       display: flex;
       align-items: center;
@@ -1009,13 +1066,13 @@ export class DashboardPanel {
   <div class="shell">
     <main class="content">
       <section id="dataPage" class="page">
-        <section id="dataLoading" class="dashboard-loading" hidden>
+        <section id="dataLoading" class="dashboard-loading">
           <div>
             <div class="dashboard-spinner" aria-hidden="true"></div>
             <strong>Sincronizando datos de SonarQube…</strong>
           </div>
         </section>
-        <section id="dataEmpty" class="empty-state">
+        <section id="dataEmpty" class="empty-state" hidden>
           <div class="empty-state-inner">
             <div class="empty-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -1033,7 +1090,7 @@ export class DashboardPanel {
         </section>
 
         <section id="results" hidden>
-          <div id="cards" class="cards"></div>
+          <div id="metricsSummary" class="metrics-summary" aria-label="Resumen de defectos"></div>
 
           <section class="panel">
             <div class="table-toolbar">
@@ -1157,7 +1214,7 @@ export class DashboardPanel {
                 </div>
                 <div class="field action-field">
                   <label aria-hidden="true">&nbsp;</label>
-                  <button id="loadProjects" type="button">Conectar y cargar aplicaciones</button>
+                  <button id="loadProjects" type="button">Conectar</button>
                 </div>
               </div>
 
@@ -1171,7 +1228,7 @@ export class DashboardPanel {
                 </div>
                 <div class="field action-field">
                   <label aria-hidden="true">&nbsp;</label>
-                  <button id="save" type="button">Guardar y sincronizar</button>
+                  <button id="save" type="button">Sincronizar</button>
                 </div>
               </div>
 
@@ -1246,7 +1303,7 @@ export class DashboardPanel {
       clear: document.getElementById('clear'),
       configState: document.getElementById('configState'),
       results: document.getElementById('results'),
-      cards: document.getElementById('cards'),
+      metricsSummary: document.getElementById('metricsSummary'),
       tableCount: document.getElementById('tableCount'),
       filter: document.getElementById('filter'),
       issuesBody: document.getElementById('issuesBody'),
@@ -1277,7 +1334,7 @@ export class DashboardPanel {
     let selectedProjectKey = '';
     let currentFolderUri = '';
     let hasWorkspace = false;
-    let dashboardLoading = false;
+    let dashboardLoading = true;
     const hiddenChartSeries = {
       types: new Set(),
       severity: new Set()
@@ -1490,27 +1547,83 @@ export class DashboardPanel {
       return badge;
     }
 
-    function createCard(value, label, className) {
-      const card = document.createElement('div');
-      card.className = 'card' + (className ? ' ' + className : '');
+    function createMetricSummary(value, label, delta, className) {
+      const item = document.createElement('div');
+      item.className = 'metric-summary' + (className ? ' ' + className : '');
 
       const number = document.createElement('strong');
       number.textContent = String(value);
-      card.appendChild(number);
+      item.appendChild(number);
 
       const caption = document.createElement('span');
+      caption.className = 'metric-label';
       caption.textContent = label;
-      card.appendChild(caption);
-      return card;
+      item.appendChild(caption);
+
+      const change = document.createElement('span');
+      change.className = 'metric-delta';
+      if (delta === null) {
+        change.textContent = 'Sin histórico anterior';
+      } else if (delta > 0) {
+        change.classList.add('increase');
+        change.textContent = '▲ +' + delta;
+      } else if (delta < 0) {
+        change.classList.add('decrease');
+        change.textContent = '▼ ' + Math.abs(delta);
+      } else {
+        change.textContent = 'Sin cambios';
+      }
+      item.appendChild(change);
+      return item;
     }
 
-    function renderCards(summary) {
-      elements.cards.textContent = '';
-      elements.cards.appendChild(createCard(summary.published || 0, 'Total publicados', ''));
+    function previousAnalysis(summary) {
+      const evolution = summary.evolution || [];
+      return evolution.length > 1 ? evolution[evolution.length - 2] : null;
+    }
 
-      for (const item of summary.severity || []) {
-        elements.cards.appendChild(
-          createCard(item.count || 0, item.name || 'UNKNOWN', severityClass(item.name))
+    function previousIssueTotal(point) {
+      if (!point) return null;
+      return (point.bugs || 0) + (point.codeSmells || 0) + (point.vulnerabilities || 0);
+    }
+
+    function previousSeverityValue(point, severity) {
+      if (!point) return null;
+      const keys = {
+        BLOCKER: 'blockerViolations',
+        CRITICAL: 'criticalViolations',
+        MAJOR: 'majorViolations',
+        MINOR: 'minorViolations',
+        INFO: 'infoViolations'
+      };
+      const key = keys[String(severity || '').toUpperCase()];
+      return key ? Number(point[key] || 0) : null;
+    }
+
+    function renderMetricsSummary(summary) {
+      const previous = previousAnalysis(summary);
+      const total = Number(summary.published || 0);
+      const previousTotal = previousIssueTotal(previous);
+      elements.metricsSummary.textContent = '';
+      elements.metricsSummary.appendChild(
+        createMetricSummary(
+          total,
+          'Issues encontrados',
+          previousTotal === null ? null : total - previousTotal,
+          ''
+        )
+      );
+
+      for (const severity of summary.severity || []) {
+        const count = Number(severity.count || 0);
+        const previousCount = previousSeverityValue(previous, severity.name);
+        elements.metricsSummary.appendChild(
+          createMetricSummary(
+            count,
+            severity.name || 'UNKNOWN',
+            previousCount === null ? null : count - previousCount,
+            severityClass(severity.name)
+          )
         );
       }
     }
@@ -2003,7 +2116,7 @@ export class DashboardPanel {
       currentSummary = summary || { published: 0, issues: [], severity: [], evolution: [] };
       summaryVisible = Boolean(visible);
       currentIssues = currentSummary.issues || [];
-      renderCards(currentSummary);
+      renderMetricsSummary(currentSummary);
       renderIssues();
       renderTopFiles();
       renderTopRules();

@@ -10,7 +10,14 @@ import {
 } from './dashboardPanel';
 import { issueSeverityRank, publishFolderDiagnostics } from './diagnostics';
 import { fetchAllIssues } from './sonarClient';
-import { DashboardIssue, EvolutionPoint, RefreshSummary, SeverityCount } from './types';
+import {
+  DashboardIssue,
+  EvolutionPoint,
+  QualityGateStatus,
+  RatingGrade,
+  RefreshSummary,
+  SeverityCount
+} from './types';
 
 let diagnostics: vscode.DiagnosticCollection;
 let refreshTimer: NodeJS.Timeout | undefined;
@@ -26,8 +33,54 @@ function emptySummary(): RefreshSummary {
     errors: [],
     issues: [],
     severity: [],
-    evolution: []
+    evolution: [],
+    qualityGate: { status: 'NONE' },
+    ratings: {
+      overall: {
+        maintainability: 'NONE',
+        reliability: 'NONE',
+        security: 'NONE',
+        securityReview: 'NONE'
+      },
+      newCode: {
+        maintainability: 'NONE',
+        reliability: 'NONE',
+        security: 'NONE',
+        securityReview: 'NONE'
+      }
+    },
+    types: {
+      bugs: 0,
+      codeSmells: 0,
+      vulnerabilities: 0,
+      securityHotspots: 0
+    }
   };
+}
+
+function worstRating(current: RatingGrade, candidate: RatingGrade): RatingGrade {
+  const rank: Record<RatingGrade, number> = {
+    NONE: 0,
+    A: 1,
+    B: 2,
+    C: 3,
+    D: 4,
+    E: 5
+  };
+  return rank[candidate] > rank[current] ? candidate : current;
+}
+
+function worstQualityGateStatus(
+  current: QualityGateStatus,
+  candidate: QualityGateStatus
+): QualityGateStatus {
+  const rank: Record<QualityGateStatus, number> = {
+    NONE: 0,
+    OK: 1,
+    WARN: 2,
+    ERROR: 3
+  };
+  return rank[candidate] > rank[current] ? candidate : current;
 }
 
 function aggregateSeverity(issues: DashboardIssue[]): SeverityCount[] {
@@ -118,6 +171,27 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
       summary.skipped += result.skipped;
       summary.issues.push(...result.issues);
       summary.evolution.push(...loaded.evolution);
+      summary.types.bugs += loaded.types.bugs;
+      summary.types.codeSmells += loaded.types.codeSmells;
+      summary.types.vulnerabilities += loaded.types.vulnerabilities;
+      summary.types.securityHotspots += loaded.types.securityHotspots;
+      summary.qualityGate.status = worstQualityGateStatus(
+        summary.qualityGate.status,
+        loaded.qualityGate.status
+      );
+      for (const scope of ['overall', 'newCode'] as const) {
+        for (const rating of [
+          'maintainability',
+          'reliability',
+          'security',
+          'securityReview'
+        ] as const) {
+          summary.ratings[scope][rating] = worstRating(
+            summary.ratings[scope][rating],
+            loaded.ratings[scope][rating]
+          );
+        }
+      }
     } catch (error) {
       if (signal.aborted) {
         break;
@@ -148,7 +222,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
     );
   } else if (summary.configuredFolders > 0) {
     void vscode.window.setStatusBarMessage(
-      `SonarQube Dashboard: ${summary.published} issues en Problems` +
+      `SonarQube Dashboard: ${summary.published} issues encontrados` +
         (summary.skipped ? `, ${summary.skipped} omitidos` : ''),
       5000
     );

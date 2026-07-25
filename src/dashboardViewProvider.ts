@@ -109,7 +109,28 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
           errors: [],
           issues: [],
           severity: [],
-          evolution: []
+          evolution: [],
+          qualityGate: { status: 'NONE' },
+          ratings: {
+            overall: {
+              maintainability: 'NONE',
+              reliability: 'NONE',
+              security: 'NONE',
+              securityReview: 'NONE'
+            },
+            newCode: {
+              maintainability: 'NONE',
+              reliability: 'NONE',
+              security: 'NONE',
+              securityReview: 'NONE'
+            }
+          },
+          types: {
+            bugs: 0,
+            codeSmells: 0,
+            vulnerabilities: 0,
+            securityHotspots: 0
+          }
         });
         break;
     }
@@ -264,7 +285,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       } else {
         this.postStatus(
           'success',
-          `${summary.published} issues publicados en Problems.`
+          `${summary.published} issues encontrados.`
         );
       }
     } catch (error) {
@@ -282,7 +303,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     } else if (summary.errors.length > 0) {
       this.postStatus('error', summary.errors.join(' | '));
     } else {
-      this.postStatus('success', `${summary.published} issues publicados en Problems.`);
+      this.postStatus('success', `${summary.published} issues encontrados.`);
     }
   }
 

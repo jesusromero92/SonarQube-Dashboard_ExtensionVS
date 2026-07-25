@@ -46,6 +46,26 @@ export interface SonarMeasuresHistoryResponse {
   measures?: SonarHistoryMeasure[];
 }
 
+export interface SonarQualityGateResponse {
+  projectStatus?: {
+    status?: string;
+  };
+}
+
+export interface SonarCurrentMeasure {
+  metric: string;
+  value?: string;
+  period?: {
+    value?: string;
+  };
+}
+
+export interface SonarMeasuresComponentResponse {
+  component?: {
+    measures?: SonarCurrentMeasure[];
+  };
+}
+
 export interface SonarComponent {
   key: string;
   name?: string;
@@ -119,9 +139,37 @@ export interface LoadedIssues {
   componentPaths: Map<string, string>;
   instanceMode: SonarInstanceMode;
   evolution: EvolutionPoint[];
+  qualityGate: QualityGateSummary;
+  ratings: RatingsSummary;
+  types: DefectTypeSummary;
 }
 
 export type DashboardSeverity = string;
+export type QualityGateStatus = 'OK' | 'WARN' | 'ERROR' | 'NONE';
+export type RatingGrade = 'A' | 'B' | 'C' | 'D' | 'E' | 'NONE';
+
+export interface QualityGateSummary {
+  status: QualityGateStatus;
+}
+
+export interface CodeQualityRatings {
+  maintainability: RatingGrade;
+  reliability: RatingGrade;
+  security: RatingGrade;
+  securityReview: RatingGrade;
+}
+
+export interface RatingsSummary {
+  overall: CodeQualityRatings;
+  newCode: CodeQualityRatings;
+}
+
+export interface DefectTypeSummary {
+  bugs: number;
+  codeSmells: number;
+  vulnerabilities: number;
+  securityHotspots: number;
+}
 
 export interface DashboardIssue {
   key: string;
@@ -170,4 +218,7 @@ export interface RefreshSummary {
   issues: DashboardIssue[];
   severity: SeverityCount[];
   evolution: EvolutionPoint[];
+  qualityGate: QualityGateSummary;
+  ratings: RatingsSummary;
+  types: DefectTypeSummary;
 }

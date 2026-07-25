@@ -8,7 +8,7 @@ Extensión de Visual Studio Code que conecta una carpeta del workspace con Sonar
   - **Datos**, que es la página principal y se abre al pulsar el icono de la extensión.
   - **Configuración**, donde se introducen el servidor, token, proyecto, rama y subcarpeta.
 - Cuando no hay proyecto vinculado o todavía no se han sincronizado datos, la página principal muestra un estado vacío con acceso directo a configuración.
-- Después de guardar y sincronizar, la extensión vuelve automáticamente a la página de datos.
+- Después de Sincronizar, la extensión vuelve automáticamente a la página de datos.
 - La tabla principal se llama **Defectos**.
 - Se añaden dos tablas nuevas:
   - **Top Archivos**, ordenada por número de defectos.
@@ -27,9 +27,9 @@ Extensión de Visual Studio Code que conecta una carpeta del workspace con Sonar
 2. Pulsa el icono de bug de **SonarQube Dashboard** en la barra izquierda.
 3. En la página **Datos**, pulsa **Configurar proyecto**.
 4. Introduce la URL y el token.
-5. Pulsa **Conectar y cargar aplicaciones**.
+5. Pulsa **Conectar**.
 6. Selecciona el proyecto o aplicación.
-7. Pulsa **Guardar y sincronizar**.
+7. Pulsa **Sincronizar**.
 8. La extensión vuelve a **Datos** y muestra:
    - totales por severidad;
    - Defectos;

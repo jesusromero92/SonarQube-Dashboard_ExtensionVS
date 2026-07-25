@@ -5,12 +5,20 @@ import {
   SonarInstanceMode,
   SonarIssue,
   SonarIssuesResponse,
+  SonarCurrentMeasure,
   SonarHistoryMeasure,
   SonarMeasuresHistoryResponse,
+  SonarMeasuresComponentResponse,
   SonarProject,
   SonarProjectsResponse,
+  SonarQualityGateResponse,
   SonarRuleResponse,
-  SonarSettingsResponse
+  SonarSettingsResponse,
+  QualityGateStatus,
+  QualityGateSummary,
+  DefectTypeSummary,
+  RatingGrade,
+  RatingsSummary
 } from './types';
 
 const PAGE_SIZE = 500;
@@ -26,6 +34,20 @@ const EVOLUTION_METRICS = [
   'major_violations',
   'minor_violations',
   'info_violations'
+] as const;
+const SUMMARY_METRICS = [
+  'sqale_rating',
+  'reliability_rating',
+  'security_rating',
+  'security_review_rating',
+  'new_maintainability_rating',
+  'new_reliability_rating',
+  'new_security_rating',
+  'new_security_review_rating',
+  'bugs',
+  'code_smells',
+  'vulnerabilities',
+  'security_hotspots'
 ] as const;
 
 function normalizeServerUrl(serverUrl: string): string {
@@ -347,6 +369,127 @@ async function fetchEvolution(
   }
 }
 
+function normalizeQualityGateStatus(status?: string): QualityGateStatus {
+  const normalized = status?.toUpperCase();
+  if (normalized === 'OK' || normalized === 'WARN' || normalized === 'ERROR') {
+    return normalized;
+  }
+  return 'NONE';
+}
+
+async function fetchQualityGate(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<QualityGateSummary> {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/qualitygates/project_status`);
+  url.searchParams.set('projectKey', config.projectKey);
+  if (config.branch?.trim()) {
+    url.searchParams.set('branch', config.branch.trim());
+  }
+
+  try {
+    const payload = await requestJson<SonarQualityGateResponse>(url, config.token, signal);
+    return {
+      status: normalizeQualityGateStatus(payload.projectStatus?.status)
+    };
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    return { status: 'NONE' };
+  }
+}
+
+function normalizeRating(value?: string): RatingGrade {
+  const normalized = value?.trim().toUpperCase();
+  const map: Record<string, RatingGrade> = {
+    '1': 'A',
+    '1.0': 'A',
+    '2': 'B',
+    '2.0': 'B',
+    '3': 'C',
+    '3.0': 'C',
+    '4': 'D',
+    '4.0': 'D',
+    '5': 'E',
+    '5.0': 'E',
+    A: 'A',
+    B: 'B',
+    C: 'C',
+    D: 'D',
+    E: 'E'
+  };
+  return normalized ? map[normalized] ?? 'NONE' : 'NONE';
+}
+
+async function fetchSummaryMetrics(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<{ ratings: RatingsSummary; types: DefectTypeSummary }> {
+  const requestMetrics = async (metrics: readonly string[]): Promise<SonarMeasuresComponentResponse> => {
+    const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component`);
+    url.searchParams.set('component', config.projectKey);
+    url.searchParams.set('metricKeys', metrics.join(','));
+    if (config.branch?.trim()) {
+      url.searchParams.set('branch', config.branch.trim());
+    }
+    return requestJson<SonarMeasuresComponentResponse>(url, config.token, signal);
+  };
+
+  let measures: SonarCurrentMeasure[] = [];
+  try {
+    measures = (await requestMetrics(SUMMARY_METRICS)).component?.measures ?? [];
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    const responses = await Promise.all(
+      SUMMARY_METRICS.map(async metric => {
+        try {
+          return (await requestMetrics([metric])).component?.measures?.[0];
+        } catch (metricError) {
+          if (signal?.aborted) {
+            throw metricError;
+          }
+          return undefined;
+        }
+      })
+    );
+    measures = responses.filter(
+      (measure): measure is NonNullable<typeof measure> => Boolean(measure)
+    );
+  }
+
+  const values = new Map(
+    measures.map(measure => [
+      measure.metric,
+      measure.value ?? measure.period?.value
+    ])
+  );
+  return {
+    ratings: {
+      overall: {
+        maintainability: normalizeRating(values.get('sqale_rating')),
+        reliability: normalizeRating(values.get('reliability_rating')),
+        security: normalizeRating(values.get('security_rating')),
+        securityReview: normalizeRating(values.get('security_review_rating'))
+      },
+      newCode: {
+        maintainability: normalizeRating(values.get('new_maintainability_rating')),
+        reliability: normalizeRating(values.get('new_reliability_rating')),
+        security: normalizeRating(values.get('new_security_rating')),
+        securityReview: normalizeRating(values.get('new_security_review_rating'))
+      }
+    },
+    types: {
+      bugs: Number(values.get('bugs')) || 0,
+      codeSmells: Number(values.get('code_smells')) || 0,
+      vulnerabilities: Number(values.get('vulnerabilities')) || 0,
+      securityHotspots: Number(values.get('security_hotspots')) || 0
+    }
+  };
+}
+
 export async function fetchAllIssues(
   config: FolderSonarConfig,
   signal?: AbortSignal
@@ -390,12 +533,19 @@ export async function fetchAllIssues(
   for (const issue of issues) {
     issue.ruleName = ruleNames.get(issue.rule);
   }
-  const evolution = await fetchEvolution(config, signal);
+  const [evolution, qualityGate, summaryMetrics] = await Promise.all([
+    fetchEvolution(config, signal),
+    fetchQualityGate(config, signal),
+    fetchSummaryMetrics(config, signal)
+  ]);
 
   return {
     issues,
     componentPaths,
     instanceMode: inferInstanceMode(configuredMode, issues),
-    evolution
+    evolution,
+    qualityGate,
+    ratings: summaryMetrics.ratings,
+    types: summaryMetrics.types
   };
 }
