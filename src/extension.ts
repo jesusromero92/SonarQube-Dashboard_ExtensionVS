@@ -5,9 +5,16 @@ import {
   DashboardLauncherViewProvider
 } from './dashboardLauncherViewProvider';
 import {
+  DASHBOARD_COMMANDS,
+  DASHBOARD_CONFIGURATION_KEYS,
+  DASHBOARD_CONFIGURATION_SECTION,
   DASHBOARD_PANEL_VIEW_TYPE,
-  DashboardPanel
-} from './dashboardPanel';
+  QUALITY_GATE_STATUS_RANKS,
+  RATING_GRADE_RANKS,
+  SONAR_CONFIGURATION_SECTION
+} from './constants';
+import { createEmptyRefreshSummary } from './dashboard/summary';
+import { DashboardPanel } from './dashboardPanel';
 import {
   issueSeverityRank,
   mapFolderHotspots,
@@ -30,73 +37,19 @@ let configurationRefreshTimer: NodeJS.Timeout | undefined;
 let activeRefresh: AbortController | undefined;
 let dashboardPanel: DashboardPanel | undefined;
 
-function emptySummary(): RefreshSummary {
-  return {
-    configuredFolders: 0,
-    published: 0,
-    newPublished: 0,
-    skipped: 0,
-    errors: [],
-    issues: [],
-    newIssues: [],
-    hotspots: [],
-    newHotspots: [],
-    severity: [],
-    newSeverity: [],
-    evolution: [],
-    qualityGate: { status: 'NONE', conditions: [] },
-    ratings: {
-      overall: {
-        maintainability: 'NONE',
-        reliability: 'NONE',
-        security: 'NONE',
-        securityReview: 'NONE'
-      },
-      newCode: {
-        maintainability: 'NONE',
-        reliability: 'NONE',
-        security: 'NONE',
-        securityReview: 'NONE'
-      }
-    },
-    types: {
-      bugs: 0,
-      codeSmells: 0,
-      vulnerabilities: 0,
-      securityHotspots: 0
-    },
-    newTypes: {
-      bugs: 0,
-      codeSmells: 0,
-      vulnerabilities: 0,
-      securityHotspots: 0
-    }
-  };
-}
-
 function worstRating(current: RatingGrade, candidate: RatingGrade): RatingGrade {
-  const rank: Record<RatingGrade, number> = {
-    NONE: 0,
-    A: 1,
-    B: 2,
-    C: 3,
-    D: 4,
-    E: 5
-  };
-  return rank[candidate] > rank[current] ? candidate : current;
+  return RATING_GRADE_RANKS[candidate] > RATING_GRADE_RANKS[current]
+    ? candidate
+    : current;
 }
 
 function worstQualityGateStatus(
   current: QualityGateStatus,
   candidate: QualityGateStatus
 ): QualityGateStatus {
-  const rank: Record<QualityGateStatus, number> = {
-    NONE: 0,
-    OK: 1,
-    WARN: 2,
-    ERROR: 3
-  };
-  return rank[candidate] > rank[current] ? candidate : current;
+  return QUALITY_GATE_STATUS_RANKS[candidate] > QUALITY_GATE_STATUS_RANKS[current]
+    ? candidate
+    : current;
 }
 
 function aggregateSeverity(issues: DashboardIssue[]): SeverityCount[] {
@@ -154,7 +107,7 @@ function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
 
 async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSummary> {
   const folders = vscode.workspace.workspaceFolders ?? [];
-  const summary = emptySummary();
+  const summary = createEmptyRefreshSummary();
   dashboardPanel?.setLoading(true);
 
   if (folders.length === 0) {
@@ -295,8 +248,8 @@ function configureRefreshTimer(context: vscode.ExtensionContext): void {
   }
 
   const minutes = vscode.workspace
-    .getConfiguration('sonarQubeDashboard')
-    .get<number>('refreshIntervalMinutes', 0);
+    .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
+    .get<number>(DASHBOARD_CONFIGURATION_KEYS.refreshIntervalMinutes, 0);
 
   if (minutes > 0) {
     refreshTimer = setInterval(() => {
@@ -348,29 +301,29 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.commands.registerCommand(
-      'sonarQubeDashboard.open',
+      DASHBOARD_COMMANDS.open,
       () => dashboardPanel?.show()
     ),
     vscode.commands.registerCommand(
-      'sonarQubeDashboard.refresh',
+      DASHBOARD_COMMANDS.refresh,
       async () => {
         const summary = await refreshAll(context);
         dashboardPanel?.setRefreshSummary(summary, summary.configuredFolders > 0);
       }
     ),
     vscode.commands.registerCommand(
-      'sonarQubeDashboard.clear',
+      DASHBOARD_COMMANDS.clear,
       () => {
         diagnostics.clear();
-        dashboardPanel?.setRefreshSummary(emptySummary());
+        dashboardPanel?.setRefreshSummary(createEmptyRefreshSummary());
       }
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void dashboardPanel?.refreshWorkspaceState();
       if (
         vscode.workspace
-          .getConfiguration('sonarQubeDashboard')
-          .get<boolean>('autoRefresh', true)
+          .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
+          .get<boolean>(DASHBOARD_CONFIGURATION_KEYS.autoRefresh, true)
       ) {
         void refreshAll(context);
       }
@@ -378,8 +331,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration(
       (event: vscode.ConfigurationChangeEvent) => {
         if (
-          event.affectsConfiguration('sonarQubeDashboard') ||
-          event.affectsConfiguration('sonarQubeDashboard.sonar')
+          event.affectsConfiguration(DASHBOARD_CONFIGURATION_SECTION) ||
+          event.affectsConfiguration(SONAR_CONFIGURATION_SECTION)
         ) {
           configureRefreshTimer(context);
           scheduleWorkspaceStateRefresh();
@@ -404,8 +357,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   if (
     vscode.workspace
-      .getConfiguration('sonarQubeDashboard')
-      .get<boolean>('autoRefresh', true)
+      .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
+      .get<boolean>(DASHBOARD_CONFIGURATION_KEYS.autoRefresh, true)
   ) {
     void refreshAll(context);
   }

@@ -1,10 +1,14 @@
 import * as vscode from 'vscode';
+import {
+  SONAR_CONFIGURATION_KEYS,
+  SONAR_CONFIGURATION_SECTION,
+  SONAR_TOKEN_KEY_PREFIX
+} from './constants';
 import { FolderSonarConfig, FolderSonarFormConfig } from './types';
 
-const TOKEN_KEY_PREFIX = 'sonarQubeDashboard.sonar.token:';
 
 export function tokenKey(folder: vscode.WorkspaceFolder): string {
-  return `${TOKEN_KEY_PREFIX}${folder.uri.toString()}`;
+  return `${SONAR_TOKEN_KEY_PREFIX}${folder.uri.toString()}`;
 }
 
 export async function getFolderFormConfig(
@@ -12,15 +16,15 @@ export async function getFolderFormConfig(
   folder: vscode.WorkspaceFolder
 ): Promise<FolderSonarFormConfig> {
   const configuration = vscode.workspace.getConfiguration(
-    'sonarQubeDashboard.sonar',
+    SONAR_CONFIGURATION_SECTION,
     folder.uri
   );
 
   return {
-    serverUrl: configuration.get<string>('serverUrl', '').trim(),
-    projectKey: configuration.get<string>('projectKey', '').trim(),
-    branch: configuration.get<string>('branch', '').trim(),
-    baseDir: configuration.get<string>('baseDir', '').trim(),
+    serverUrl: configuration.get<string>(SONAR_CONFIGURATION_KEYS.serverUrl, '').trim(),
+    projectKey: configuration.get<string>(SONAR_CONFIGURATION_KEYS.projectKey, '').trim(),
+    branch: configuration.get<string>(SONAR_CONFIGURATION_KEYS.branch, '').trim(),
+    baseDir: configuration.get<string>(SONAR_CONFIGURATION_KEYS.baseDir, '').trim(),
     hasToken: Boolean(await context.secrets.get(tokenKey(folder)))
   };
 }
@@ -57,27 +61,27 @@ export async function saveFolderConfig(
   }
 ): Promise<void> {
   const configuration = vscode.workspace.getConfiguration(
-    'sonarQubeDashboard.sonar',
+    SONAR_CONFIGURATION_SECTION,
     folder.uri
   );
 
   await configuration.update(
-    'serverUrl',
+    SONAR_CONFIGURATION_KEYS.serverUrl,
     values.serverUrl.trim().replace(/\/+$/, ''),
     vscode.ConfigurationTarget.WorkspaceFolder
   );
   await configuration.update(
-    'projectKey',
+    SONAR_CONFIGURATION_KEYS.projectKey,
     values.projectKey.trim(),
     vscode.ConfigurationTarget.WorkspaceFolder
   );
   await configuration.update(
-    'branch',
+    SONAR_CONFIGURATION_KEYS.branch,
     values.branch.trim(),
     vscode.ConfigurationTarget.WorkspaceFolder
   );
   await configuration.update(
-    'baseDir',
+    SONAR_CONFIGURATION_KEYS.baseDir,
     values.baseDir.trim(),
     vscode.ConfigurationTarget.WorkspaceFolder
   );

@@ -1,4 +1,11 @@
 import {
+  SONAR_EVOLUTION_LIMIT,
+  SONAR_EVOLUTION_METRICS,
+  SONAR_MODE_SETTING_KEY,
+  SONAR_PAGE_SIZE,
+  SONAR_SUMMARY_METRICS
+} from './constants';
+import {
   FolderSonarConfig,
   EvolutionPoint,
   LoadedIssues,
@@ -25,48 +32,6 @@ import {
   RatingGrade,
   RatingsSummary
 } from './types';
-
-const PAGE_SIZE = 500;
-const MODE_SETTING_KEY = 'sonar.multi-quality-mode.enabled';
-const EVOLUTION_LIMIT = 15;
-const EVOLUTION_METRICS = [
-  'bugs',
-  'code_smells',
-  'vulnerabilities',
-  'security_hotspots',
-  'blocker_violations',
-  'critical_violations',
-  'major_violations',
-  'minor_violations',
-  'info_violations',
-  'new_bugs',
-  'new_code_smells',
-  'new_vulnerabilities',
-  'new_security_hotspots',
-  'new_blocker_violations',
-  'new_critical_violations',
-  'new_major_violations',
-  'new_minor_violations',
-  'new_info_violations'
-] as const;
-const SUMMARY_METRICS = [
-  'sqale_rating',
-  'reliability_rating',
-  'security_rating',
-  'security_review_rating',
-  'new_maintainability_rating',
-  'new_reliability_rating',
-  'new_security_rating',
-  'new_security_review_rating',
-  'bugs',
-  'code_smells',
-  'vulnerabilities',
-  'security_hotspots',
-  'new_bugs',
-  'new_code_smells',
-  'new_vulnerabilities',
-  'new_security_hotspots'
-] as const;
 
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.trim().replace(/\/+$/, '');
@@ -129,7 +94,7 @@ async function fetchProjectPages(
       : '/api/components/search';
     const url = new URL(`${normalizeServerUrl(serverUrl)}${path}`);
     url.searchParams.set('p', String(page));
-    url.searchParams.set('ps', String(PAGE_SIZE));
+    url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
 
     if (endpoint === 'components') {
       url.searchParams.set('qualifiers', 'TRK,APP');
@@ -188,11 +153,11 @@ async function fetchInstanceMode(
   signal?: AbortSignal
 ): Promise<SonarInstanceMode> {
   const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/settings/values`);
-  url.searchParams.set('keys', MODE_SETTING_KEY);
+  url.searchParams.set('keys', SONAR_MODE_SETTING_KEY);
 
   try {
     const payload = await requestJson<SonarSettingsResponse>(url, config.token, signal);
-    const setting = payload.settings?.find(item => item.key === MODE_SETTING_KEY);
+    const setting = payload.settings?.find(item => item.key === SONAR_MODE_SETTING_KEY);
     const value = setting?.value ?? setting?.parentValue;
 
     if (value === 'true') {
@@ -354,7 +319,7 @@ function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[] {
     byWeek.set(bucket, { ...point, label: bucket });
   }
 
-  return [...byWeek.values()].slice(-EVOLUTION_LIMIT);
+  return [...byWeek.values()].slice(-SONAR_EVOLUTION_LIMIT);
 }
 
 async function fetchEvolution(
@@ -365,7 +330,7 @@ async function fetchEvolution(
     const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/search_history`);
     url.searchParams.set('component', config.projectKey);
     url.searchParams.set('metrics', metrics.join(','));
-    url.searchParams.set('ps', String(PAGE_SIZE));
+    url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
     if (config.branch?.trim()) {
       url.searchParams.set('branch', config.branch.trim());
     }
@@ -374,18 +339,18 @@ async function fetchEvolution(
   };
 
   try {
-    return buildEvolution(await requestMetrics(EVOLUTION_METRICS));
+    return buildEvolution(await requestMetrics(SONAR_EVOLUTION_METRICS));
   } catch (error) {
     if (signal?.aborted) {
       throw error;
     }
     const measures: Array<SonarHistoryMeasure | undefined> =
-      new Array(EVOLUTION_METRICS.length);
+      new Array(SONAR_EVOLUTION_METRICS.length);
     let nextMetricIndex = 0;
     const worker = async (): Promise<void> => {
-      while (nextMetricIndex < EVOLUTION_METRICS.length) {
+      while (nextMetricIndex < SONAR_EVOLUTION_METRICS.length) {
         const metricIndex = nextMetricIndex++;
-        const metric = EVOLUTION_METRICS[metricIndex];
+        const metric = SONAR_EVOLUTION_METRICS[metricIndex];
         try {
           measures[metricIndex] = (await requestMetrics([metric]))[0];
         } catch (metricError) {
@@ -397,7 +362,7 @@ async function fetchEvolution(
     };
     await Promise.all(
       Array.from(
-        { length: Math.min(4, EVOLUTION_METRICS.length) },
+        { length: Math.min(4, SONAR_EVOLUTION_METRICS.length) },
         () => worker()
       )
     );
@@ -489,13 +454,13 @@ async function fetchSummaryMetrics(
 
   let measures: SonarCurrentMeasure[] = [];
   try {
-    measures = (await requestMetrics(SUMMARY_METRICS)).component?.measures ?? [];
+    measures = (await requestMetrics(SONAR_SUMMARY_METRICS)).component?.measures ?? [];
   } catch (error) {
     if (signal?.aborted) {
       throw error;
     }
     const responses = await Promise.all(
-      SUMMARY_METRICS.map(async metric => {
+      SONAR_SUMMARY_METRICS.map(async metric => {
         try {
           return (await requestMetrics([metric])).component?.measures?.[0];
         } catch (metricError) {
@@ -562,7 +527,7 @@ async function fetchIssueSet(
     url.searchParams.set('componentKeys', config.projectKey);
     url.searchParams.set('resolved', 'false');
     url.searchParams.set('p', String(page));
-    url.searchParams.set('ps', String(PAGE_SIZE));
+    url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
     if (onlyNewCode) {
       url.searchParams.set('inNewCodePeriod', 'true');
     }
@@ -617,7 +582,7 @@ async function fetchHotspotSet(
       const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/hotspots/search`);
       url.searchParams.set('projectKey', config.projectKey);
       url.searchParams.set('p', String(page));
-      url.searchParams.set('ps', String(PAGE_SIZE));
+      url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
       if (onlyNewCode) {
         url.searchParams.set('inNewCodePeriod', 'true');
       }

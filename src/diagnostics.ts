@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { SEVERITY_RANKS } from './constants';
 import {
   DashboardIssue,
   DashboardHotspot,
@@ -11,18 +12,6 @@ import {
   SonarInstanceMode,
   SonarIssue
 } from './types';
-
-const SEVERITY_RANKS: Record<string, number> = {
-  BLOCKER: 100,
-  CRITICAL: 90,
-  HIGH: 90,
-  MAJOR: 70,
-  MEDIUM: 70,
-  MINOR: 50,
-  LOW: 50,
-  INFO: 30,
-  UNKNOWN: 0
-};
 
 function highestImpact(impacts: SonarImpact[] | undefined): string | undefined {
   return [...(impacts ?? [])]
