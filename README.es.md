@@ -114,6 +114,19 @@ Solo se incluyen los issues cuyo componente de SonarQube coincide con un archivo
 
 El encabezado permanece fijo y únicamente el cuerpo de la tabla tiene desplazamiento vertical.
 
+### Indicadores y detalle dentro del editor
+
+![Iconos y detalle de los hallazgos dentro del editor](docs/images/details.png)
+
+Al abrir un archivo con hallazgos, la extensión marca directamente las líneas afectadas:
+
+- muestra en el gutter, a la izquierda del número de línea, el mismo icono y color utilizados en el resumen para **Bug**, **Code Smell**, **Vulnerability** y **Security Hotspot**;
+- resalta la línea con el color correspondiente al tipo de hallazgo y añade una marca en la regla de visión general del editor;
+- al situar el puntero sobre el icono muestra la descripción, regla, tipo, severidad o prioridad, estado, resolución, archivo, línea, proyecto, componente, identificador e impactos disponibles;
+- el enlace del tooltip abre el detalle completo del defecto o Security Hotspot en **SonarQube Dashboard**.
+
+Los indicadores solo se crean para hallazgos cuya ruta de SonarQube coincide con un archivo real de la carpeta vinculada. Se actualizan al sincronizar el dashboard y se eliminan al limpiar sus datos.
+
 ## Top Archivos y Top Reglas
 
 ![Rankings de archivos y reglas](docs/images/rankings.png)
@@ -238,6 +251,7 @@ Los issues Overall se publican como diagnósticos nativos de VS Code:
 - se agrupan por archivo;
 - muestran regla y descripción;
 - incluyen severidad, línea y columna;
+- muestran en el editor el icono del tipo de hallazgo y permiten consultar todos sus datos desde la propia línea;
 - identifican a **SonarQube Dashboard** como origen;
 - permiten navegar al código con un clic.
 

@@ -31,6 +31,8 @@ import {
 } from './sonarClient';
 import {
   AnalysisPermissionStatus,
+  DashboardHotspot,
+  DashboardIssue,
   RefreshSummary,
   ScannerMode
 } from './types';
@@ -45,6 +47,8 @@ export class DashboardPanel {
   private loading = false;
   private currentPage: DashboardPage = 'data';
   private language: DashboardLanguage = getDashboardLanguage();
+  private pendingIssueDetail: DashboardIssue | undefined;
+  private pendingHotspotDetail: DashboardHotspot | undefined;
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private panelDisposables: vscode.Disposable[] = [];
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
@@ -166,6 +170,24 @@ export class DashboardPanel {
     this.postMessage({ type: 'showQualityGate' });
   }
 
+  async showIssueDetail(issue: DashboardIssue): Promise<void> {
+    const panelWasOpen = Boolean(this.panel);
+    this.pendingIssueDetail = issue;
+    await this.show('data');
+    if (panelWasOpen) {
+      this.postPendingIssueDetail();
+    }
+  }
+
+  async showHotspotDetail(hotspot: DashboardHotspot): Promise<void> {
+    const panelWasOpen = Boolean(this.panel);
+    this.pendingHotspotDetail = hotspot;
+    await this.show('data');
+    if (panelWasOpen) {
+      this.postPendingHotspotDetail();
+    }
+  }
+
   private navigate(page: DashboardPage): void {
     this.currentPage = page;
     this.postMessage({ type: 'navigate', page });
@@ -240,6 +262,8 @@ export class DashboardPanel {
             state: localizeAnalysisState(this.analysisService.getState(), this.language)
           });
         this.navigate(this.currentPage);
+        this.postPendingIssueDetail();
+        this.postPendingHotspotDetail();
         break;
       case 'selectFolder':
         this.selectedFolderUri = message.folderUri;
@@ -703,6 +727,28 @@ export class DashboardPanel {
       return;
     }
     void this.panel?.webview.postMessage(message);
+  }
+
+  private postPendingIssueDetail(): void {
+    if (!this.pendingIssueDetail) {
+      return;
+    }
+    this.postMessage({
+      type: 'showIssueDetail',
+      issue: this.pendingIssueDetail
+    });
+    this.pendingIssueDetail = undefined;
+  }
+
+  private postPendingHotspotDetail(): void {
+    if (!this.pendingHotspotDetail) {
+      return;
+    }
+    this.postMessage({
+      type: 'showHotspotDetail',
+      hotspot: this.pendingHotspotDetail
+    });
+    this.pendingHotspotDetail = undefined;
   }
 
   private isValidHttpUrl(value: string): boolean {

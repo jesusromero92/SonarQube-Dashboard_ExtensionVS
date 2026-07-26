@@ -142,7 +142,8 @@ export function getDashboardLauncherHtml(
     }
     .total strong { display: block; font-size: 28px; font-weight: 400; }
     .label { color: var(--vscode-descriptionForeground); font-size: 11px; }
-    .severity-list { display: grid; gap: 7px; margin-top: 12px; }
+    .severity-section { display: grid; gap: 8px; margin-top: 12px; }
+    .severity-list { display: grid; gap: 7px; }
     .severity {
       display: grid;
       grid-template-columns: 5px 1fr auto;
@@ -299,7 +300,10 @@ export function getDashboardLauncherHtml(
         <strong id="total">0</strong>
         <span class="label">Issues encontrados</span>
       </div>
-      <div id="severityList" class="severity-list"></div>
+      <div id="severitySection" class="severity-section">
+        <div class="section-title">Por severidad</div>
+        <div id="severityList" class="severity-list"></div>
+      </div>
       <div id="defectTypes" class="defect-types">
         <div class="section-title">Por tipo de defecto</div>
         <div class="defect-type">
@@ -363,6 +367,7 @@ export function getDashboardLauncherHtml(
     const content = document.getElementById('content');
     const totalSummary = document.getElementById('totalSummary');
     const total = document.getElementById('total');
+    const severitySection = document.getElementById('severitySection');
     const severityList = document.getElementById('severityList');
     const defectTypes = document.getElementById('defectTypes');
     const typeCounts = {
@@ -428,7 +433,7 @@ export function getDashboardLauncherHtml(
       severityList.textContent = '';
       const hasSummary = Boolean(summary.configuredFolders);
       totalSummary.hidden = !hasSummary;
-      severityList.hidden = !hasSummary;
+      severitySection.hidden = !hasSummary;
       qualitySection.hidden = !hasSummary;
       ratings.hidden = !hasSummary;
       defectTypes.hidden = !hasSummary;

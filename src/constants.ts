@@ -29,7 +29,9 @@ export const DASHBOARD_COMMANDS = {
   refresh: 'sonarQubeDashboard.refresh',
   clear: 'sonarQubeDashboard.clear',
   analyze: 'sonarQubeDashboard.analyze',
-  cancelAnalysis: 'sonarQubeDashboard.cancelAnalysis'
+  cancelAnalysis: 'sonarQubeDashboard.cancelAnalysis',
+  showIssueDetail: 'sonarQubeDashboard.showIssueDetail',
+  showHotspotDetail: 'sonarQubeDashboard.showHotspotDetail'
 } as const;
 
 

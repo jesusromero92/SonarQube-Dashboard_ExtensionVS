@@ -15,6 +15,7 @@ export const EN_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   "issuesFoundLower": " issues found",
   "oneIssueFound": " issue found",
   "manyIssuesFound": " issues found",
+  "bySeverity": "By severity",
   "byDefectType": "By issue type",
   "bugs": "Bugs",
   "codeSmells": "Code Smells",

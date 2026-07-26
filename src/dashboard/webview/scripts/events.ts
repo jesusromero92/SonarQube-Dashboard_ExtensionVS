@@ -161,6 +161,12 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
         case 'showQualityGate':
           showQualityGateDialog();
           break;
+        case 'showIssueDetail':
+          if (message.issue) showRuleDialog(message.issue);
+          break;
+        case 'showHotspotDetail':
+          if (message.hotspot) showHotspotDialog(message.hotspot);
+          break;
         case 'analysisState':
           renderAnalysisState(message.state || {});
           break;

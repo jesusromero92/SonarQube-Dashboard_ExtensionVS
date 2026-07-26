@@ -13,6 +13,7 @@ export const SOURCE_MESSAGES = {
   "issuesFoundLower": " issues encontrados",
   "oneIssueFound": " issue encontrado",
   "manyIssuesFound": " issues encontrados",
+  "bySeverity": "Por severidad",
   "byDefectType": "Por tipo de defecto",
   "bugs": "Bugs",
   "codeSmells": "Code Smells",

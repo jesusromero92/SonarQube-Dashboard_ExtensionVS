@@ -26,6 +26,10 @@ import {
   mapFolderIssues,
   publishFolderDiagnostics
 } from './diagnostics';
+import {
+  IssueDecorationManager,
+  SonarIssueCodeActionProvider
+} from './issueDecorations';
 import { fetchAllIssues } from './sonarClient';
 import {
   DashboardHotspot,
@@ -43,6 +47,7 @@ let refreshTimer: NodeJS.Timeout | undefined;
 let configurationRefreshTimer: NodeJS.Timeout | undefined;
 let activeRefresh: AbortController | undefined;
 let dashboardPanel: DashboardPanel | undefined;
+let issueDecorations: IssueDecorationManager;
 
 function worstRating(current: RatingGrade, candidate: RatingGrade): RatingGrade {
   return RATING_GRADE_RANKS[candidate] > RATING_GRADE_RANKS[current]
@@ -147,6 +152,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
 
   if (folders.length === 0) {
     diagnostics.clear();
+    issueDecorations.clear();
     dashboardPanel?.setRefreshSummary(summary);
     dashboardPanel?.setLoading(false);
     return summary;
@@ -158,6 +164,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   const signal = refreshController.signal;
 
   diagnostics.clear();
+  issueDecorations.clear();
 
   for (const folder of folders) {
     if (signal.aborted) {
@@ -247,6 +254,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
     left.line - right.line;
   summary.hotspots.sort(sortHotspots);
   summary.newHotspots.sort(sortHotspots);
+  issueDecorations.setIssues(summary.issues, summary.hotspots);
 
   dashboardPanel?.setRefreshSummary(
     summary,
@@ -308,12 +316,16 @@ function scheduleWorkspaceStateRefresh(): void {
 
 export function activate(context: vscode.ExtensionContext): void {
   diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
-  context.subscriptions.push(diagnostics);
+  issueDecorations = new IssueDecorationManager(context.extensionUri);
+  context.subscriptions.push(diagnostics, issueDecorations);
 
   dashboardPanel = new DashboardPanel(
     context,
     () => refreshAll(context),
-    () => diagnostics.clear()
+    () => {
+      diagnostics.clear();
+      issueDecorations.clear();
+    }
   );
 
   const launcherProvider = new DashboardLauncherViewProvider(
@@ -352,6 +364,7 @@ export function activate(context: vscode.ExtensionContext): void {
       DASHBOARD_COMMANDS.clear,
       () => {
         diagnostics.clear();
+        issueDecorations.clear();
         dashboardPanel?.setRefreshSummary(createEmptyRefreshSummary());
       }
     ),
@@ -362,6 +375,43 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.cancelAnalysis,
       () => dashboardPanel?.cancelAnalysis()
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.showIssueDetail,
+      async (issueKey: string) => {
+        const issue = issueDecorations.getIssue(issueKey);
+        if (!issue) {
+          await vscode.window.showWarningMessage(
+            getDashboardLanguage() === 'es'
+              ? 'El defecto ya no está disponible. Actualiza los datos de SonarQube.'
+              : 'The issue is no longer available. Refresh the SonarQube data.'
+          );
+          return;
+        }
+        await dashboardPanel?.showIssueDetail(issue);
+      }
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.showHotspotDetail,
+      async (hotspotKey: string) => {
+        const hotspot = issueDecorations.getHotspot(hotspotKey);
+        if (!hotspot) {
+          await vscode.window.showWarningMessage(
+            getDashboardLanguage() === 'es'
+              ? 'El Security Hotspot ya no está disponible. Actualiza los datos de SonarQube.'
+              : 'The Security Hotspot is no longer available. Refresh the SonarQube data.'
+          );
+          return;
+        }
+        await dashboardPanel?.showHotspotDetail(hotspot);
+      }
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file' },
+      new SonarIssueCodeActionProvider(issueDecorations),
+      {
+        providedCodeActionKinds: SonarIssueCodeActionProvider.providedCodeActionKinds
+      }
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void dashboardPanel?.refreshWorkspaceState();

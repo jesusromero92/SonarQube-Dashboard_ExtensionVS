@@ -113,6 +113,19 @@ Only issues whose SonarQube component matches a file in the open folder are incl
 
 The header remains fixed while only the table body scrolls vertically.
 
+### In-editor indicators and issue details
+
+![Finding icons and details inside the editor](docs/images/details.png)
+
+When a file containing findings is opened, the extension marks the affected lines directly in the editor:
+
+- the gutter, to the left of the line number, displays the same icon and color used in the summary for **Bug**, **Code Smell**, **Vulnerability**, and **Security Hotspot**;
+- the affected line is highlighted with the corresponding finding-type color and a marker is added to the editor overview ruler;
+- hovering over the icon displays the description, rule, type, severity or priority, status, resolution, file, line, project, component, identifier, and available impacts;
+- the tooltip link opens the complete issue or Security Hotspot details in **SonarQube Dashboard**.
+
+Indicators are only created for findings whose SonarQube path matches a real file in the linked folder. They are refreshed when dashboard data is synchronized and removed when its data is cleared.
+
 ## Top Files and Top Rules
 
 ![File and rule rankings](docs/images/rankings.png)
@@ -237,6 +250,7 @@ Overall issues are published as native VS Code diagnostics:
 - grouped by file;
 - displaying rule and description;
 - including severity, line, and column;
+- displaying the finding-type icon in the editor and exposing all available details from the affected line;
 - identifying **SonarQube Dashboard** as the source;
 - supporting one-click navigation to the code.
 

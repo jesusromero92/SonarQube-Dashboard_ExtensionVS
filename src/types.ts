@@ -255,6 +255,10 @@ export interface DashboardIssue {
   key: string;
   rule: string;
   ruleName: string;
+  status: string;
+  project: string;
+  component: string;
+  impacts: SonarImpact[];
   severity: DashboardSeverity;
   severityRank: number;
   type: string;
@@ -267,6 +271,8 @@ export interface DashboardIssue {
 export interface DashboardHotspot {
   key: string;
   ruleKey: string;
+  project: string;
+  component: string;
   message: string;
   status: string;
   resolution: string;
