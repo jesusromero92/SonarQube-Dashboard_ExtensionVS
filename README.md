@@ -1,104 +1,250 @@
-# SonarQube Dashboard 0.10.0
+# SonarQube Dashboard para Visual Studio Code
 
-Extensión para Visual Studio Code que conecta una carpeta del workspace con un proyecto de SonarQube, publica sus issues en el panel **Problems** y muestra un dashboard integrado con métricas, defectos, archivos, reglas y evolución histórica.
+SonarQube Dashboard conecta cada carpeta del workspace con un proyecto de SonarQube y acerca sus resultados al flujo de trabajo de Visual Studio Code.
 
-## Características
+La extensión permite consultar el estado del proyecto, comparar **Overall** y **New Code**, revisar defectos y Security Hotspots, analizar la evolución entre análisis y publicar los hallazgos directamente en el panel **Problems**.
 
-- Dashboard integrado en Visual Studio Code.
-- Acceso desde el icono de bug situado en la barra lateral.
-- Dos páginas principales:
-  - **Datos**, abierta por defecto.
-  - **Configuración**, para gestionar la conexión con SonarQube.
-- Selección de proyectos y aplicaciones visibles para el token configurado.
-- Publicación de los issues de SonarQube en el panel **Problems**.
-- Asociación de los issues con los archivos y líneas del workspace.
-- Resumen por severidad o criticidad.
-- Tabla completa de **Defectos**.
-- Tabla de **Top Archivos**.
-- Tabla de **Top Reglas**.
-- Métricas de Quality Gate.
-- Visualización de Security Hotspots.
-- Evolución histórica de los análisis.
-- Filtros y navegación directa desde las tablas hasta el código afectado.
-- Compatibilidad con los distintos modos de severidad de SonarQube.
-- Almacenamiento seguro del token mediante `SecretStorage`.
 
-## Páginas del dashboard
+## Requisito para utilizar la extensión
 
-### Datos
+Para que SonarQube Dashboard funcione correctamente:
 
-Es la página principal y se abre al pulsar el icono de la extensión.
+1. La aplicación debe haber sido analizada previamente en SonarQube.
+2. En Visual Studio Code debe abrirse la carpeta local de esa misma aplicación.
+3. La carpeta abierta debe vincularse con el proyecto correspondiente de SonarQube desde la pestaña **Configuración**.
 
-Cuando existe un proyecto configurado y se han sincronizado los datos, muestra:
+La extensión compara las rutas de los componentes devueltos por SonarQube con los archivos existentes en la carpeta abierta. En el dashboard y en **Problems** se mostrarán únicamente los defectos que puedan asociarse con un archivo local coincidente.
 
-- resumen de defectos por severidad;
-- estado del Quality Gate;
-- Defectos;
+Si el código analizado se encuentra dentro de una subcarpeta del workspace, debe indicarse en **Configuración avanzada → Subcarpeta local**. Una asociación incorrecta entre proyecto, carpeta o subcarpeta puede provocar que SonarQube tenga issues, pero que estos no aparezcan en la extensión.
+
+## Características principales
+
+- Sincronización automática al abrir un proyecto ya vinculado.
+- Configuración independiente por carpeta del workspace.
+- Token protegido mediante `SecretStorage`.
+- Selector global **Overall / New Code**.
+- Resumen por severidad y tipo de defecto.
+- Ratings de Maintainability, Reliability, Security y Security Review.
+- Estado y detalle completo del Quality Gate.
+- Tabla de defectos con filtro y navegación al código.
+- Tabla específica de Security Hotspots.
+- Rankings de archivos y reglas con ordenación por columnas.
+- Evolución histórica por tipo de issue y criticidad.
+- Publicación de diagnósticos en **Problems**.
+- Compatibilidad con ramas y subcarpetas locales.
+
+## Inicio rápido
+
+1. Comprueba que la aplicación ya tenga al menos un análisis disponible en SonarQube.
+2. Abre en VS Code la carpeta local de esa misma aplicación.
+3. Pulsa el icono de **SonarQube Dashboard** en la barra de actividad.
+4. Abre la pestaña **Configuración**.
+5. Introduce la URL del servidor y un token de acceso.
+6. Pulsa **Conectar y cargar proyectos**.
+7. Vincula la carpeta con el proyecto o aplicación de SonarQube que analiza ese código.
+8. Configura opcionalmente la rama y, si las rutas no parten de la raíz del workspace, la subcarpeta local.
+9. Pulsa **Guardar y sincronizar**.
+
+Después de la primera vinculación, la extensión sincroniza los datos automáticamente al abrir el workspace. El icono de recarga del panel lateral permite solicitar una actualización manual.
+
+## Panel lateral
+
+![Panel lateral con resumen de SonarQube](docs/images/sidebar-summary.png)
+
+El panel lateral ofrece una lectura rápida sin abandonar el explorador de VS Code:
+
+- **Datos / Configuración:** cambia entre el resumen y la conexión del proyecto.
+- **Recargar:** vuelve a consultar SonarQube y actualiza el dashboard y Problems.
+- **Issues encontrados:** total de issues recuperados para el proyecto.
+- **Severidades:** distribución de Blocker, Critical, Major, Minor e Info.
+- **Tipos:** Bugs, Code Smells, Vulnerabilidades y Security Hotspots.
+- **Quality Gate:** estado del último análisis. Al pulsarlo se abre su detalle.
+- **Ratings:** comparación directa entre Overall y New Code mediante badges A–E.
+
+Mientras se realiza una sincronización, el panel muestra un spinner y oculta temporalmente los datos anteriores para evitar estados parciales.
+
+## Vista de datos y selector Overall / New Code
+
+![Vista general del dashboard y tabla de defectos](docs/images/dashboard-overview.png)
+
+El selector global **Overall / New Code** actualiza de forma coordinada:
+
+- el resumen superior;
+- la tabla de defectos;
+- los Security Hotspots;
 - Top Archivos;
 - Top Reglas;
-- Security Hotspots;
-- evolución histórica por tipo;
-- evolución histórica por criticidad.
+- las gráficas de evolución.
 
-Las tablas permiten navegar directamente al archivo y línea relacionados con el defecto.
+**Overall** representa el estado completo del proyecto. **New Code** limita la vista al periodo de código nuevo configurado en SonarQube.
 
-Cuando todavía no hay un proyecto vinculado, se muestra un estado vacío con un botón para abrir la página de configuración.
+### Resumen superior
 
-### Configuración
+Cada columna muestra:
 
-Permite introducir y guardar:
+- valor actual;
+- severidad correspondiente;
+- aumento o disminución frente al análisis anterior;
+- color oficial utilizado en el resto del dashboard.
 
-- URL del servidor SonarQube;
-- token de acceso;
-- proyecto o aplicación;
-- rama opcional;
-- subcarpeta local opcional.
+Los indicadores `▲` y `▼` permiten detectar rápidamente regresiones y mejoras. Cuando no existe variación se muestra **Sin cambios**.
 
-Después de introducir la URL y el token, el botón **Conectar** carga los proyectos y aplicaciones visibles para ese usuario.
+### Tabla de defectos
 
-Al pulsar **Sincronizar**, la extensión:
+La tabla contiene:
 
-1. Guarda la configuración.
-2. Consulta los datos de SonarQube.
-3. Publica los issues correspondientes en **Problems**.
-4. Actualiza las métricas y tablas.
-5. Vuelve a la página de Datos.
+- **Severidad:** criticidad del issue.
+- **Tipo:** icono de Bug, Code Smell o Vulnerabilidad.
+- **Archivo:** nombre final y línea afectada; el tooltip conserva la ruta completa.
+- **Regla:** nombre descriptivo de la regla de SonarQube.
 
-## Uso
+El campo de búsqueda filtra por archivo, regla o descripción. Al pulsar una fila se abre el archivo local en la línea afectada. Al pulsar la regla se muestra su descripción en un modal.
 
-1. Abre en VS Code la carpeta local correspondiente al proyecto de SonarQube.
-2. Pulsa el icono de bug de **SonarQube Dashboard** en la barra lateral.
-3. En la página Datos, pulsa **Configurar proyecto**.
-4. Introduce la URL del servidor SonarQube.
-5. Introduce un token con permisos para consultar el proyecto.
-6. Pulsa **Conectar**.
-7. Selecciona un proyecto o aplicación.
-8. Configura opcionalmente la rama y la subcarpeta local.
-9. Pulsa **Sincronizar**.
-10. Consulta los resultados en el dashboard y en el panel **Problems**.
+Solo se incluyen los issues cuyo componente de SonarQube coincide con un archivo de la carpeta abierta, teniendo en cuenta la subcarpeta local configurada.
 
-## Seguridad del token
+El encabezado permanece fijo y únicamente el cuerpo de la tabla tiene desplazamiento vertical.
 
-El token se guarda mediante la API de almacenamiento seguro de Visual Studio Code:
+## Top Archivos y Top Reglas
+
+![Rankings de archivos y reglas](docs/images/rankings.png)
+
+### Top Archivos
+
+Agrupa los issues por archivo y muestra:
+
+- nombre final del archivo;
+- ruta completa en el tooltip;
+- severidad más alta encontrada;
+- número total de defectos.
+
+### Top Reglas
+
+Agrupa los issues por regla y muestra:
+
+- nombre descriptivo de la regla;
+- severidad más alta;
+- cantidad de apariciones.
+
+En ambas tablas se puede ordenar pulsando **Archivo/Regla**, **Severidad** o **Defectos**. Un segundo clic invierte el orden y el indicador `▲` o `▼` muestra la dirección activa.
+
+Los headers permanecen fuera del área desplazable y las dos tablas conservan la misma altura.
+
+## Evolución histórica
+
+![Gráficas de evolución histórica](docs/images/evolution.png)
+
+La sección inferior incluye dos gráficas:
+
+- **Issues por tipo:** Bugs, Code Smells, Vulnerabilidades y Security Hotspots.
+- **Issues por criticidad:** Blocker, Critical, Major, Minor e Info.
+
+Cada punto representa un análisis anterior. Al mover el ratón sobre la gráfica aparece un tooltip que sigue el cursor e indica la fecha y los valores de todas las series visibles.
+
+Las leyendas están centradas y son interactivas: al pulsar una serie se puede ocultar o volver a mostrar.
+
+## Quality Gate
+
+![Modal con detalle del Quality Gate](docs/images/quality-gate.png)
+
+El botón del Quality Gate abre un modal con:
+
+- estado global del último análisis;
+- número de condiciones fallidas y configuradas;
+- métrica evaluada;
+- valor actual;
+- límite permitido;
+- ámbito Overall o New Code;
+- resultado individual de cada condición;
+- ratings Overall y New Code;
+- número de Security Hotspots.
+
+Las condiciones fallidas aparecen primero. El modal diferencia entre el total de condiciones configuradas y las condiciones fallidas que muestra SonarQube en su interfaz.
+
+El modal está dividido en **header**, **body** y **footer**. Solo el body tiene scroll, por lo que el título y los botones permanecen siempre visibles.
+
+## Security Hotspots
+
+![Tabla y detalle de Security Hotspots](docs/images/security-hotspots2.png)
+
+La pestaña **Security Hotspots** ofrece una vista independiente con:
+
+- prioridad High, Medium o Low;
+- estado To Review, Acknowledged, Fixed o Safe;
+- archivo y línea;
+- regla o descripción;
+- filtro de texto;
+- opción **Solo pendientes**.
+
+Al pulsar un hotspot se consulta su detalle y se abre un modal con:
+
+- descripción;
+- riesgo;
+- contexto de vulnerabilidad;
+- recomendaciones de corrección;
+- acceso directo al archivo.
+
+La extensión obtiene el detalle bajo demanda para no retrasar la carga inicial del dashboard.
+
+## Integración con Problems
+
+![Issues de SonarQube publicados en Problems](docs/images/problems-integration.png)
+
+Los issues Overall se publican como diagnósticos nativos de VS Code:
+
+- se agrupan por archivo;
+- muestran regla y descripción;
+- incluyen severidad, línea y columna;
+- identifican a **SonarQube Dashboard** como origen;
+- permiten navegar al código con un clic.
+
+Para evitar diagnósticos asociados a archivos incorrectos, no se publica un issue cuando su ruta de SonarQube no puede resolverse dentro de la carpeta vinculada.
+
+El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados por la extensión.
+
+## Configuración
+
+![Configuración de la conexión con SonarQube](docs/images/configuration.png)
+
+La página de configuración permite gestionar:
+
+- **Servidor SonarQube:** URL base del servidor.
+- **Token:** credencial utilizada para consultar la API.
+- **Proyecto o aplicación:** componentes visibles para el token.
+- **Rama:** rama opcional que debe consultarse.
+- **Subcarpeta local:** correspondencia entre la raíz de SonarQube y una carpeta del workspace.
+
+### Seguridad del token
+
+El token se almacena mediante:
 
 ```typescript
 ExtensionContext.secrets
 ```
 
-Visual Studio Code utiliza `SecretStorage` para proteger este valor.
-
-El token:
+Por tanto:
 
 - no se escribe en `settings.json`;
 - no se incluye en el repositorio;
-- no se guarda dentro del VSIX;
-- se almacena de forma independiente para cada entorno de Visual Studio Code.
+- no se empaqueta dentro del VSIX;
+- se almacena de forma independiente para cada entorno de VS Code.
 
-No incluyas tokens reales en capturas, incidencias ni archivos del proyecto.
+No incluyas tokens reales en capturas, incidencias o archivos del proyecto.
+
+## Sincronización
+
+Una sincronización realiza las siguientes acciones:
+
+1. Lee la configuración de la carpeta activa.
+2. Consulta issues Overall y New Code.
+3. Consulta Security Hotspots y sus métricas.
+4. Obtiene Quality Gate, ratings e histórico.
+5. Asocia los componentes de SonarQube con archivos locales.
+6. Publica los diagnósticos Overall en Problems.
+7. Actualiza el panel lateral y el dashboard.
+
+Si cambia la carpeta activa, la extensión selecciona su configuración correspondiente. Las solicitudes anteriores se cancelan para evitar que una respuesta obsoleta sobrescriba los datos actuales.
 
 ## Configuración disponible
-
-La extensión utiliza las siguientes propiedades:
 
 ```json
 {
@@ -111,23 +257,18 @@ La extensión utiliza las siguientes propiedades:
 }
 ```
 
-La URL, el proyecto, la rama y la subcarpeta también pueden gestionarse directamente desde el dashboard.
+`autoRefresh` activa la sincronización al abrir o cambiar el workspace. Un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica.
 
 ## Desarrollo
 
-Instala las dependencias:
+Instala las dependencias y compila:
 
 ```bash
 npm install
-```
-
-Compila el proyecto:
-
-```bash
 npm run compile
 ```
 
-Para mantener el compilador activo durante el desarrollo:
+Para mantener el compilador activo:
 
 ```bash
 npm run watch
@@ -135,9 +276,7 @@ npm run watch
 
 Pulsa `F5` desde Visual Studio Code para ejecutar la extensión en un **Extension Development Host**.
 
-## Estructura del código
-
-El dashboard está dividido en módulos para facilitar su mantenimiento y crecimiento.
+### Estructura
 
 ```text
 src/
@@ -150,97 +289,51 @@ src/
 └── dashboard/
     ├── contracts.ts
     ├── summary.ts
-    ├── pages/
     ├── components/
     ├── modals/
+    ├── pages/
     ├── scripts/
     └── styles/
 ```
 
-Las constantes relacionadas con severidades, criticidades, tipos, colores, iconos, estados y métricas están centralizadas para evitar duplicación.
+Colores, iconos, severidades, tipos, estados y métricas están centralizados. Las páginas, componentes, scripts, modales y estilos del webview se mantienen en módulos separados.
 
-Las páginas, tablas, gráficas, modales, scripts y estilos del dashboard se encuentran separadas en módulos independientes.
+## Generar el VSIX
 
-## Generar el VSIX en Windows
-
-Desde PowerShell, dentro de la carpeta raíz del proyecto:
+Desde PowerShell:
 
 ```powershell
 .\generar-vsix.ps1
 ```
 
-También puedes ejecutar:
-
-```bat
-generar-vsix.cmd
-```
-
-El proceso realiza:
-
-1. Instalación de dependencias mediante `npm ci` o `npm install`.
-2. Compilación mediante `npm run compile`.
-3. Empaquetado mediante `@vscode/vsce`.
-4. Generación del archivo VSIX.
-
-Cuando las dependencias ya estén instaladas:
+Sin reinstalar dependencias:
 
 ```powershell
 .\generar-vsix.ps1 -SinInstalarDependencias
 ```
 
-También se puede generar directamente mediante:
+También se puede ejecutar:
 
-```bash
-npm run package
+```bat
+generar-vsix.cmd
 ```
 
-El archivo generado tendrá la versión indicada en `package.json`, por ejemplo:
-
-```text
-vscode-sonarqube-dashboard-0.10.0.vsix
-```
-
-Si el script utiliza un nombre de salida personalizado, puede generarse como:
-
-```text
-sonarqube-dashboard-0.10.0.vsix
-```
+El VSIX utiliza la versión indicada en `package.json`.
 
 ## Instalar el VSIX
 
-1. Abre Visual Studio Code.
-2. Pulsa `Ctrl + Shift + P`.
-3. Ejecuta:
-
-```text
-Extensions: Install from VSIX...
-```
-
-4. Selecciona el archivo `.vsix`.
-5. Recarga la ventana cuando Visual Studio Code lo solicite.
+1. Abre la paleta con `Ctrl + Shift + P`.
+2. Ejecuta **Extensions: Install from VSIX...**.
+3. Selecciona `sonarqube-dashboard-<versión>.vsix`.
+4. Recarga la ventana cuando VS Code lo solicite.
 
 ## Repositorio
 
-El código fuente está disponible en:
-
-https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS
-
-Las incidencias y propuestas pueden registrarse en:
-
-https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues
+- Código fuente: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS>
+- Incidencias: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues>
 
 ## Licencia
 
-Este proyecto es de código fuente público y puede utilizarse gratuitamente en su forma original y sin modificaciones.
+Consulta [LICENSE.txt](LICENSE.txt) para conocer los términos de uso y distribución.
 
-No está permitido:
-
-- modificar el código fuente;
-- crear versiones derivadas;
-- distribuir versiones modificadas;
-- eliminar los avisos de autoría o licencia;
-- vender copias o versiones derivadas de la extensión.
-
-Consulta el archivo [LICENSE](LICENSE) para conocer los términos completos.
-
-> Esta licencia no corresponde a una licencia Open Source aprobada por la Open Source Initiative, ya que no permite modificar ni distribuir trabajos derivados.
+Esta licencia no es una licencia Open Source aprobada por la Open Source Initiative, ya que limita la modificación y distribución de trabajos derivados.

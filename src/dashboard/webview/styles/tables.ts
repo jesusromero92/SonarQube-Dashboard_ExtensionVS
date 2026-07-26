@@ -120,6 +120,16 @@ export function getTableStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIcon
     .body-scroll-table tbody:empty { display: none; }
     table { width: 100%; border-collapse: collapse; }
     .issues-table { table-layout: fixed; }
+    .body-scroll-table .defects-table thead tr,
+    .body-scroll-table .defects-table tbody tr {
+      display: grid;
+      grid-template-columns: 92px 58px minmax(260px, 42%) minmax(0, 1fr);
+    }
+    .body-scroll-table .hotspots-table thead tr,
+    .body-scroll-table .hotspots-table tbody tr {
+      display: grid;
+      grid-template-columns: 90px 120px minmax(260px, 42%) minmax(0, 1fr);
+    }
     th, td {
       padding: 9px 11px;
       border-bottom: 1px solid var(--vscode-panel-border);

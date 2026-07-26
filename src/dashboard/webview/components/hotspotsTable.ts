@@ -10,7 +10,7 @@ export const HOTSPOTS_TABLE_MARKUP = `          <section id="hotspotsView" class
               <input id="hotspotFilter" type="search" placeholder="Filtrar por archivo, regla o descripción">
             </div>
             <div class="table-wrap body-scroll-table">
-              <table class="issues-table" aria-label="Security Hotspots">
+              <table class="issues-table hotspots-table" aria-label="Security Hotspots">
                 <thead>
                   <tr>
                     <th style="width:90px">Prioridad</th>

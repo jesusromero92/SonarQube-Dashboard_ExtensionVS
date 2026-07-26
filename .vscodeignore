@@ -5,6 +5,7 @@ tsconfig.json
 **/*.map
 node_modules/**
 *.zip
+docs/images/*.svg
 
 generar-vsix.ps1
 generar-vsix.cmd

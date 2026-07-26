@@ -6,7 +6,7 @@ export const ISSUES_TABLE_MARKUP = `          <section class="panel">
               <input id="filter" type="search" placeholder="Filtrar por archivo, regla o descripción">
             </div>
             <div class="table-wrap body-scroll-table">
-              <table class="issues-table" aria-label="Defectos">
+              <table class="issues-table defects-table" aria-label="Defectos">
                 <thead>
                   <tr>
                     <th class="col-severity">Severidad</th>
