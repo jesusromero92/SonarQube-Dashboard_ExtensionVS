@@ -3,8 +3,9 @@
   "displayName": "SonarQube Dashboard",
   "description": "Dashboard de SonarQube para VS Code con análisis del repositorio, Problems, Quality Gate, defectos, hotspots, rankings y evolución.",
   "version": "0.14.0",
-  "publisher": "local-development",
+  "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
+  "icon": "media/sonarqube-dashboard.png",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS.git"
