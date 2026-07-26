@@ -20,6 +20,24 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       color: var(--vscode-button-foreground);
       background: var(--vscode-button-background);
     }
+    .analysis-icon::before {
+      width: 0;
+      height: 0;
+      content: "";
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 9px solid currentColor;
+      transform: translateX(1.5px);
+    }
+    .analysis-icon.running::before {
+      width: 15px;
+      height: 15px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      transform: none;
+      animation: dashboard-spin .8s linear infinite;
+    }
     .analysis-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
     .analysis-dialog-status {
       display: flex;
@@ -64,6 +82,12 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       line-height: 1.45;
       white-space: pre-wrap;
       word-break: break-word;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .analysis-icon.running::before,
+      .analysis-status-indicator {
+        animation: none;
+      }
     }
     @media (max-width: 760px) {
       .analysis-panel { align-items: flex-start; flex-direction: column; }

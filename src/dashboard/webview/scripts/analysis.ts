@@ -35,6 +35,7 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
       elements.analysisMessage.textContent = message;
       elements.analysisScanner.textContent = scanner ? 'Scanner: ' + scanner : '';
       elements.analysisTitle.textContent = running ? 'Análisis en ejecución' : 'Análisis del repositorio';
+      elements.analysisIcon.classList.toggle('running', running);
       elements.analyzeRepository.disabled = running;
       elements.analyzeEmpty.disabled = running;
       elements.cancelAnalysis.hidden = !currentAnalysisState.canCancel;

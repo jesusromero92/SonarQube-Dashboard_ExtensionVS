@@ -64,7 +64,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                 </div>
               </div>
 
-              <details>
+              <details class="configuration-disclosure">
                 <summary>Configuración avanzada del proyecto y del scanner</summary>
                 <div class="form-grid advanced-grid">
                   <div class="field">
@@ -95,7 +95,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                 </div>
               </details>
 
-              <details>
+              <details class="configuration-disclosure">
                 <summary>Notificaciones automáticas</summary>
                 <div class="form-grid advanced-grid notification-settings">
                   <div class="field full-width-field checkbox-field">

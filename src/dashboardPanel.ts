@@ -641,7 +641,11 @@ export class DashboardPanel {
       this.navigate('data');
     } catch (error) {
       if (this.analysisService.getState().phase !== 'cancelled') {
-        this.postStatus('error', this.errorMessage(error));
+        const message = this.errorMessage(error);
+        if (this.analysisService.getState().phase === 'refreshing') {
+          this.analysisService.setRefreshError(message);
+        }
+        this.postStatus('error', message);
       }
     }
   }

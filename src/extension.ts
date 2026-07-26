@@ -393,7 +393,14 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
     summary,
     summary.configuredFolders > 0
   );
-  await notifications.evaluate(notificationScopes, source);
+
+  if (activeRefresh === refreshController) {
+    dashboardPanel?.setLoading(false);
+  }
+
+  void notifications.evaluate(notificationScopes, source).catch(error => {
+    console.error('SonarQube Dashboard notification evaluation failed:', error);
+  });
 
   if (summary.configuredFolders > 0) {
     void vscode.window.setStatusBarMessage(
@@ -406,9 +413,6 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
     );
   }
 
-  if (activeRefresh === refreshController) {
-    dashboardPanel?.setLoading(false);
-  }
   return summary;
 }
 

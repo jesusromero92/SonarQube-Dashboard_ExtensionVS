@@ -1,6 +1,6 @@
 export const ANALYSIS_CONTROL_MARKUP = `        <section id="analysisPanel" class="analysis-panel" hidden>
           <div class="analysis-summary">
-            <div class="analysis-icon" aria-hidden="true">▶</div>
+            <div id="analysisIcon" class="analysis-icon" aria-hidden="true"></div>
             <div>
               <strong id="analysisTitle">Análisis del repositorio</strong>
               <p id="analysisMessage">Ejecuta el scanner adecuado para el proyecto abierto.</p>
