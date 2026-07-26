@@ -14,6 +14,11 @@ import {
   SONAR_CONFIGURATION_SECTION
 } from './constants';
 import { createEmptyRefreshSummary } from './dashboard/summary';
+import {
+  getDashboardLanguage,
+  localeTag,
+  localizeRuntimeText
+} from './i18n';
 import { DashboardPanel } from './dashboardPanel';
 import {
   issueSeverityRank,
@@ -70,7 +75,7 @@ function aggregateSeverity(issues: DashboardIssue[]): SeverityCount[] {
     }))
     .sort((left, right) =>
       right.rank - left.rank ||
-      left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
+      left.name.localeCompare(right.name, localeTag(getDashboardLanguage()), { sensitivity: 'base' })
     );
 }
 
@@ -211,7 +216,9 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
         break;
       }
       const message = error instanceof Error ? error.message : String(error);
-      summary.errors.push(`${folder.name}: ${message}`);
+      summary.errors.push(
+        `${folder.name}: ${localizeRuntimeText(message, getDashboardLanguage())}`
+      );
     }
   }
 
@@ -222,21 +229,21 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   summary.evolution = aggregateEvolution(summary.evolution);
   summary.issues.sort((left, right) =>
     right.severityRank - left.severityRank ||
-    left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||
+    left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
     left.line - right.line ||
-    left.ruleName.localeCompare(right.ruleName, 'es', { sensitivity: 'base' })
+    left.ruleName.localeCompare(right.ruleName, localeTag(getDashboardLanguage()), { sensitivity: 'base' })
   );
   summary.newIssues.sort((left, right) =>
     right.severityRank - left.severityRank ||
-    left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||
+    left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
     left.line - right.line ||
-    left.ruleName.localeCompare(right.ruleName, 'es', { sensitivity: 'base' })
+    left.ruleName.localeCompare(right.ruleName, localeTag(getDashboardLanguage()), { sensitivity: 'base' })
   );
   const hotspotRank = (priority: string) =>
     ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[priority.toUpperCase()] ?? 0);
   const sortHotspots = (left: typeof summary.hotspots[number], right: typeof summary.hotspots[number]) =>
     hotspotRank(right.priority) - hotspotRank(left.priority) ||
-    left.relativePath.localeCompare(right.relativePath, 'es', { sensitivity: 'base' }) ||
+    left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
     left.line - right.line;
   summary.hotspots.sort(sortHotspots);
   summary.newHotspots.sort(sortHotspots);
@@ -248,13 +255,19 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
 
   if (summary.errors.length > 0) {
     void vscode.window.setStatusBarMessage(
-      `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
+      localizeRuntimeText(
+        `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
+        getDashboardLanguage()
+      ),
       6000
     );
   } else if (summary.configuredFolders > 0) {
     void vscode.window.setStatusBarMessage(
-      `SonarQube Dashboard: ${summary.published} issues encontrados` +
-        (summary.skipped ? `, ${summary.skipped} omitidos` : ''),
+      localizeRuntimeText(
+        `SonarQube Dashboard: ${summary.published} issues encontrados` +
+          (summary.skipped ? `, ${summary.skipped} omitidos` : ''),
+        getDashboardLanguage()
+      ),
       5000
     );
   }
@@ -370,6 +383,9 @@ export function activate(context: vscode.ExtensionContext): void {
           event.affectsConfiguration(SONAR_CONFIGURATION_SECTION)
         ) {
           configureRefreshTimer(context);
+          if (event.affectsConfiguration(`${DASHBOARD_CONFIGURATION_SECTION}.${DASHBOARD_CONFIGURATION_KEYS.language}`)) {
+            void dashboardPanel?.refreshLanguage();
+          }
           scheduleWorkspaceStateRefresh();
         }
       }

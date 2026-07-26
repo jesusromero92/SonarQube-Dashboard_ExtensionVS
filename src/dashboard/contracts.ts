@@ -1,3 +1,4 @@
+import { DashboardLanguage } from '../i18n';
 import { RefreshSummary, ScannerMode } from '../types';
 
 export type RefreshCallback = () => Promise<RefreshSummary>;
@@ -15,6 +16,7 @@ export interface DashboardWebviewMessage {
   scannerMode?: ScannerMode;
   buildCommand?: string;
   customScannerCommand?: string;
+  language?: DashboardLanguage;
   fileUri?: string;
   line?: number;
   page?: DashboardPage;

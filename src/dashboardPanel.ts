@@ -2,6 +2,14 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { DASHBOARD_PANEL_VIEW_TYPE } from './constants';
 import {
+  DashboardLanguage,
+  getDashboardLanguage,
+  localizeAnalysisState,
+  localizeRuntimeText,
+  normalizeDashboardLanguage,
+  setDashboardLanguage
+} from './i18n';
+import {
   getFolderConfig,
   getFolderFormConfig,
   saveFolderConfig,
@@ -36,16 +44,19 @@ export class DashboardPanel {
   private savingConfig = false;
   private loading = false;
   private currentPage: DashboardPage = 'data';
+  private language: DashboardLanguage = getDashboardLanguage();
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private panelDisposables: vscode.Disposable[] = [];
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
+  private readonly languageEmitter = new vscode.EventEmitter<DashboardLanguage>();
   private readonly analysisService: AnalysisService;
 
   readonly onDidChangeSummary = this.summaryEmitter.event;
   readonly onDidChangeLoading = this.loadingEmitter.event;
   readonly onDidChangePage = this.pageEmitter.event;
+  readonly onDidChangeLanguage = this.languageEmitter.event;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -53,7 +64,10 @@ export class DashboardPanel {
     private readonly clearCallback: ClearCallback
   ) {
     this.analysisService = new AnalysisService(context, state => {
-      this.postMessage({ type: 'analysisState', state });
+      this.postMessage({
+        type: 'analysisState',
+        state: localizeAnalysisState(state, this.language)
+      });
     });
   }
 
@@ -167,6 +181,7 @@ export class DashboardPanel {
     this.summaryEmitter.dispose();
     this.loadingEmitter.dispose();
     this.pageEmitter.dispose();
+    this.languageEmitter.dispose();
   }
 
   private attachPanel(panel: vscode.WebviewPanel): void {
@@ -181,7 +196,11 @@ export class DashboardPanel {
     panel.webview.options = {
       enableScripts: true
     };
-    panel.webview.html = getDashboardHtml(panel.webview, this.context.extensionUri);
+    panel.webview.html = getDashboardHtml(
+      panel.webview,
+      this.context.extensionUri,
+      this.language
+    );
 
     this.panelDisposables.push(
       panel.webview.onDidReceiveMessage(
@@ -195,7 +214,10 @@ export class DashboardPanel {
         if (event.webviewPanel.visible) {
           void this.sendState();
           this.setRefreshSummary(this.lastSummary);
-          this.postMessage({ type: 'analysisState', state: this.analysisService.getState() });
+          this.postMessage({
+            type: 'analysisState',
+            state: localizeAnalysisState(this.analysisService.getState(), this.language)
+          });
         }
       })
     );
@@ -213,12 +235,18 @@ export class DashboardPanel {
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
         this.postMessage({ type: 'loading', loading: this.loading });
-        this.postMessage({ type: 'analysisState', state: this.analysisService.getState() });
+        this.postMessage({
+            type: 'analysisState',
+            state: localizeAnalysisState(this.analysisService.getState(), this.language)
+          });
         this.navigate(this.currentPage);
         break;
       case 'selectFolder':
         this.selectedFolderUri = message.folderUri;
         await this.sendState();
+        break;
+      case 'setLanguage':
+        await this.changeLanguage(normalizeDashboardLanguage(message.language));
         break;
       case 'navigate':
         if (message.page) {
@@ -279,6 +307,7 @@ export class DashboardPanel {
         folders: [],
         selectedFolderUri: '',
         workspaceTrusted: vscode.workspace.isTrusted,
+        language: this.language,
         config: {
           serverUrl: '',
           projectKey: '',
@@ -312,6 +341,7 @@ export class DashboardPanel {
       })),
       selectedFolderUri: this.selectedFolderUri,
       workspaceTrusted: vscode.workspace.isTrusted,
+      language: this.language,
       config: {
         ...config,
         analysisPermission
@@ -469,9 +499,12 @@ export class DashboardPanel {
     }
 
     if (!vscode.workspace.isTrusted) {
-      const manageTrust = 'Gestionar confianza';
+      const manageTrust = localizeRuntimeText('Gestionar confianza', this.language);
       const action = await vscode.window.showWarningMessage(
-        'Analizar el repositorio puede ejecutar herramientas y comandos del proyecto. Confía en el workspace antes de continuar.',
+        localizeRuntimeText(
+          'Analizar el repositorio puede ejecutar herramientas y comandos del proyecto. Confía en el workspace antes de continuar.',
+          this.language
+        ),
         manageTrust
       );
       if (action === manageTrust) {
@@ -648,10 +681,27 @@ export class DashboardPanel {
   }
 
   private postStatus(kind: 'loading' | 'success' | 'error', message: string): void {
-    this.postMessage({ type: 'status', kind, message });
+    this.postMessage({
+      type: 'status',
+      kind,
+      message: localizeRuntimeText(message, this.language)
+    });
   }
 
   private postMessage(message: unknown): void {
+    if (
+      message &&
+      typeof message === 'object' &&
+      'message' in message &&
+      typeof (message as { message?: unknown }).message === 'string'
+    ) {
+      const value = message as { message: string };
+      void this.panel?.webview.postMessage({
+        ...value,
+        message: localizeRuntimeText(value.message, this.language)
+      });
+      return;
+    }
     void this.panel?.webview.postMessage(message);
   }
 
@@ -671,6 +721,45 @@ export class DashboardPanel {
   }
 
   private errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    const value = error instanceof Error ? error.message : String(error);
+    return localizeRuntimeText(value, this.language);
+  }
+
+  private async changeLanguage(language: DashboardLanguage): Promise<void> {
+    if (language === this.language) {
+      await this.sendState();
+      return;
+    }
+
+    await setDashboardLanguage(language);
+    this.language = language;
+    this.languageEmitter.fire(language);
+
+    if (this.panel) {
+      this.panel.webview.html = getDashboardHtml(
+        this.panel.webview,
+        this.context.extensionUri,
+        this.language
+      );
+    }
+  }
+
+  async refreshLanguage(): Promise<void> {
+    const language = getDashboardLanguage();
+    if (language !== this.language) {
+      this.language = language;
+      this.languageEmitter.fire(language);
+      if (this.panel) {
+        this.panel.webview.html = getDashboardHtml(
+          this.panel.webview,
+          this.context.extensionUri,
+          this.language
+        );
+      }
+    }
+  }
+
+  getLanguage(): DashboardLanguage {
+    return this.language;
   }
 }

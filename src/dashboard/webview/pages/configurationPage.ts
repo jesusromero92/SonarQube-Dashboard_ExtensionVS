@@ -18,6 +18,17 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
 
           <div id="configurationContent">
             <div class="panel-body">
+              <div class="form-grid language-row">
+                <div class="field">
+                  <label for="language">Idioma</label>
+                  <select id="language">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                  </select>
+                  <div class="hint">Cambia inmediatamente el idioma del dashboard y los mensajes de la extensión.</div>
+                </div>
+              </div>
+
               <div id="folderField" class="workspace-row" hidden>
                 <label for="folder">Carpeta del workspace</label>
                 <select id="folder"></select>

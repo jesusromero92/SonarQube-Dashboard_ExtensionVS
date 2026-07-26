@@ -50,7 +50,7 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
       const started = currentAnalysisState.startedAt ? new Date(currentAnalysisState.startedAt) : null;
       const completed = currentAnalysisState.completedAt ? new Date(currentAnalysisState.completedAt) : null;
       elements.analysisDialogTime.textContent = started
-        ? 'Inicio: ' + started.toLocaleString() + (completed ? ' · Fin: ' + completed.toLocaleString() : '')
+        ? 'Inicio: ' + started.toLocaleString(dashboardLocale) + (completed ? ' · Fin: ' + completed.toLocaleString(dashboardLocale) : '')
         : '';
     }
 

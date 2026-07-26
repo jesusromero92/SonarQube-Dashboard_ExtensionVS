@@ -1,8 +1,7 @@
 export const HOTSPOTS_TABLE_SCRIPT = `    function hotspotDisplayStatus(hotspot) {
       const resolution = String(hotspot.resolution || '').toUpperCase();
-      if (resolution) return resolution.replace(/_/g, ' ');
-      const status = String(hotspot.status || 'TO_REVIEW').toUpperCase();
-      return status.replace(/_/g, ' ');
+      const status = resolution || String(hotspot.status || 'TO_REVIEW').toUpperCase();
+      return dashboardMessages.hotspotStatus[status] || status.replace(/_/g, ' ');
     }
 
     function isPendingHotspot(hotspot) {
@@ -31,7 +30,7 @@ export const HOTSPOTS_TABLE_SCRIPT = `    function hotspotDisplayStatus(hotspot)
 
       elements.hotspotsBody.textContent = '';
       elements.hotspotsCount.textContent = String(filtered.length) +
-        (filtered.length === 1 ? ' hotspot' : ' hotspots');
+        (filtered.length === 1 ? dashboardMessages.hotspotSingular : dashboardMessages.hotspotPlural);
       elements.noHotspots.hidden = filtered.length > 0;
       elements.noHotspots.textContent = currentHotspots.length
         ? 'No hay Security Hotspots que coincidan con el filtro.'
@@ -54,7 +53,7 @@ export const HOTSPOTS_TABLE_SCRIPT = `    function hotspotDisplayStatus(hotspot)
         const priority = document.createElement('span');
         const priorityName = String(hotspot.priority || 'UNKNOWN').toUpperCase();
         priority.className = 'hotspot-priority ' + priorityName.toLowerCase();
-        priority.textContent = priorityName;
+        priority.textContent = dashboardMessages.hotspotPriority[priorityName] || priorityName;
         priorityCell.appendChild(priority);
         row.appendChild(priorityCell);
         row.appendChild(createCell(hotspotDisplayStatus(hotspot), 'hotspot-status'));

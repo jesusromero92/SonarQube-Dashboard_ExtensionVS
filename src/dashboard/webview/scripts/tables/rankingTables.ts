@@ -24,7 +24,7 @@ export const RANKING_TABLES_SCRIPT = `    function aggregateBy(keyName) {
       return Array.from(groups.values()).sort((left, right) =>
         right.count - left.count ||
         right.severityRank - left.severityRank ||
-        String(left.key).localeCompare(String(right.key), 'es', { sensitivity: 'base' })
+        String(left.key).localeCompare(String(right.key), dashboardLanguage, { sensitivity: 'base' })
       );
     }
 
@@ -35,7 +35,7 @@ export const RANKING_TABLES_SCRIPT = `    function aggregateBy(keyName) {
         if (sort.key === 'key') {
           comparison = String(left.key).localeCompare(
             String(right.key),
-            'es',
+            dashboardLanguage,
             { sensitivity: 'base' }
           );
         } else {
@@ -44,7 +44,7 @@ export const RANKING_TABLES_SCRIPT = `    function aggregateBy(keyName) {
         return comparison * direction ||
           right.count - left.count ||
           right.severityRank - left.severityRank ||
-          String(left.key).localeCompare(String(right.key), 'es', { sensitivity: 'base' });
+          String(left.key).localeCompare(String(right.key), dashboardLanguage, { sensitivity: 'base' });
       });
     }
 
@@ -69,7 +69,7 @@ export const RANKING_TABLES_SCRIPT = `    function aggregateBy(keyName) {
       updateTopSortHeaders('files');
       elements.filesBody.textContent = '';
       elements.filesCount.textContent = allRows.length > rows.length
-        ? String(rows.length) + ' de ' + String(allRows.length) + ' archivos'
+        ? String(rows.length) + dashboardMessages.of + String(allRows.length) + ' archivos'
         : String(rows.length) + (rows.length === 1 ? ' archivo' : ' archivos');
       elements.noFiles.hidden = rows.length > 0;
 
@@ -91,7 +91,7 @@ export const RANKING_TABLES_SCRIPT = `    function aggregateBy(keyName) {
       updateTopSortHeaders('rules');
       elements.rulesBody.textContent = '';
       elements.rulesCount.textContent = allRows.length > rows.length
-        ? String(rows.length) + ' de ' + String(allRows.length) + ' reglas'
+        ? String(rows.length) + dashboardMessages.of + String(allRows.length) + ' reglas'
         : String(rows.length) + (rows.length === 1 ? ' regla' : ' reglas');
       elements.noRules.hidden = rows.length > 0;
 

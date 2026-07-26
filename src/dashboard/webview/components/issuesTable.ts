@@ -2,7 +2,7 @@
 export const ISSUES_TABLE_MARKUP = `          <section class="panel">
             <div class="table-toolbar">
               <h2>Defectos</h2>
-              <span id="tableCount" class="muted">0 issues</span>
+              <span id="tableCount" class="muted">0</span>
               <input id="filter" type="search" placeholder="Filtrar por archivo, regla o descripción">
             </div>
             <div class="table-wrap body-scroll-table">

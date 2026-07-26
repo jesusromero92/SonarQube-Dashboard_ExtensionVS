@@ -19,6 +19,7 @@ export const SONAR_CONFIGURATION_KEYS = {
 } as const;
 
 export const DASHBOARD_CONFIGURATION_KEYS = {
+  language: 'language',
   autoRefresh: 'autoRefresh',
   refreshIntervalMinutes: 'refreshIntervalMinutes'
 } as const;

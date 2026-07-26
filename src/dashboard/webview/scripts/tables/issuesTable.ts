@@ -47,8 +47,8 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
       const localTotal = Number(scopeData(summary).published || 0);
       const latestProjectTotal = previousIssueTotal(latest);
 
-      // El histórico de SonarQube pertenece al proyecto completo. Solo es
-      // comparable con el resumen cuando todos sus issues tienen archivo local.
+      // SonarQube history belongs to the complete project. It is comparable
+      // with the local summary only when every issue resolves to a local file.
       return latestProjectTotal === localTotal
         ? evolution[evolution.length - 2]
         : null;
@@ -228,7 +228,8 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
           .includes(query);
       });
       elements.issuesBody.textContent = '';
-      elements.tableCount.textContent = String(filtered.length) + ' issues';
+      elements.tableCount.textContent = String(filtered.length) +
+        (filtered.length === 1 ? dashboardMessages.issueSingular : dashboardMessages.issuePlural);
       elements.noResults.hidden = filtered.length > 0;
 
       if (!filtered.length) {

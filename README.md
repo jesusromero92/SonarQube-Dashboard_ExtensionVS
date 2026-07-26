@@ -25,6 +25,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Manual selection of Maven, Gradle, .NET, NPM, Docker, or a custom command.
 - Automatic synchronization when opening an already linked project.
 - Independent configuration for each workspace folder.
+- Interface language selector with immediate switching between English and Spanish.
 - Token protection through `SecretStorage`.
 - Global **Overall / New Code** selector.
 - Summaries by severity and issue type.
@@ -43,12 +44,13 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 2. Open the local folder for that same application in VS Code.
 3. Select the **SonarQube Dashboard** icon in the Activity Bar.
 4. Open the **Configuration** tab.
-5. Enter the server URL and an access token.
-6. Select **Connect and load projects**.
-7. Link the folder to the SonarQube project or application that analyzes that code.
-8. Optionally configure the branch and, when paths do not start at the workspace root, the local subfolder.
-9. Select **Save and synchronize**.
-10. On the **Data** page, select **Analyze repository** to create and submit a new analysis.
+5. Select **English** or **Español** from the language dropdown. The dashboard, side panel, notifications, dialogs, and scanner messages update immediately.
+6. Enter the server URL and an access token.
+7. Select **Connect and load projects**.
+8. Link the folder to the SonarQube project or application that analyzes that code.
+9. Optionally configure the branch and, when paths do not start at the workspace root, the local subfolder.
+10. Select **Save and synchronize**.
+11. On the **Data** page, select **Analyze repository** to create and submit a new analysis.
 
 After the first link is created, the extension synchronizes data automatically whenever the workspace is opened. The refresh icon in the side panel can be used to request a manual update.
 
@@ -292,6 +294,7 @@ When the active folder changes, the extension selects the matching configuration
 
 ```json
 {
+  "sonarQubeDashboard.language": "en",
   "sonarQubeDashboard.sonar.serverUrl": "",
   "sonarQubeDashboard.sonar.projectKey": "",
   "sonarQubeDashboard.sonar.branch": "",
@@ -304,7 +307,7 @@ When the active folder changes, the extension selects the matching configuration
 }
 ```
 
-`autoRefresh` enables synchronization when opening or changing the workspace. A value greater than `0` for `refreshIntervalMinutes` enables periodic updates.
+`sonarQubeDashboard.language` accepts `en` or `es` and is stored globally for the VS Code environment. `autoRefresh` enables synchronization when opening or changing the workspace. A value greater than `0` for `refreshIntervalMinutes` enables periodic updates.
 
 ## Development
 

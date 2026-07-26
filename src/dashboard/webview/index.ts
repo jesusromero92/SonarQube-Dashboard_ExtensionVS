@@ -1,5 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
+import {
+  DashboardLanguage,
+  localeTag,
+  localizeWebviewSource
+} from '../../i18n';
 import { getDashboardWebviewAssets } from './assets';
 import { getDashboardBody } from './body';
 import { getDashboardScript } from './scripts';
@@ -7,13 +12,13 @@ import { getDashboardStyles } from './styles';
 
 export function getDashboardHtml(
   webview: vscode.Webview,
-  extensionUri: vscode.Uri
+  extensionUri: vscode.Uri,
+  language: DashboardLanguage
 ): string {
   const nonce = randomBytes(16).toString('hex');
   const assets = getDashboardWebviewAssets(webview, extensionUri);
-
-  return `<!DOCTYPE html>
-<html lang="es">
+  const source = `<!DOCTYPE html>
+<html lang="${language}">
 <head>
   <meta charset="UTF-8">
   <meta
@@ -25,7 +30,9 @@ export function getDashboardHtml(
   <style nonce="${nonce}">${getDashboardStyles(assets)}</style>
 </head>
 <body>${getDashboardBody()}
-  <script nonce="${nonce}">${getDashboardScript()}</script>
+  <script nonce="${nonce}">${getDashboardScript(language, localeTag(language))}</script>
 </body>
 </html>`;
+
+  return localizeWebviewSource(source, language);
 }

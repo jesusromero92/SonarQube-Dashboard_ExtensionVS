@@ -23,7 +23,7 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       if (!Number.isFinite(date.getTime())) {
         return String(value || '');
       }
-      return new Intl.DateTimeFormat('es-ES', {
+      return new Intl.DateTimeFormat(dashboardLocale, {
         day: '2-digit',
         month: 'short',
         year: '2-digit'
@@ -31,7 +31,7 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
     }
 
     function formatChartValue(value) {
-      return new Intl.NumberFormat('es-ES', {
+      return new Intl.NumberFormat(dashboardLocale, {
         maximumFractionDigits: 1
       }).format(Number(value) || 0);
     }

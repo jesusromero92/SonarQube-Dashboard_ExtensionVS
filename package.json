@@ -1,8 +1,8 @@
 {
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
-  "description": "Dashboard de SonarQube para VS Code con análisis del repositorio, Problems, Quality Gate, defectos, hotspots, rankings y evolución.",
-  "version": "0.14.1",
+  "description": "%extension.description%",
+  "version": "0.15.0",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -37,7 +37,7 @@
       "activitybar": [
         {
           "id": "sonarQubeDashboardContainer",
-          "title": "SonarQube Dashboard",
+          "title": "%views.container.title%",
           "icon": "media/SonarQube.svg"
         }
       ]
@@ -47,78 +47,92 @@
         {
           "type": "webview",
           "id": "sonarQubeDashboard.launcher",
-          "name": "Panel",
+          "name": "%views.panel.name%",
           "visibility": "visible",
-          "contextualTitle": "SonarQube Dashboard"
+          "contextualTitle": "%views.container.title%"
         }
       ]
     },
     "commands": [
       {
         "command": "sonarQubeDashboard.open",
-        "title": "SonarQube Dashboard: Abrir dashboard",
+        "title": "%command.open%",
         "icon": "$(dashboard)"
       },
       {
         "command": "sonarQubeDashboard.refresh",
-        "title": "SonarQube Dashboard: Actualizar issues",
+        "title": "%command.refresh%",
         "icon": "$(refresh)"
       },
       {
         "command": "sonarQubeDashboard.clear",
-        "title": "SonarQube Dashboard: Limpiar Problems",
+        "title": "%command.clear%",
         "icon": "$(clear-all)"
       },
       {
         "command": "sonarQubeDashboard.analyze",
-        "title": "SonarQube Dashboard: Analizar repositorio",
+        "title": "%command.analyze%",
         "icon": "$(play)"
       },
       {
         "command": "sonarQubeDashboard.cancelAnalysis",
-        "title": "SonarQube Dashboard: Cancelar análisis",
+        "title": "%command.cancelAnalysis%",
         "icon": "$(debug-stop)"
       }
     ],
     "configuration": {
-      "title": "SonarQube Dashboard",
+      "title": "%configuration.title%",
       "properties": {
+        "sonarQubeDashboard.language": {
+          "type": "string",
+          "default": "en",
+          "scope": "window",
+          "enum": [
+            "en",
+            "es"
+          ],
+          "enumDescriptions": [
+            "%configuration.language.en%",
+            "%configuration.language.es%"
+          ],
+          "description": "%configuration.language.description%"
+        },
         "sonarQubeDashboard.sonar.serverUrl": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "URL de SonarQube. Se gestiona desde SonarQube Dashboard."
+          "description": "%configuration.sonar_serverUrl.description%"
         },
         "sonarQubeDashboard.sonar.projectKey": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Proyecto de SonarQube. Se gestiona desde SonarQube Dashboard."
+          "description": "%configuration.sonar_projectKey.description%"
         },
         "sonarQubeDashboard.sonar.branch": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Rama de SonarQube. Se gestiona desde SonarQube Dashboard."
+          "description": "%configuration.sonar_branch.description%"
         },
         "sonarQubeDashboard.sonar.baseDir": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Subcarpeta local asociada a la raíz del proyecto. Se gestiona desde el dashboard."
+          "description": "%configuration.sonar_baseDir.description%"
         },
         "sonarQubeDashboard.autoRefresh": {
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "description": "Actualiza los issues automáticamente al abrir o cambiar el workspace."
+          "description": "%configuration.autoRefresh.description%"
         },
         "sonarQubeDashboard.refreshIntervalMinutes": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "scope": "window",
-          "description": "Intervalo de actualización. 0 desactiva la actualización periódica."
+          "description": "%configuration.refreshIntervalMinutes.description%"
         },
         "sonarQubeDashboard.sonar.scannerMode": {
           "type": "string",
@@ -134,27 +148,27 @@
             "custom"
           ],
           "enumDescriptions": [
-            "Detecta Maven, Gradle y .NET; usa NPM con package.json o Docker para proyectos genéricos.",
-            "Usa SonarScanner for Maven.",
-            "Usa SonarScanner for Gradle.",
-            "Usa SonarScanner for .NET.",
-            "Usa SonarScanner for NPM como scanner genérico.",
-            "Usa la imagen sonarsource/sonar-scanner-cli.",
-            "Ejecuta el comando personalizado configurado."
+            "%configuration.scannerMode.auto%",
+            "%configuration.scannerMode.maven%",
+            "%configuration.scannerMode.gradle%",
+            "%configuration.scannerMode.dotnet%",
+            "%configuration.scannerMode.npm%",
+            "%configuration.scannerMode.docker%",
+            "%configuration.scannerMode.custom%"
           ],
-          "description": "Método empleado por el botón Analizar repositorio."
+          "description": "%configuration.sonar_scannerMode.description%"
         },
         "sonarQubeDashboard.sonar.buildCommand": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Comando de compilación opcional ejecutado antes del scanner genérico o en lugar de dotnet build."
+          "description": "%configuration.sonar_buildCommand.description%"
         },
         "sonarQubeDashboard.sonar.customScannerCommand": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Comando personalizado de análisis. El token se proporciona mediante SONAR_TOKEN."
+          "description": "%configuration.sonar_customScannerCommand.description%"
         }
       }
     }
@@ -174,7 +188,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "El dashboard puede consultar SonarQube, pero analizar el repositorio requiere confiar en el workspace.",
+      "description": "%capabilities.untrusted.description%",
       "restrictedConfigurations": [
         "sonarQubeDashboard.sonar.buildCommand",
         "sonarQubeDashboard.sonar.customScannerCommand"

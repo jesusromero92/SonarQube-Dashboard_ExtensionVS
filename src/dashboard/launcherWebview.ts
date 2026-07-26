@@ -5,10 +5,12 @@ import {
   DASHBOARD_TYPE_ICON_FILES,
   DASHBOARD_WEBVIEW_CONSTANTS
 } from '../constants';
+import { DashboardLanguage, localizeWebviewSource } from '../i18n';
 
 export function getDashboardLauncherHtml(
   webview: vscode.Webview,
-  extensionUri: vscode.Uri
+  extensionUri: vscode.Uri,
+  language: DashboardLanguage
 ): string {
     const nonce = randomBytes(16).toString('hex');
     const iconUri = (file: string) => webview.asWebviewUri(
@@ -19,8 +21,8 @@ export function getDashboardLauncherHtml(
     const vulnerabilityIconUri = iconUri(DASHBOARD_TYPE_ICON_FILES.VULNERABILITY);
     const hotspotIconUri = iconUri(DASHBOARD_TYPE_ICON_FILES.SECURITY_HOTSPOT);
 
-    return `<!DOCTYPE html>
-<html lang="es">
+    const source = `<!DOCTYPE html>
+<html lang="${language}">
 <head>
   <meta charset="UTF-8">
   <meta
@@ -476,4 +478,6 @@ export function getDashboardLauncherHtml(
   </script>
 </body>
 </html>`;
+
+    return localizeWebviewSource(source, language);
   }

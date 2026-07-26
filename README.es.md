@@ -26,6 +26,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Selección manual de Maven, Gradle, .NET, NPM, Docker o un comando personalizado.
 - Sincronización automática al abrir un proyecto ya vinculado.
 - Configuración independiente por carpeta del workspace.
+- Selector de idioma con cambio inmediato entre español e inglés.
 - Token protegido mediante `SecretStorage`.
 - Selector global **Overall / New Code**.
 - Resumen por severidad y tipo de defecto.
@@ -44,12 +45,13 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 2. Abre en VS Code la carpeta local de esa misma aplicación.
 3. Pulsa el icono de **SonarQube Dashboard** en la barra de actividad.
 4. Abre la pestaña **Configuración**.
-5. Introduce la URL del servidor y un token de acceso.
-6. Pulsa **Conectar y cargar proyectos**.
-7. Vincula la carpeta con el proyecto o aplicación de SonarQube que analiza ese código.
-8. Configura opcionalmente la rama y, si las rutas no parten de la raíz del workspace, la subcarpeta local.
-9. Pulsa **Guardar y sincronizar**.
-10. En la página **Datos**, pulsa **Analizar repositorio** para generar y enviar un nuevo análisis.
+5. Selecciona **Español** o **English** en el desplegable de idioma. El dashboard, el panel lateral, las notificaciones, los modales y los mensajes del scanner cambian inmediatamente.
+6. Introduce la URL del servidor y un token de acceso.
+7. Pulsa **Conectar y cargar proyectos**.
+8. Vincula la carpeta con el proyecto o aplicación de SonarQube que analiza ese código.
+9. Configura opcionalmente la rama y, si las rutas no parten de la raíz del workspace, la subcarpeta local.
+10. Pulsa **Guardar y sincronizar**.
+11. En la página **Datos**, pulsa **Analizar repositorio** para generar y enviar un nuevo análisis.
 
 Después de la primera vinculación, la extensión sincroniza los datos automáticamente al abrir el workspace. El icono de recarga del panel lateral permite solicitar una actualización manual.
 
@@ -293,6 +295,7 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
 
 ```json
 {
+  "sonarQubeDashboard.language": "es",
   "sonarQubeDashboard.sonar.serverUrl": "",
   "sonarQubeDashboard.sonar.projectKey": "",
   "sonarQubeDashboard.sonar.branch": "",
@@ -305,7 +308,7 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
 }
 ```
 
-`autoRefresh` activa la sincronización al abrir o cambiar el workspace. Un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica.
+`sonarQubeDashboard.language` acepta `en` o `es` y se guarda globalmente para el entorno de VS Code. `autoRefresh` activa la sincronización al abrir o cambiar el workspace. Un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica.
 
 ## Desarrollo
 

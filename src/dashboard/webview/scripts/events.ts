@@ -5,6 +5,10 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
     elements.analyzeEmpty.addEventListener('click', requestAnalysis);
     elements.syncEmpty.addEventListener('click', requestRefresh);
 
+    elements.language.addEventListener('change', () => {
+      vscode.postMessage({ type: 'setLanguage', language: elements.language.value });
+    });
+
     elements.folder.addEventListener('change', () => {
       currentFolderUri = elements.folder.value;
       loadedProjects = [];

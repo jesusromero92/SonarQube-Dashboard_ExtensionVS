@@ -2,10 +2,15 @@ import {
   DASHBOARD_COLORS,
   DASHBOARD_WEBVIEW_CONSTANTS
 } from '../../../constants';
+import { DashboardLanguage } from '../../../i18n';
+import { getWebviewMessages } from '../../../i18n/webview';
 
-export function getBootstrapScript(): string {
+export function getBootstrapScript(language: DashboardLanguage, locale: string): string {
   return `
     const vscode = acquireVsCodeApi();
+    const dashboardLanguage = ${JSON.stringify(language)};
+    const dashboardLocale = ${JSON.stringify(locale)};
+    const dashboardMessages = ${JSON.stringify(getWebviewMessages(language))};
     const dashboardColors = ${JSON.stringify(DASHBOARD_COLORS)};
     const dashboardConstants = ${JSON.stringify(DASHBOARD_WEBVIEW_CONSTANTS)};
     const typeIconClasses = dashboardConstants.typeIconClasses;
@@ -31,6 +36,7 @@ export function getBootstrapScript(): string {
       configurationContent: document.getElementById('configurationContent'),
       folderField: document.getElementById('folderField'),
       folder: document.getElementById('folder'),
+      language: document.getElementById('language'),
       serverUrl: document.getElementById('serverUrl'),
       token: document.getElementById('token'),
       tokenHint: document.getElementById('tokenHint'),
@@ -261,6 +267,7 @@ export function getBootstrapScript(): string {
 
     function renderState(message) {
       const folders = message.folders || [];
+      elements.language.value = message.language || dashboardLanguage;
       hasWorkspace = folders.length > 0;
       elements.emptyWorkspace.hidden = hasWorkspace;
       elements.configurationContent.hidden = !hasWorkspace;

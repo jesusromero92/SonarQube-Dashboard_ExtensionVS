@@ -2,7 +2,7 @@
 export const HOTSPOTS_TABLE_MARKUP = `          <section id="hotspotsView" class="panel" hidden>
             <div class="table-toolbar">
               <h2>Security Hotspots</h2>
-              <span id="hotspotsCount" class="muted">0 hotspots</span>
+              <span id="hotspotsCount" class="muted">0</span>
               <label class="pending-filter">
                 <input id="pendingHotspotsOnly" type="checkbox">
                 Solo pendientes
