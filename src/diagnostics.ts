@@ -153,7 +153,7 @@ async function mapLocation(
   componentPaths: Map<string, string>,
   location: SonarIssueLocation,
   role: DashboardIssueLocation['role']
-): Promise<DashboardIssueLocation | undefined> {
+): Promise<DashboardIssueLocation> {
   const local = await resolveLocalFile(
     folder,
     projectKey,
@@ -161,15 +161,18 @@ async function mapLocation(
     location.component,
     componentPaths
   );
-  if (!local) {
-    return undefined;
-  }
   const line = Math.max(1, location.textRange?.startLine ?? 1);
+  const remotePath = resolveIssuePath(
+    location.component,
+    projectKey,
+    componentPaths
+  ) ?? location.component;
   return {
     component: location.component,
     message: location.msg ?? '',
-    relativePath: local.relativePath,
-    fileUri: local.uri.toString(),
+    relativePath: local?.relativePath ?? remotePath,
+    fileUri: local?.uri.toString() ?? '',
+    resolved: Boolean(local),
     line,
     endLine: Math.max(line, location.textRange?.endLine ?? line),
     role
@@ -197,7 +200,7 @@ async function mapIssueFlows(
     }));
     return {
       index: flowIndex,
-      locations: mapped.filter((location): location is DashboardIssueLocation => Boolean(location))
+      locations: mapped
     };
   }));
   const flows = mappedFlows.filter(flow => flow.locations.length > 0);
@@ -236,7 +239,7 @@ async function toDashboardIssue(
     key: issue.key,
     rule: issue.rule,
     ruleName: issue.ruleName || issue.rule,
-    status: issue.status || '',
+    status: issue.issueStatus || issue.status || '',
     resolution: issue.resolution ?? '',
     assignee: issue.assignee ?? '',
     author: issue.author ?? '',

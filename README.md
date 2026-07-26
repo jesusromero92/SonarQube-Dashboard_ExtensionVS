@@ -201,7 +201,8 @@ Select **Manage issue** from the Issues table, an editor hover, or the issue exp
 - add comments;
 - inspect comments, change history, author, dates, status, resolution, and assignee.
 
-Every write operation displays a native confirmation dialog before SonarQube is modified. Status buttons are created only from the transitions returned by `/api/issues/transitions`; assignment controls are shown only when the token can list assignable users. Server-side authorization remains the final source of truth and API errors are displayed without discarding the current dashboard state.
+Every write operation displays a native confirmation dialog before SonarQube is modified. Status buttons are created only from the transitions included by `/api/issues/search`; assignment controls follow the actions returned for the issue, and the available-user list is paginated. Server-side authorization remains the final source of truth and API errors are displayed without discarding the current dashboard state.
+The current status is displayed in the Issues table and in the dialog; its matching action is disabled. Comments and history use mutually exclusive collapsible sections.
 
 ## Security flows and secondary locations
 
@@ -213,6 +214,8 @@ Issues that include execution flows expose all local locations involved in the f
 - other related locations.
 
 The lifecycle dialog includes **Previous** and **Next** controls and a complete location list. Selecting a location opens the corresponding file and line. While a flow is active, VS Code displays colored whole-line decorations and CodeLens entries so the path can be followed directly in the editor.
+
+Locations that are part of the SonarQube flow but do not exist in the open workspace remain visible as unavailable and are never redirected to a different file with the same name.
 
 ## Coverage and duplications
 
@@ -226,8 +229,10 @@ The **Coverage and duplication** data tab provides separate Overall and New Code
 - historical coverage and duplication charts.
 
 Selecting a file loads line-level data on demand. Covered, partially covered, and uncovered lines are marked in the gutter and overview ruler. Duplicated lines receive a dedicated decoration, and the detail dialog lists each duplicated block together with every matching local file and range.
+Each duplication group can be opened in a dedicated Git-style comparison tab. It displays every local occurrence side by side with its original line numbers and provides direct navigation to the selected range.
 
 Coverage requires the corresponding test reports to have been imported by the scanner during analysis. When SonarQube has no coverage data for a file, the extension leaves it undecorated.
+Missing historical metrics are also displayed as unavailable rather than as an artificial 0%.
 
 ## Quick issue navigation
 
@@ -243,6 +248,7 @@ Default shortcuts:
 | Next Blocker/Critical issue | `Ctrl+Alt+C` | `Cmd+Alt+C` |
 
 The status bar shows the current position, for example `3/12`, and opens the next issue when selected.
+The explorer and navigation commands follow the active Overall/New Code scope.
 
 ## Automatic notifications
 
@@ -255,6 +261,7 @@ Notifications can be enabled or disabled from the dashboard configuration or VS 
 - completion of an analysis launched by the extension.
 
 The default significant-increase threshold is 20% with at least five additional issues. These values can be changed through `sonarQubeDashboard.notifications.significantIncreasePercent` and `sonarQubeDashboard.notifications.significantIncreaseMinimum`.
+Notification baselines are persisted independently for each workspace folder, server, project, branch, and VS Code workspace.
 
 ## Security Hotspots
 

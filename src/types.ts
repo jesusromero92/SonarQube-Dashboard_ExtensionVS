@@ -39,6 +39,7 @@ export interface SonarIssue {
   textRange?: SonarTextRange;
   message: string;
   status: string;
+  issueStatus?: string;
   resolution?: string;
   assignee?: string;
   author?: string;
@@ -428,6 +429,7 @@ export interface DashboardIssueLocation {
   message: string;
   relativePath: string;
   fileUri: string;
+  resolved: boolean;
   line: number;
   endLine: number;
   role: IssueFlowRole;
@@ -561,10 +563,10 @@ export interface EvolutionPoint {
   newMajorViolations: number;
   newMinorViolations: number;
   newInfoViolations: number;
-  coverage: number;
-  newCoverage: number;
-  duplicatedLinesDensity: number;
-  newDuplicatedLinesDensity: number;
+  coverage: number | null;
+  newCoverage: number | null;
+  duplicatedLinesDensity: number | null;
+  newDuplicatedLinesDensity: number | null;
 }
 
 export interface CoverageFileSummary extends RemoteCoverageFile {

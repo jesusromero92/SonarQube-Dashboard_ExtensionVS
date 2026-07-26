@@ -189,6 +189,16 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
       return cell;
     }
 
+    function createIssueStatusCell(issue) {
+      const cell = document.createElement('td');
+      cell.className = 'issue-status-cell';
+      const status = document.createElement('span');
+      const value = String(issue.status || 'OPEN').toUpperCase();
+      status.className = 'status-chip issue-status ' + value.toLowerCase().replace(/_/g, '-');
+      status.textContent = value.replace(/_/g, ' ');
+      cell.appendChild(status);
+      return cell;
+    }
 
     function createIssueActionsCell(issue) {
       const cell = document.createElement('td');
@@ -239,7 +249,8 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
           issue.rule,
           issue.message,
           issue.type,
-          issue.severity
+          issue.severity,
+          issue.status
         ]
           .join(' ')
           .toLowerCase()
@@ -266,6 +277,7 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
         row.appendChild(severityCell);
         row.appendChild(createTypeCell(issue.type));
         row.appendChild(fileCellUtils.create(issue.relativePath, issue.line));
+        row.appendChild(createIssueStatusCell(issue));
         row.appendChild(createRuleCell(issue));
         row.appendChild(createIssueActionsCell(issue));
         elements.issuesBody.appendChild(row);

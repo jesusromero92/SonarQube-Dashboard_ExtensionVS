@@ -48,7 +48,6 @@ import {
   SonarDuplicationFile,
   SonarDuplicationsResponse,
   SonarIssueChangelogResponse,
-  SonarIssueTransitionsResponse,
   SonarMeasureComponent,
   SonarMeasuresComponentTreeResponse,
   SonarSourceLinesResponse,
@@ -397,10 +396,10 @@ function emptyEvolutionPoint(date: string): EvolutionPoint {
     newMajorViolations: 0,
     newMinorViolations: 0,
     newInfoViolations: 0,
-    coverage: 0,
-    newCoverage: 0,
-    duplicatedLinesDensity: 0,
-    newDuplicatedLinesDensity: 0
+    coverage: null,
+    newCoverage: null,
+    duplicatedLinesDensity: null,
+    newDuplicatedLinesDensity: null
   };
 }
 
@@ -424,7 +423,11 @@ function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[] {
     }
     for (const history of measure.history ?? []) {
       const point = byDate.get(history.date) ?? emptyEvolutionPoint(history.date);
-      point[property] = Number(history.value) || 0;
+      const parsedValue = Number(history.value);
+      if (!Number.isFinite(parsedValue)) {
+        continue;
+      }
+      point[property] = parsedValue;
       byDate.set(history.date, point);
     }
   }
@@ -753,11 +756,19 @@ async function fetchIssueSet(
   const components = new Map<string, SonarComponent>();
   let page = 1;
   let total = Number.POSITIVE_INFINITY;
+  let supportsIssueStatuses = true;
 
   while (issues.length < total) {
     const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
     url.searchParams.set('componentKeys', config.projectKey);
-    url.searchParams.set('resolved', 'false');
+    if (supportsIssueStatuses) {
+      url.searchParams.set(
+        'issueStatuses',
+        'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
+      );
+    } else {
+      url.searchParams.set('resolved', 'false');
+    }
     url.searchParams.set('additionalFields', '_all');
     url.searchParams.set('p', String(page));
     url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
@@ -768,7 +779,21 @@ async function fetchIssueSet(
       url.searchParams.set('branch', config.branch.trim());
     }
 
-    const payload = await requestJson<SonarIssuesResponse>(url, config.token, signal);
+    let payload: SonarIssuesResponse;
+    try {
+      payload = await requestJson<SonarIssuesResponse>(url, config.token, signal);
+    } catch (error) {
+      if (
+        supportsIssueStatuses &&
+        page === 1 &&
+        error instanceof SonarHttpError &&
+        error.status === 400
+      ) {
+        supportsIssueStatuses = false;
+        continue;
+      }
+      throw error;
+    }
     total = getTotal(payload);
     issues.push(...payload.issues);
     for (const component of payload.components ?? []) {
@@ -924,13 +949,38 @@ export async function fetchAllIssues(
 function dashboardIssueFromSearch(issue: SonarIssue, fallback: DashboardIssue): DashboardIssue {
   return {
     ...fallback,
-    status: issue.status || fallback.status,
+    status: issue.issueStatus || issue.status || fallback.status,
     resolution: issue.resolution ?? fallback.resolution,
     assignee: issue.assignee ?? fallback.assignee,
     author: issue.author ?? fallback.author,
     creationDate: issue.creationDate ?? fallback.creationDate,
     updateDate: issue.updateDate ?? fallback.updateDate
   };
+}
+
+async function fetchActiveUsers(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<SonarUser[]> {
+  const users: SonarUser[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+  while (users.length < total) {
+    const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/users/search`);
+    url.searchParams.set('p', String(page));
+    url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
+    const payload = await requestJson<SonarUsersResponse>(url, config.token, signal);
+    const pageUsers = (payload.users ?? []).filter(user => user.active !== false);
+    users.push(...pageUsers);
+    total = payload.paging?.total ?? users.length;
+    if ((payload.users ?? []).length === 0) {
+      break;
+    }
+    page += 1;
+  }
+  return users.sort((left, right) =>
+    (left.name || left.login).localeCompare(right.name || right.login)
+  );
 }
 
 export async function fetchIssueLifecycle(
@@ -941,26 +991,15 @@ export async function fetchIssueLifecycle(
   const searchUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
   searchUrl.searchParams.set('issues', issue.key);
   searchUrl.searchParams.set('additionalFields', '_all');
-  const [search, transitions, changelog, users] = await Promise.all([
-    requestJson<SonarIssuesResponse>(searchUrl, config.token, signal).catch(() => ({ total: 0, issues: [] })),
-    (() => {
-      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/transitions`);
-      url.searchParams.set('issue', issue.key);
-      return requestJson<SonarIssueTransitionsResponse>(url, config.token, signal)
-        .catch(() => ({ transitions: [] }));
-    })(),
+  const [search, changelog, users] = await Promise.all([
+    requestJson<SonarIssuesResponse>(searchUrl, config.token, signal),
     (() => {
       const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/changelog`);
       url.searchParams.set('issue', issue.key);
       return requestJson<SonarIssueChangelogResponse>(url, config.token, signal)
         .catch(() => ({ changelog: [] }));
     })(),
-    (() => {
-      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/users/search`);
-      url.searchParams.set('ps', '100');
-      return requestJson<SonarUsersResponse>(url, config.token, signal)
-        .catch(() => ({ users: [] }));
-    })()
+    fetchActiveUsers(config, signal).catch(() => [])
   ]);
 
   const current = search.issues[0];
@@ -979,16 +1018,15 @@ export async function fetchIssueLifecycle(
       newValue: diff.newValue ?? ''
     }))
   }));
-  const transitionItems: IssueTransition[] = (transitions.transitions ?? []).map(item => ({
-    key: item.key,
-    name: item.name ?? item.key
+  const transitionItems: IssueTransition[] = (current?.transitions ?? []).map(key => ({
+    key,
+    name: key
   }));
   const availableActions = new Set(
     (current?.actions ?? []).map(action => action.trim().toLowerCase())
   );
   const actionMetadataAvailable = current?.actions !== undefined;
-  const hasBrowsePermission = Boolean(current);
-  const assignableUsers = (users.users ?? []).filter(user => user.active !== false);
+  const assignableUsers = users;
   return {
     issue: current ? dashboardIssueFromSearch(current, issue) : issue,
     transitions: transitionItems,
@@ -997,10 +1035,10 @@ export async function fetchIssueLifecycle(
     users: assignableUsers,
     canComment: actionMetadataAvailable
       ? availableActions.has('comment')
-      : hasBrowsePermission,
-    canAssign: (actionMetadataAvailable
+      : false,
+    canAssign: actionMetadataAvailable
       ? availableActions.has('assign')
-      : hasBrowsePermission) && assignableUsers.length > 0
+      : false
   };
 }
 
@@ -1114,4 +1152,3 @@ export async function fetchFileCoverageDetail(
     duplications: groups
   };
 }
-

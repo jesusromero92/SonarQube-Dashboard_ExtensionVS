@@ -20,6 +20,7 @@ export interface DashboardWebviewMessage {
   fileUri?: string;
   line?: number;
   page?: DashboardPage;
+  scope?: 'overall' | 'newCode';
   hotspotKey?: string;
   issueKey?: string;
   mutationKind?: IssueMutationKind;
@@ -28,6 +29,7 @@ export interface DashboardWebviewMessage {
   comment?: string;
   flowIndex?: number;
   locationIndex?: number;
+  groupIndex?: number;
   notificationsEnabled?: boolean;
   significantIncreasePercent?: number;
   significantIncreaseMinimum?: number;

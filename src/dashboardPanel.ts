@@ -30,6 +30,7 @@ import { getDashboardHtml } from './dashboard/webview';
 import { AnalysisService } from './scanner/analysisService';
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
+import { DuplicationComparisonPanel } from './dashboard/duplicationComparisonPanel';
 import {
   checkAnalysisPermission,
   fetchHotspotDetail,
@@ -57,6 +58,7 @@ export class DashboardPanel {
   private currentPage: DashboardPage = 'data';
   private language: DashboardLanguage = getDashboardLanguage();
   private pendingIssueDetail: DashboardIssue | undefined;
+  private managedIssue: DashboardIssue | undefined;
   private pendingHotspotDetail: DashboardHotspot | undefined;
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private panelDisposables: vscode.Disposable[] = [];
@@ -65,6 +67,7 @@ export class DashboardPanel {
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
   private readonly languageEmitter = new vscode.EventEmitter<DashboardLanguage>();
   private readonly analysisService: AnalysisService;
+  private readonly duplicationComparison: DuplicationComparisonPanel;
 
   readonly onDidChangeSummary = this.summaryEmitter.event;
   readonly onDidChangeLoading = this.loadingEmitter.event;
@@ -76,8 +79,10 @@ export class DashboardPanel {
     private readonly refreshCallback: RefreshCallback,
     private readonly clearCallback: ClearCallback,
     private readonly coverageDecorations: CoverageDecorationManager,
-    private readonly flowController: IssueFlowController
+    private readonly flowController: IssueFlowController,
+    private readonly scopeCallback: (scope: 'overall' | 'newCode') => void
   ) {
+    this.duplicationComparison = new DuplicationComparisonPanel(coverageDecorations);
     this.analysisService = new AnalysisService(context, state => {
       this.postMessage({
         type: 'analysisState',
@@ -214,6 +219,7 @@ export class DashboardPanel {
   dispose(): void {
     this.projectLoadController?.abort();
     this.analysisService.dispose();
+    this.duplicationComparison.dispose();
     this.disposePanelListeners();
     this.panel?.dispose();
     this.panel = undefined;
@@ -271,6 +277,7 @@ export class DashboardPanel {
   private async handleMessage(message: DashboardWebviewMessage): Promise<void> {
     switch (message.type) {
       case 'ready':
+        this.scopeCallback('overall');
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
         this.postMessage({ type: 'loading', loading: this.loading });
@@ -289,6 +296,11 @@ export class DashboardPanel {
       case 'setLanguage':
         await this.changeLanguage(normalizeDashboardLanguage(message.language));
         break;
+      case 'scopeChanged':
+        if (message.scope) {
+          this.scopeCallback(message.scope);
+        }
+        break;
       case 'navigate':
         if (message.page) {
           await this.showPage(message.page);
@@ -305,6 +317,9 @@ export class DashboardPanel {
         break;
       case 'loadCoverageDetail':
         await this.loadCoverageDetail(message);
+        break;
+      case 'openDuplicationComparison':
+        await this.openDuplicationComparison(message);
         break;
       case 'selectFlowLocation':
         await this.selectFlowLocation(message);
@@ -687,7 +702,8 @@ export class DashboardPanel {
   private findIssue(issueKey?: string): DashboardIssue | undefined {
     if (!issueKey) return undefined;
     return [...this.lastSummary.issues, ...this.lastSummary.newIssues]
-      .find(issue => issue.key === issueKey);
+      .find(issue => issue.key === issueKey) ??
+      (this.managedIssue?.key === issueKey ? this.managedIssue : undefined);
   }
 
   private async loadIssueLifecycle(message: DashboardWebviewMessage): Promise<void> {
@@ -713,6 +729,7 @@ export class DashboardPanel {
     this.postMessage({ type: 'issueLifecycleLoading', issueKey: issue.key });
     try {
       const detail = await fetchIssueLifecycle(config, issue);
+      this.managedIssue = detail.issue;
       this.postMessage({ type: 'issueLifecycle', detail });
     } catch (error) {
       this.postMessage({
@@ -766,6 +783,7 @@ export class DashboardPanel {
       this.setRefreshSummary(summary, true);
       const refreshed = this.findIssue(issue.key) ?? issue;
       const detail = await fetchIssueLifecycle(config, refreshed);
+      this.managedIssue = detail.issue;
       this.postMessage({ type: 'issueLifecycle', detail });
       this.postStatus('success', 'El defecto se ha actualizado en SonarQube.');
     } catch (error) {
@@ -807,6 +825,26 @@ export class DashboardPanel {
       ?? issue.secondaryLocations[locationIndex];
     if (location) {
       await this.flowController.openLocation(location);
+    }
+  }
+
+  private async openDuplicationComparison(
+    message: DashboardWebviewMessage
+  ): Promise<void> {
+    if (!message.fileUri) {
+      this.postStatus('error', 'No se pudo identificar el archivo duplicado.');
+      return;
+    }
+    try {
+      await this.duplicationComparison.show(
+        message.fileUri,
+        Math.max(0, message.groupIndex ?? 0)
+      );
+    } catch (error) {
+      this.postStatus(
+        'error',
+        `No se pudo abrir la comparación de duplicados: ${this.errorMessage(error)}`
+      );
     }
   }
 

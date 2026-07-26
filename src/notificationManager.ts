@@ -5,36 +5,44 @@ import {
   DASHBOARD_COMMANDS
 } from './constants';
 import { getDashboardLanguage } from './i18n';
-import { RefreshSummary } from './types';
+import {
+  DashboardHotspot,
+  DashboardIssue,
+  QualityGateStatus
+} from './types';
 
 interface NotificationSnapshot {
   issueKeys: string[];
   criticalKeys: string[];
   hotspotKeys: string[];
   total: number;
-  qualityGate: string;
+  qualityGate: QualityGateStatus;
 }
 
-const SNAPSHOT_KEY = 'sonarQubeDashboard.notificationSnapshot.v1';
+export interface NotificationScope {
+  id: string;
+  issues: DashboardIssue[];
+  hotspots: DashboardHotspot[];
+  qualityGate: QualityGateStatus;
+}
+
+const SNAPSHOT_KEY = 'sonarQubeDashboard.notificationSnapshots.v2';
 
 export class NotificationManager {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
-  async evaluate(summary: RefreshSummary, source: 'sync' | 'analysis' = 'sync'): Promise<void> {
+  async evaluate(
+    scopes: readonly NotificationScope[],
+    source: 'sync' | 'analysis' = 'sync'
+  ): Promise<void> {
     const configuration = vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION);
     if (!configuration.get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true)) {
       return;
     }
-    const next = this.snapshot(summary);
-    const previous = this.context.workspaceState.get<NotificationSnapshot>(SNAPSHOT_KEY);
-    await this.context.workspaceState.update(SNAPSHOT_KEY, next);
-    if (!previous || summary.configuredFolders === 0 || summary.errors.length > 0) {
-      return;
-    }
 
-    const spanish = getDashboardLanguage() === 'es';
-    const newCritical = next.criticalKeys.filter(key => !previous.criticalKeys.includes(key));
-    const newHotspots = next.hotspotKeys.filter(key => !previous.hotspotKeys.includes(key));
+    const snapshots = {
+      ...(this.context.workspaceState.get<Record<string, NotificationSnapshot>>(SNAPSHOT_KEY) ?? {})
+    };
     const percent = configuration.get<number>(
       DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent,
       20
@@ -43,42 +51,77 @@ export class NotificationManager {
       DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum,
       5
     );
-    const increase = next.total - previous.total;
-    const significant = increase >= minimum && (
-      previous.total === 0 || increase / Math.max(1, previous.total) * 100 >= percent
-    );
-    const qualityGateFailed = previous.qualityGate === 'OK' &&
-      ['WARN', 'ERROR'].includes(next.qualityGate);
 
-    if (newCritical.length > 0) {
+    let newCriticalCount = 0;
+    let newHotspotCount = 0;
+    let significantIncrease = 0;
+    let significantPrevious = 0;
+    let significantTotal = 0;
+    let qualityGateFailure: QualityGateStatus | undefined;
+
+    for (const scope of scopes) {
+      const next = this.snapshot(scope);
+      const previous = snapshots[scope.id];
+      snapshots[scope.id] = next;
+      if (!previous) {
+        continue;
+      }
+
+      newCriticalCount += next.criticalKeys
+        .filter(key => !previous.criticalKeys.includes(key)).length;
+      newHotspotCount += next.hotspotKeys
+        .filter(key => !previous.hotspotKeys.includes(key)).length;
+
+      const increase = next.total - previous.total;
+      const significant = increase >= minimum && (
+        previous.total === 0 ||
+        increase / Math.max(1, previous.total) * 100 >= percent
+      );
+      if (significant && increase > significantIncrease) {
+        significantIncrease = increase;
+        significantPrevious = previous.total;
+        significantTotal = next.total;
+      }
+      if (
+        previous.qualityGate === 'OK' &&
+        ['WARN', 'ERROR'].includes(next.qualityGate)
+      ) {
+        qualityGateFailure = next.qualityGate;
+      }
+    }
+
+    await this.context.workspaceState.update(SNAPSHOT_KEY, snapshots);
+    const spanish = getDashboardLanguage() === 'es';
+
+    if (newCriticalCount > 0) {
       await this.notify(
         spanish
-          ? `${newCritical.length} nuevo(s) defecto(s) Blocker/Critical detectado(s).`
-          : `${newCritical.length} new Blocker/Critical issue(s) detected.`,
+          ? `${newCriticalCount} nuevo(s) defecto(s) Blocker/Critical detectado(s).`
+          : `${newCriticalCount} new Blocker/Critical issue(s) detected.`,
         true
       );
     }
-    if (qualityGateFailed) {
+    if (qualityGateFailure) {
       await this.notify(
         spanish
-          ? `El Quality Gate ha pasado de OK a ${next.qualityGate}.`
-          : `The Quality Gate changed from OK to ${next.qualityGate}.`,
+          ? `El Quality Gate ha pasado de OK a ${qualityGateFailure}.`
+          : `The Quality Gate changed from OK to ${qualityGateFailure}.`,
         true
       );
     }
-    if (significant) {
+    if (significantIncrease > 0) {
       await this.notify(
         spanish
-          ? `Los defectos han aumentado en ${increase} (${previous.total} → ${next.total}).`
-          : `Issues increased by ${increase} (${previous.total} → ${next.total}).`,
+          ? `Los defectos han aumentado en ${significantIncrease} (${significantPrevious} → ${significantTotal}).`
+          : `Issues increased by ${significantIncrease} (${significantPrevious} → ${significantTotal}).`,
         true
       );
     }
-    if (newHotspots.length > 0) {
+    if (newHotspotCount > 0) {
       await this.notify(
         spanish
-          ? `${newHotspots.length} nuevo(s) Security Hotspot(s) detectado(s).`
-          : `${newHotspots.length} new Security Hotspot(s) detected.`,
+          ? `${newHotspotCount} nuevo(s) Security Hotspot(s) detectado(s).`
+          : `${newHotspotCount} new Security Hotspot(s) detected.`,
         false
       );
     }
@@ -92,15 +135,17 @@ export class NotificationManager {
     }
   }
 
-  private snapshot(summary: RefreshSummary): NotificationSnapshot {
+  private snapshot(scope: NotificationScope): NotificationSnapshot {
     return {
-      issueKeys: summary.issues.map(issue => issue.key),
-      criticalKeys: summary.issues
-        .filter(issue => ['BLOCKER', 'CRITICAL', 'HIGH'].includes(issue.severity.toUpperCase()))
+      issueKeys: scope.issues.map(issue => issue.key),
+      criticalKeys: scope.issues
+        .filter(issue =>
+          ['BLOCKER', 'CRITICAL', 'HIGH'].includes(issue.severity.toUpperCase())
+        )
         .map(issue => issue.key),
-      hotspotKeys: summary.hotspots.map(hotspot => hotspot.key),
-      total: summary.published,
-      qualityGate: summary.qualityGate.status
+      hotspotKeys: scope.hotspots.map(hotspot => hotspot.key),
+      total: scope.issues.length,
+      qualityGate: scope.qualityGate
     };
   }
 

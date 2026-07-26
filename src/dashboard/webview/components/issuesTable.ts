@@ -12,6 +12,7 @@ export const ISSUES_TABLE_MARKUP = `          <section class="panel">
                     <th class="col-severity">Severidad</th>
                     <th class="col-type">Tipo</th>
                     <th class="col-file">Archivo</th>
+                    <th class="col-status">Estado</th>
                     <th class="col-rule">Regla</th>
                     <th class="col-actions">Acciones</th>
                   </tr>

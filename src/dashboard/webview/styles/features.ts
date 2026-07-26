@@ -1,10 +1,25 @@
 export const FEATURE_STYLES = `
     .body-scroll-table .defects-table thead tr,
     .body-scroll-table .defects-table tbody tr {
-      grid-template-columns: 92px 58px minmax(220px, 36%) minmax(0, 1fr) 54px;
+      grid-template-columns: 92px 58px minmax(210px, 32%) 112px minmax(0, 1fr) 54px;
     }
     .col-actions { width: 54px; text-align: center; }
     .issue-actions-cell { text-align: center; }
+    .issue-status-cell { display: flex; align-items: flex-start; }
+    .issue-status {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .issue-status.accepted {
+      border-color: var(--vscode-testing-iconPassed);
+      color: var(--vscode-testing-iconPassed);
+    }
+    .issue-status.false-positive {
+      border-color: var(--vscode-descriptionForeground);
+      color: var(--vscode-descriptionForeground);
+    }
     .icon-button {
       min-width: 30px;
       min-height: 28px;
@@ -53,7 +68,11 @@ export const FEATURE_STYLES = `
     .detail-dialog-header h2 { margin: 0; font-size: 16px; }
     .detail-dialog-header .icon-button { margin-left: auto; font-size: 20px; }
     .detail-dialog-footer { justify-content: flex-end; border-top: 1px solid var(--vscode-panel-border); }
-    .detail-dialog-body { min-height: 180px; overflow-y: auto; }
+    .detail-dialog-body {
+      min-height: 180px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
     .dialog-loading { padding: 32px 18px; color: var(--vscode-descriptionForeground); text-align: center; }
     .detail-section { padding: 15px 16px; border-bottom: 1px solid var(--vscode-panel-border); }
     .detail-section:last-child { border-bottom: 0; }
@@ -76,7 +95,8 @@ export const FEATURE_STYLES = `
       font-size: 11px;
     }
     .action-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-    .inline-form { display: grid; grid-template-columns: 150px minmax(220px, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
+    .inline-form { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(220px, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
+    .inline-form label { grid-column: 1 / -1; }
     .comment-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
     .comment-form label { grid-column: 1 / -1; margin-bottom: -4px; }
     .section-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
@@ -98,7 +118,29 @@ export const FEATURE_STYLES = `
     .flow-location:hover,
     .flow-location.active { border-color: var(--vscode-focusBorder); background: var(--vscode-list-hoverBackground); }
     .flow-location small { grid-column: 2; color: var(--vscode-descriptionForeground); }
-    .activity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .activity-accordions { display: grid; gap: 8px; }
+    .activity-accordion {
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+    }
+    .activity-accordion summary {
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      user-select: none;
+    }
+    .activity-accordion summary:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+    .activity-accordion summary .muted {
+      margin-left: 6px;
+      font-weight: 400;
+    }
+    .activity-accordion .activity-list {
+      padding: 0 10px 10px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
     .activity-list { display: grid; gap: 8px; }
     .activity-item { padding: 10px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); }
     .activity-item time { display: block; margin-top: 2px; color: var(--vscode-descriptionForeground); font-size: 11px; }
@@ -114,10 +156,16 @@ export const FEATURE_STYLES = `
     .coverage-legend-item i { width: 9px; height: 9px; border-radius: 50%; }
     .duplication-groups { display: grid; gap: 10px; }
     .duplication-group { padding: 10px; border: 1px solid var(--vscode-panel-border); }
-    .duplication-group h4 { margin: 0 0 8px; }
+    .duplication-group h4 { margin: 0; }
+    .duplication-group-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
     .duplication-location { margin: 0 7px 7px 0; }
     @media (max-width: 920px) {
-      .activity-grid { grid-template-columns: 1fr; }
       .inline-form, .comment-form { grid-template-columns: 1fr; }
       .detail-meta { grid-template-columns: max-content minmax(0, 1fr); }
     }

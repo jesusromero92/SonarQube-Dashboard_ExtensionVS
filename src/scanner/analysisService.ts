@@ -84,8 +84,10 @@ export class AnalysisService implements vscode.Disposable {
       if (ceTaskUrl) {
         await this.waitForCeTask(ceTaskUrl, request.config.token, this.controller.signal);
       } else {
-        this.appendLog('No se encontró report-task.txt; se continuará con la actualización del dashboard.');
-        await delay(1500, this.controller.signal);
+        this.appendLog(
+          'No se encontró report-task.txt; se comprobará la aparición del nuevo análisis en SonarQube.'
+        );
+        await this.waitForProjectAnalysis(request, this.controller.signal);
       }
 
       this.ensureNotCancelled();
@@ -564,6 +566,47 @@ export class AnalysisService implements vscode.Disposable {
       await delay(CE_POLL_INTERVAL_MS, signal);
     }
     throw new Error('SonarQube no terminó de procesar el análisis dentro de 5 minutos.');
+  }
+
+  private async waitForProjectAnalysis(
+    request: AnalysisRequest,
+    signal: AbortSignal
+  ): Promise<void> {
+    const pollingStartedAt = Date.now();
+    const analysisStartedAt = Date.parse(this.state.startedAt ?? '') - 5000;
+    const serverUrl = request.config.serverUrl.replace(/\/+$/, '');
+    while (Date.now() - pollingStartedAt < CE_POLL_TIMEOUT_MS) {
+      this.ensureNotCancelled();
+      const url = new URL(`${serverUrl}/api/project_analyses/search`);
+      url.searchParams.set('project', request.config.projectKey);
+      url.searchParams.set('ps', '1');
+      if (request.config.branch?.trim()) {
+        url.searchParams.set('branch', request.config.branch.trim());
+      }
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${request.config.token}`
+        },
+        signal
+      });
+      if (!response.ok) {
+        throw new Error(
+          `SonarQube respondió ${response.status} al comprobar el nuevo análisis.`
+        );
+      }
+      const payload = await response.json() as {
+        analyses?: Array<{ date?: string }>;
+      };
+      const latestDate = Date.parse(payload.analyses?.[0]?.date ?? '');
+      if (Number.isFinite(latestDate) && latestDate >= analysisStartedAt) {
+        this.appendLog('El nuevo análisis ya está disponible en SonarQube.');
+        return;
+      }
+      this.appendLog('SonarQube sigue procesando el informe…');
+      await delay(CE_POLL_INTERVAL_MS, signal);
+    }
+    throw new Error('SonarQube no publicó el nuevo análisis dentro de 5 minutos.');
   }
 
   private update(phase: AnalysisState['phase'], message: string, scanner = this.state.scanner): void {

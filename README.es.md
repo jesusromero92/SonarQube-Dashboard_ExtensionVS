@@ -202,7 +202,8 @@ Selecciona **Gestionar defecto** desde la tabla de Defectos, el tooltip del edit
 - añadir comentarios;
 - consultar comentarios, historial de cambios, autor, fechas, estado, resolución y responsable.
 
-Antes de cualquier operación de escritura se muestra una confirmación nativa. Los botones de estado se crean únicamente a partir de las transiciones devueltas por `/api/issues/transitions`, y la asignación solo se muestra cuando el token puede obtener usuarios asignables. La autorización del servidor sigue siendo la fuente final de verdad y los errores de la API se muestran sin descartar el estado actual del dashboard.
+Antes de cualquier operación de escritura se muestra una confirmación nativa. Los botones de estado se crean únicamente a partir de las transiciones incluidas por `/api/issues/search`; los controles de asignación siguen las acciones devueltas para el defecto y la lista de usuarios se pagina. La autorización del servidor sigue siendo la fuente final de verdad y los errores de la API se muestran sin descartar el estado actual del dashboard.
+El estado actual aparece tanto en la tabla de Defectos como en el modal, y su acción correspondiente queda deshabilitada. Los comentarios y el historial utilizan secciones plegables mutuamente excluyentes.
 
 ## Flujos de seguridad y ubicaciones secundarias
 
@@ -214,6 +215,8 @@ Los defectos que incluyen execution flows muestran todas las ubicaciones locales
 - otras ubicaciones relacionadas.
 
 El modal incluye los botones **Anterior** y **Siguiente**, además de la lista completa de ubicaciones. Al seleccionar una ubicación se abre su archivo y línea. Mientras el flujo está activo, VS Code muestra decoraciones de línea y CodeLens para recorrer el camino directamente desde el editor.
+
+Las ubicaciones que forman parte del flujo de SonarQube pero no existen en el workspace abierto siguen visibles como no disponibles y nunca se redirigen a otro archivo con el mismo nombre.
 
 ## Cobertura y duplicaciones
 
@@ -227,8 +230,10 @@ La pestaña **Cobertura y duplicación** incluye vistas independientes para Over
 - evolución histórica de cobertura y duplicación.
 
 Al seleccionar un archivo se cargan los datos por línea bajo demanda. Las líneas cubiertas, parcialmente cubiertas y no cubiertas se marcan en el gutter y el overview ruler. Las líneas duplicadas utilizan una decoración propia, y el modal de detalle enumera cada bloque duplicado junto con todos los archivos y rangos locales coincidentes.
+Cada grupo de duplicación puede abrirse en una pestaña de comparación con un diseño similar al diff de Git. Muestra en paralelo todas las apariciones locales, conserva sus números de línea originales y permite navegar directamente al rango seleccionado.
 
 La cobertura depende de que los informes de pruebas correspondientes se hayan importado durante el análisis. Cuando SonarQube no contiene cobertura para un archivo, la extensión no añade decoraciones.
+Las métricas históricas ausentes también se muestran como no disponibles, en lugar de inventar un 0 %.
 
 ## Navegación rápida entre defectos
 
@@ -244,6 +249,7 @@ Atajos predeterminados:
 | Siguiente Blocker/Critical | `Ctrl+Alt+C` | `Cmd+Alt+C` |
 
 La barra de estado muestra la posición actual, por ejemplo `3/12`, y abre el siguiente defecto al seleccionarla.
+El explorador y los comandos de navegación siguen el ámbito Overall/New Code activo.
 
 ## Notificaciones automáticas
 
@@ -256,6 +262,7 @@ Las notificaciones pueden activarse o desactivarse desde la configuración del d
 - finalización de un análisis iniciado por la extensión.
 
 El umbral predeterminado es un aumento del 20% y al menos cinco defectos adicionales. Puede modificarse mediante `sonarQubeDashboard.notifications.significantIncreasePercent` y `sonarQubeDashboard.notifications.significantIncreaseMinimum`.
+Las referencias de notificación se guardan de forma independiente por carpeta del workspace, servidor, proyecto, rama y workspace de VS Code.
 
 ## Security Hotspots
 

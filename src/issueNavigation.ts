@@ -5,6 +5,9 @@ import { DashboardIssue } from './types';
 
 export class IssueNavigationManager implements vscode.Disposable {
   private issues: DashboardIssue[] = [];
+  private overallIssues: DashboardIssue[] = [];
+  private newCodeIssues: DashboardIssue[] = [];
+  private scope: 'overall' | 'newCode' = 'overall';
   private lastIssueKey: string | undefined;
   private currentFileOnly = false;
   private readonly statusBar = vscode.window.createStatusBarItem(
@@ -28,12 +31,18 @@ export class IssueNavigationManager implements vscode.Disposable {
     this.updateStatus();
   }
 
-  setIssues(issues: readonly DashboardIssue[]): void {
-    this.issues = [...issues].sort((left, right) =>
+  setIssues(
+    overallIssues: readonly DashboardIssue[],
+    newCodeIssues: readonly DashboardIssue[] = []
+  ): void {
+    const sortIssues = (issues: readonly DashboardIssue[]) => [...issues].sort((left, right) =>
       left.fileUri.localeCompare(right.fileUri) ||
       left.line - right.line ||
       right.severityRank - left.severityRank
     );
+    this.overallIssues = sortIssues(overallIssues);
+    this.newCodeIssues = sortIssues(newCodeIssues);
+    this.issues = this.scope === 'newCode' ? this.newCodeIssues : this.overallIssues;
     if (this.lastIssueKey && !this.issues.some(issue => issue.key === this.lastIssueKey)) {
       this.lastIssueKey = undefined;
     }
@@ -42,6 +51,8 @@ export class IssueNavigationManager implements vscode.Disposable {
   }
 
   clear(): void {
+    this.overallIssues = [];
+    this.newCodeIssues = [];
     this.issues = [];
     this.lastIssueKey = undefined;
     this.changedEmitter.fire();
@@ -50,6 +61,24 @@ export class IssueNavigationManager implements vscode.Disposable {
 
   getIssues(): DashboardIssue[] {
     return [...this.filteredIssues()];
+  }
+
+  setScope(scope: 'overall' | 'newCode'): void {
+    if (this.scope === scope) {
+      return;
+    }
+    this.scope = scope;
+    this.issues = scope === 'newCode' ? this.newCodeIssues : this.overallIssues;
+    if (this.lastIssueKey && !this.issues.some(issue => issue.key === this.lastIssueKey)) {
+      this.lastIssueKey = undefined;
+    }
+    this.changedEmitter.fire();
+    this.updateStatus();
+  }
+
+  refreshLanguage(): void {
+    this.changedEmitter.fire();
+    this.updateStatus();
   }
 
   isCurrentFileOnly(): boolean {

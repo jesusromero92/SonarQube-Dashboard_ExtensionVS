@@ -120,7 +120,10 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
       dot.style.backgroundColor = color;
       legendItem.append(dot, document.createTextNode(name));
       legend.appendChild(legendItem);
-      if (!data.length) {
+      const availableData = data.filter(point =>
+        point[key] !== null && point[key] !== undefined && Number.isFinite(Number(point[key]))
+      );
+      if (!availableData.length) {
         const empty = document.createElement('div');
         empty.className = 'chart-empty';
         empty.textContent = 'No hay análisis históricos disponibles.';
@@ -141,16 +144,44 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
         label.textContent = labelValue + '%';
         svg.appendChild(label);
       }
-      const xFor = index => margin.left + (data.length === 1 ? plotWidth / 2 : plotWidth * index / (data.length - 1));
-      const yFor = value => margin.top + plotHeight - Math.max(0, Math.min(100, Number(value) || 0)) / 100 * plotHeight;
-      const points = data.map((point, index) => xFor(index) + ',' + yFor(point[key])).join(' ');
+      const xFor = index => margin.left + (availableData.length === 1 ? plotWidth / 2 : plotWidth * index / (availableData.length - 1));
+      const yFor = value => margin.top + plotHeight - Math.max(0, Math.min(100, Number(value))) / 100 * plotHeight;
+      const labelStep = Math.max(1, Math.ceil(availableData.length / 5));
+      availableData.forEach((point, index) => {
+        if (index % labelStep !== 0 && index !== availableData.length - 1) return;
+        const label = createSvgElement('text', {
+          x: xFor(index),
+          y: height - 12,
+          fill: 'var(--vscode-descriptionForeground)',
+          'font-size': 10,
+          'text-anchor': 'middle'
+        });
+        label.textContent = formatEvolutionDate(point.date || point.label);
+        svg.appendChild(label);
+      });
+      const points = availableData.map((point, index) => xFor(index) + ',' + yFor(point[key])).join(' ');
       svg.appendChild(createSvgElement('polyline', { points, fill: 'none', stroke: color, 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke' }));
-      data.forEach((point, index) => {
+      availableData.forEach((point, index) => {
         const circle = createSvgElement('circle', { cx: xFor(index), cy: yFor(point[key]), r: 4, fill: color });
-        circle.addEventListener('mousemove', event => showChartTooltip(point, [{ key, name, color }], event.clientX, event.clientY));
-        circle.addEventListener('mouseleave', () => document.querySelector('.chart-tooltip')?.remove());
         svg.appendChild(circle);
       });
+      svg.addEventListener('mousemove', event => {
+        const rect = svg.getBoundingClientRect();
+        const viewX = ((event.clientX - rect.left) / rect.width) * width;
+        const ratio = clamp((viewX - margin.left) / plotWidth, 0, 1);
+        const pointIndex = Math.round(
+          ratio * Math.max(0, availableData.length - 1)
+        );
+        showChartTooltip(
+          availableData[pointIndex],
+          [{ key, name, color }],
+          event.clientX,
+          event.clientY
+        );
+      });
+      svg.addEventListener('mouseleave', () =>
+        document.querySelector('.chart-tooltip')?.remove()
+      );
       container.appendChild(svg);
     }
 
@@ -192,7 +223,19 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
         section.className = 'duplication-group';
         const heading = document.createElement('h4');
         heading.textContent = 'Grupo ' + String(groupIndex + 1);
-        section.appendChild(heading);
+        const headingRow = document.createElement('div');
+        headingRow.className = 'duplication-group-heading';
+        const compare = document.createElement('button');
+        compare.type = 'button';
+        compare.className = 'secondary';
+        compare.textContent = 'Comparar código';
+        compare.addEventListener('click', () => vscode.postMessage({
+          type: 'openDuplicationComparison',
+          fileUri: detail.file.fileUri,
+          groupIndex
+        }));
+        headingRow.append(heading, compare);
+        section.appendChild(headingRow);
         for (const location of group.locations || []) {
           const button = document.createElement('button');
           button.type = 'button';

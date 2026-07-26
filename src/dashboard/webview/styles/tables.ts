@@ -102,7 +102,7 @@ export function getTableStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIcon
     }
     .body-scroll-table thead {
       flex: 0 0 auto;
-      padding-right: 10px;
+      padding-right: var(--table-scrollbar-width, 0px);
     }
     .body-scroll-table tbody {
       display: block;

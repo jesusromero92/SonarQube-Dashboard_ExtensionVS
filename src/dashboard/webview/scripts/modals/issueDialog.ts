@@ -15,6 +15,28 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
       return labels[String(transition.key || '').toLowerCase()] || transition.name || transition.key;
     }
 
+    function issueStatus(issue) {
+      return String(issue.status || 'OPEN').toUpperCase();
+    }
+
+    function currentTransitionForStatus(status) {
+      return {
+        ACCEPTED: 'accept',
+        FALSE_POSITIVE: 'falsepositive',
+        CONFIRMED: 'confirm',
+        FIXED: 'resolve'
+      }[String(status || '').toUpperCase()] || '';
+    }
+
+    function renderIssueBadges(issue) {
+      elements.issueDialogBadges.textContent = '';
+      elements.issueDialogBadges.appendChild(createBadge(issue.severity));
+      const status = document.createElement('span');
+      status.className = 'status-chip';
+      status.textContent = issueStatus(issue);
+      elements.issueDialogBadges.appendChild(status);
+    }
+
     function formatLifecycleDate(value) {
       if (!value) return 'No disponible';
       const date = new Date(value);
@@ -37,12 +59,7 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
       selectedFlowIndex = 0;
       selectedFlowLocationIndex = 0;
       elements.issueDialogTitle.textContent = issue.ruleName || issue.rule || 'Gestión del defecto';
-      elements.issueDialogBadges.textContent = '';
-      elements.issueDialogBadges.appendChild(createBadge(issue.severity));
-      const status = document.createElement('span');
-      status.className = 'status-chip';
-      status.textContent = issue.resolution || issue.status || 'OPEN';
-      elements.issueDialogBadges.appendChild(status);
+      renderIssueBadges(issue);
       elements.issueDialogLoading.textContent = 'Cargando gestión del defecto…';
       elements.issueDialogLoading.hidden = false;
       elements.issueDialogContent.hidden = true;
@@ -99,7 +116,8 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
               ? 'Paso intermedio'
               : 'Ubicación relacionada';
         const path = document.createElement('span');
-        path.textContent = location.relativePath + ':' + location.line;
+        path.textContent = location.relativePath + ':' + location.line +
+          (location.resolved ? '' : ' · No disponible localmente');
         const message = document.createElement('small');
         message.textContent = location.message || '';
         button.append(role, path, message);
@@ -125,9 +143,10 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
       elements.issueDialogLoading.hidden = true;
       elements.issueDialogContent.hidden = false;
       elements.issueDialogTitle.textContent = issue.ruleName || issue.rule;
+      renderIssueBadges(issue);
       elements.issueDialogMessage.textContent = issue.message;
       elements.issueDialogMeta.textContent = '';
-      appendDetailTerm(elements.issueDialogMeta, 'Estado', issue.resolution || issue.status);
+      appendDetailTerm(elements.issueDialogMeta, 'Estado', issueStatus(issue));
       appendDetailTerm(elements.issueDialogMeta, 'Responsable', issue.assignee || 'Sin asignar');
       appendDetailTerm(elements.issueDialogMeta, 'Autor', issue.author);
       appendDetailTerm(elements.issueDialogMeta, 'Creado', formatLifecycleDate(issue.creationDate));
@@ -135,11 +154,19 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
       appendDetailTerm(elements.issueDialogMeta, 'Archivo', issue.relativePath + ':' + issue.line);
 
       elements.issueTransitionActions.textContent = '';
+      const currentTransition = currentTransitionForStatus(issueStatus(issue));
+      let currentTransitionRendered = false;
       for (const transition of detail.transitions || []) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'secondary';
         button.textContent = transitionLabel(transition);
+        button.disabled = String(transition.key || '').toLowerCase() === currentTransition;
+        if (button.disabled) {
+          button.title = 'Estado actual';
+          button.setAttribute('aria-current', 'true');
+          currentTransitionRendered = true;
+        }
         button.addEventListener('click', () => vscode.postMessage({
           type: 'mutateIssue',
           mutationKind: 'transition',
@@ -148,6 +175,16 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
           transition: transition.key
         }));
         elements.issueTransitionActions.appendChild(button);
+      }
+      if (currentTransition && !currentTransitionRendered) {
+        const currentButton = document.createElement('button');
+        currentButton.type = 'button';
+        currentButton.className = 'secondary';
+        currentButton.textContent = transitionLabel({ key: currentTransition });
+        currentButton.disabled = true;
+        currentButton.title = 'Estado actual';
+        currentButton.setAttribute('aria-current', 'true');
+        elements.issueTransitionActions.prepend(currentButton);
       }
       elements.issueActionsSection.hidden = !(detail.transitions?.length || detail.canAssign || detail.canComment);
       if (!detail.transitions?.length) {
@@ -158,22 +195,14 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
       }
 
       elements.issueAssignment.hidden = !detail.canAssign;
-      elements.issueAssignee.textContent = '';
-      const unassigned = document.createElement('option');
-      unassigned.value = '';
-      unassigned.textContent = 'Sin asignar';
-      elements.issueAssignee.appendChild(unassigned);
-      for (const user of detail.users || []) {
-        const option = document.createElement('option');
-        option.value = user.login;
-        option.textContent = (user.name || user.login) + (user.name ? ' · ' + user.login : '');
-        elements.issueAssignee.appendChild(option);
-      }
-      elements.issueAssignee.value = issue.assignee || '';
+      elements.issueAssigneeSearch.value = '';
+      renderAssignableUsers(detail.users || [], issue.assignee || '');
       elements.issueCommentForm.hidden = !detail.canComment;
       elements.issueComment.value = '';
 
       renderIssueFlows(issue);
+      elements.issueCommentsCount.textContent = String((detail.comments || []).length);
+      elements.issueHistoryCount.textContent = String((detail.history || []).length);
       renderLifecycleActivity(
         elements.issueComments,
         detail.comments || [],
@@ -211,6 +240,29 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
           return card;
         }
       );
+    }
+
+    function renderAssignableUsers(users, selectedLogin) {
+      const query = String(elements.issueAssigneeSearch.value || '')
+        .trim()
+        .toLocaleLowerCase(dashboardLocale);
+      elements.issueAssignee.textContent = '';
+      const unassigned = document.createElement('option');
+      unassigned.value = '';
+      unassigned.textContent = 'Sin asignar';
+      elements.issueAssignee.appendChild(unassigned);
+      for (const user of users) {
+        const searchable = String((user.name || '') + ' ' + user.login)
+          .toLocaleLowerCase(dashboardLocale);
+        if (query && !searchable.includes(query) && user.login !== selectedLogin) {
+          continue;
+        }
+        const option = document.createElement('option');
+        option.value = user.login;
+        option.textContent = (user.name || user.login) + (user.name ? ' · ' + user.login : '');
+        elements.issueAssignee.appendChild(option);
+      }
+      elements.issueAssignee.value = selectedLogin;
     }
 
     function setIssueLifecycleError(message) {

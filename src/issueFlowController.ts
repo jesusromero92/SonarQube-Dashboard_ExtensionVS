@@ -23,6 +23,18 @@ export class IssueFlowController implements vscode.CodeLensProvider, vscode.Disp
   readonly onDidChangeCodeLenses = this.codeLensEmitter.event;
 
   constructor() {
+    this.createDecorationTypes();
+    this.disposables.push(
+      this.codeLensEmitter,
+      vscode.window.onDidChangeVisibleTextEditors(() => this.refreshDecorations())
+    );
+  }
+
+  private createDecorationTypes(): void {
+    for (const decoration of this.decorationTypes.values()) {
+      decoration.dispose();
+    }
+    this.decorationTypes.clear();
     for (const role of ['source', 'intermediate', 'sink', 'related'] as const) {
       const color = DASHBOARD_COLORS.flows[role];
       this.decorationTypes.set(role, vscode.window.createTextEditorDecorationType({
@@ -39,10 +51,6 @@ export class IssueFlowController implements vscode.CodeLensProvider, vscode.Disp
         }
       }));
     }
-    this.disposables.push(
-      this.codeLensEmitter,
-      vscode.window.onDidChangeVisibleTextEditors(() => this.refreshDecorations())
-    );
   }
 
   setIssue(issue: DashboardIssue | undefined, flowIndex = 0): void {
@@ -75,6 +83,14 @@ export class IssueFlowController implements vscode.CodeLensProvider, vscode.Disp
   }
 
   async openLocation(location: DashboardIssueLocation): Promise<void> {
+    if (!location.resolved || !location.fileUri) {
+      await vscode.window.showWarningMessage(
+        getDashboardLanguage() === 'es'
+          ? `La ubicación ${location.relativePath}:${location.line} no existe en el workspace.`
+          : `Location ${location.relativePath}:${location.line} does not exist in the workspace.`
+      );
+      return;
+    }
     const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(location.fileUri));
     const editor = await vscode.window.showTextDocument(document, { preview: false });
     const line = Math.min(Math.max(0, location.line - 1), Math.max(0, document.lineCount - 1));
@@ -101,6 +117,12 @@ export class IssueFlowController implements vscode.CodeLensProvider, vscode.Disp
 
   clear(): void {
     this.setIssue(undefined);
+  }
+
+  refreshLanguage(): void {
+    this.createDecorationTypes();
+    this.codeLensEmitter.fire();
+    this.refreshDecorations();
   }
 
   dispose(): void {

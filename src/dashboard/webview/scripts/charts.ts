@@ -209,7 +209,7 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
           'font-size': 10,
           'text-anchor': 'middle'
         });
-        label.textContent = formatEvolutionDate(point.label);
+        label.textContent = formatEvolutionDate(point.date || point.label);
         svg.appendChild(label);
       });
 

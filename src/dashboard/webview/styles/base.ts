@@ -32,7 +32,7 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
       --dashboard-rating-e-bg: ${DASHBOARD_COLORS.ratings.E.background};
     }
     html {
-      overflow-y: scroll;
+      overflow-y: auto;
       scrollbar-gutter: stable;
     }
     * { box-sizing: border-box; }

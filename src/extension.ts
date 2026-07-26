@@ -37,7 +37,10 @@ import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { IssueNavigationManager } from './issueNavigation';
 import { IssueTreeProvider } from './issueTreeView';
-import { NotificationManager } from './notificationManager';
+import {
+  NotificationManager,
+  NotificationScope
+} from './notificationManager';
 import { fetchAllIssues } from './sonarClient';
 import {
   CoverageSummary,
@@ -127,6 +130,15 @@ function aggregateTypes(
 }
 
 function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
+  const maximumMetric = (left: number | null, right: number | null): number | null => {
+    if (left === null) {
+      return right;
+    }
+    if (right === null) {
+      return left;
+    }
+    return Math.max(left, right);
+  };
   const byLabel = new Map<string, EvolutionPoint>();
   for (const point of points) {
     const current = byLabel.get(point.label);
@@ -153,10 +165,16 @@ function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
     current.newMajorViolations += point.newMajorViolations;
     current.newMinorViolations += point.newMinorViolations;
     current.newInfoViolations += point.newInfoViolations;
-    current.coverage = Math.max(current.coverage, point.coverage);
-    current.newCoverage = Math.max(current.newCoverage, point.newCoverage);
-    current.duplicatedLinesDensity = Math.max(current.duplicatedLinesDensity, point.duplicatedLinesDensity);
-    current.newDuplicatedLinesDensity = Math.max(current.newDuplicatedLinesDensity, point.newDuplicatedLinesDensity);
+    current.coverage = maximumMetric(current.coverage, point.coverage);
+    current.newCoverage = maximumMetric(current.newCoverage, point.newCoverage);
+    current.duplicatedLinesDensity = maximumMetric(
+      current.duplicatedLinesDensity,
+      point.duplicatedLinesDensity
+    );
+    current.newDuplicatedLinesDensity = maximumMetric(
+      current.newDuplicatedLinesDensity,
+      point.newDuplicatedLinesDensity
+    );
   }
   return [...byLabel.values()]
     .sort((left, right) => left.label.localeCompare(right.label))
@@ -206,6 +224,8 @@ function recomputeCoverageTotals(summary: CoverageSummary): void {
 async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'analysis' = 'sync'): Promise<RefreshSummary> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   const summary = createEmptyRefreshSummary();
+  const notificationScopes: NotificationScope[] = [];
+  const previousSummary = dashboardPanel?.getRefreshSummary() ?? createEmptyRefreshSummary();
   dashboardPanel?.setLoading(true);
 
   if (folders.length === 0) {
@@ -223,12 +243,9 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
   activeRefresh = new AbortController();
   const refreshController = activeRefresh;
   const signal = refreshController.signal;
-
-  diagnostics.clear();
-  issueDecorations.clear();
-  coverageDecorations.clear();
-  issueNavigation.clear();
-  flowController.clear();
+  const pendingDiagnostics = vscode.languages.createDiagnosticCollection(
+    'sonarqube-dashboard-pending'
+  );
 
   for (const folder of folders) {
     if (signal.aborted) {
@@ -245,7 +262,7 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
     try {
       const loaded = await fetchAllIssues(config, signal);
       const result = await publishFolderDiagnostics(
-        diagnostics,
+        pendingDiagnostics,
         folder,
         config.projectKey,
         config.baseDir,
@@ -264,6 +281,17 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
       summary.newPublished += newIssues.length;
       summary.hotspots.push(...hotspots);
       summary.newHotspots.push(...newHotspots);
+      notificationScopes.push({
+        id: [
+          folder.uri.toString(),
+          config.serverUrl,
+          config.projectKey,
+          config.branch?.trim() ?? ''
+        ].join('|'),
+        issues: result.issues,
+        hotspots,
+        qualityGate: loaded.qualityGate.status
+      });
       summary.coverage.files.push(...coverage.files);
       if (summary.configuredFolders === 1) {
         summary.coverage.overall = coverage.overall;
@@ -299,6 +327,32 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
     }
   }
 
+  if (signal.aborted || activeRefresh !== refreshController) {
+    pendingDiagnostics.dispose();
+    if (activeRefresh === refreshController) {
+      dashboardPanel?.setLoading(false);
+    }
+    return dashboardPanel?.getRefreshSummary() ?? previousSummary;
+  }
+
+  if (summary.errors.length > 0) {
+    pendingDiagnostics.dispose();
+    const preserved = {
+      ...previousSummary,
+      errors: [...summary.errors]
+    };
+    dashboardPanel?.setRefreshSummary(preserved, previousSummary.configuredFolders > 0);
+    dashboardPanel?.setLoading(false);
+    void vscode.window.setStatusBarMessage(
+      localizeRuntimeText(
+        `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
+        getDashboardLanguage()
+      ),
+      6000
+    );
+    return preserved;
+  }
+
   summary.severity = aggregateSeverity(summary.issues);
   summary.newSeverity = aggregateSeverity(summary.newIssues);
   summary.types = aggregateTypes(summary.issues, summary.hotspots);
@@ -325,26 +379,23 @@ async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'an
     left.line - right.line;
   summary.hotspots.sort(sortHotspots);
   summary.newHotspots.sort(sortHotspots);
+  diagnostics.clear();
+  pendingDiagnostics.forEach((uri, fileDiagnostics) => {
+    diagnostics.set(uri, fileDiagnostics);
+  });
+  pendingDiagnostics.dispose();
   issueDecorations.setIssues(summary.issues, summary.hotspots);
   coverageDecorations.setCoverage(summary.coverage);
-  issueNavigation.setIssues(summary.issues);
+  issueNavigation.setIssues(summary.issues, summary.newIssues);
   issueTree.refresh();
 
   dashboardPanel?.setRefreshSummary(
     summary,
     summary.configuredFolders > 0
   );
-  await notifications.evaluate(summary, source);
+  await notifications.evaluate(notificationScopes, source);
 
-  if (summary.errors.length > 0) {
-    void vscode.window.setStatusBarMessage(
-      localizeRuntimeText(
-        `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
-        getDashboardLanguage()
-      ),
-      6000
-    );
-  } else if (summary.configuredFolders > 0) {
+  if (summary.configuredFolders > 0) {
     void vscode.window.setStatusBarMessage(
       localizeRuntimeText(
         `SonarQube Dashboard: ${summary.published} issues encontrados` +
@@ -417,7 +468,11 @@ export function activate(context: vscode.ExtensionContext): void {
       flowController.clear();
     },
     coverageDecorations,
-    flowController
+    flowController,
+    scope => {
+      issueNavigation.setScope(scope);
+      issueTree.refresh();
+    }
   );
 
   const launcherProvider = new DashboardLauncherViewProvider(
@@ -580,6 +635,11 @@ export function activate(context: vscode.ExtensionContext): void {
           configureRefreshTimer(context);
           if (event.affectsConfiguration(`${DASHBOARD_CONFIGURATION_SECTION}.${DASHBOARD_CONFIGURATION_KEYS.language}`)) {
             void dashboardPanel?.refreshLanguage();
+            issueDecorations.refreshLanguage();
+            coverageDecorations.refreshLanguage();
+            flowController.refreshLanguage();
+            issueNavigation.refreshLanguage();
+            issueTree.refresh();
           }
           scheduleWorkspaceStateRefresh();
         }

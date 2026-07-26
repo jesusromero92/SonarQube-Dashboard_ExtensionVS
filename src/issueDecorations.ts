@@ -216,6 +216,10 @@ export class IssueDecorationManager implements vscode.Disposable {
     this.refreshVisibleEditors();
   }
 
+  refreshLanguage(): void {
+    this.refreshVisibleEditors();
+  }
+
   dispose(): void {
     this.clear();
     for (const disposable of this.disposables) {

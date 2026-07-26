@@ -22,6 +22,7 @@ export const ISSUE_DIALOG_MARKUP = `  <dialog id="issueDialog" class="detail-dia
             <div id="issueTransitionActions" class="action-grid"></div>
             <div id="issueAssignment" class="inline-form" hidden>
               <label for="issueAssignee">Responsable</label>
+              <input id="issueAssigneeSearch" type="search" placeholder="Buscar usuario por nombre o login" autocomplete="off">
               <select id="issueAssignee"></select>
               <button id="issueAssign" type="button">Asignar</button>
             </div>
@@ -48,15 +49,15 @@ export const ISSUE_DIALOG_MARKUP = `  <dialog id="issueDialog" class="detail-dia
             <ol id="issueFlowLocations" class="flow-list"></ol>
           </section>
 
-          <section class="detail-section activity-grid">
-            <div>
-              <h3>Comentarios</h3>
+          <section class="detail-section activity-accordions">
+            <details class="activity-accordion" name="issueActivity">
+              <summary>Comentarios <span id="issueCommentsCount" class="muted">0</span></summary>
               <div id="issueComments" class="activity-list"></div>
-            </div>
-            <div>
-              <h3>Historial</h3>
+            </details>
+            <details class="activity-accordion" name="issueActivity">
+              <summary>Historial <span id="issueHistoryCount" class="muted">0</span></summary>
               <div id="issueHistory" class="activity-list"></div>
-            </div>
+            </details>
           </section>
         </div>
       </div>

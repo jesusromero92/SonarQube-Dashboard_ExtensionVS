@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getFolderConfig } from './configuration';
 import { DASHBOARD_COLORS } from './constants';
+import { resolveLocalFile } from './diagnostics';
 import { getDashboardLanguage } from './i18n';
 import { fetchFileCoverageDetail } from './sonarClient';
 import {
@@ -34,33 +35,9 @@ export class CoverageDecorationManager implements vscode.Disposable {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    extensionUri: vscode.Uri
+    private readonly extensionUri: vscode.Uri
   ) {
-    for (const status of LINE_STATUSES) {
-      const color = DASHBOARD_COLORS.coverage[status];
-      this.decorations.set(status, vscode.window.createTextEditorDecorationType({
-        isWholeLine: true,
-        backgroundColor: `${color}12`,
-        overviewRulerColor: color,
-        overviewRulerLane: vscode.OverviewRulerLane.Left,
-        gutterIconPath: vscode.Uri.joinPath(extensionUri, 'assets', `coverage-${status}.svg`),
-        gutterIconSize: '10px'
-      }));
-    }
-    const duplicatedColor = DASHBOARD_COLORS.coverage.duplicated;
-    this.decorations.set('duplicated', vscode.window.createTextEditorDecorationType({
-      isWholeLine: true,
-      borderStyle: 'dotted',
-      borderWidth: '0 0 1px 0',
-      borderColor: duplicatedColor,
-      overviewRulerColor: duplicatedColor,
-      overviewRulerLane: vscode.OverviewRulerLane.Center,
-      after: {
-        contentText: getDashboardLanguage() === 'es' ? '  duplicado' : '  duplicated',
-        color: duplicatedColor,
-        fontStyle: 'italic'
-      }
-    }));
+    this.createDecorationTypes();
     this.disposables.push(
       vscode.window.onDidChangeVisibleTextEditors(editors => {
         for (const editor of editors) void this.decorate(editor);
@@ -69,6 +46,32 @@ export class CoverageDecorationManager implements vscode.Disposable {
         this.details.delete(document.uri.toString());
       })
     );
+  }
+
+  private createDecorationTypes(): void {
+    for (const decoration of this.decorations.values()) {
+      decoration.dispose();
+    }
+    this.decorations.clear();
+    for (const status of LINE_STATUSES) {
+      const color = DASHBOARD_COLORS.coverage[status];
+      this.decorations.set(status, vscode.window.createTextEditorDecorationType({
+        isWholeLine: true,
+        backgroundColor: `${color}12`,
+        overviewRulerColor: color,
+        overviewRulerLane: vscode.OverviewRulerLane.Left,
+        gutterIconPath: vscode.Uri.joinPath(this.extensionUri, 'assets', `coverage-${status}.svg`),
+        gutterIconSize: '10px'
+      }));
+    }
+    const duplicatedColor = DASHBOARD_COLORS.coverage.duplicated;
+    this.decorations.set('duplicated', vscode.window.createTextEditorDecorationType({
+      after: {
+        contentText: getDashboardLanguage() === 'es' ? '  duplicado' : '  duplicated',
+        color: duplicatedColor,
+        fontStyle: 'italic'
+      }
+    }));
   }
 
   setCoverage(summary: CoverageSummary): void {
@@ -114,6 +117,11 @@ export class CoverageDecorationManager implements vscode.Disposable {
     return this.filesByUri.get(fileUri);
   }
 
+  refreshLanguage(): void {
+    this.createDecorationTypes();
+    this.refreshVisibleEditors();
+  }
+
   async getDetail(fileUri: string): Promise<FileCoverageDetail | undefined> {
     const file = this.filesByUri.get(fileUri);
     if (!file) return undefined;
@@ -126,10 +134,14 @@ export class CoverageDecorationManager implements vscode.Disposable {
       if (generation === this.generation) {
         this.details.set(fileUri, detail);
       }
-      this.loading.delete(fileUri);
+      if (this.loading.get(fileUri) === promise) {
+        this.loading.delete(fileUri);
+      }
       return detail;
     }, error => {
-      this.loading.delete(fileUri);
+      if (this.loading.get(fileUri) === promise) {
+        this.loading.delete(fileUri);
+      }
       throw error;
     });
     this.loading.set(fileUri, promise);
@@ -169,9 +181,24 @@ export class CoverageDecorationManager implements vscode.Disposable {
           location.fileUri = local.fileUri;
           location.relativePath = local.relativePath;
           location.isCurrentFile = local.fileUri === file.fileUri;
+          continue;
+        }
+        const resolved = await resolveLocalFile(
+          folder,
+          config.projectKey,
+          config.baseDir,
+          location.component,
+          new Map()
+        );
+        if (resolved) {
+          location.fileUri = resolved.uri.toString();
+          location.relativePath = resolved.relativePath;
+          location.isCurrentFile = resolved.uri.toString() === file.fileUri;
         }
       }
+      group.locations = group.locations.filter(location => Boolean(location.fileUri));
     }
+    detail.duplications = detail.duplications.filter(group => group.locations.length > 0);
     return detail;
   }
 
@@ -185,9 +212,14 @@ export class CoverageDecorationManager implements vscode.Disposable {
     }
     const file = this.filesByUri.get(editor.document.uri.toString());
     if (!file) return;
+    const generation = this.generation;
     try {
       const detail = await this.getDetail(file.fileUri);
-      if (!detail || editor.document.uri.toString() !== file.fileUri) return;
+      if (
+        !detail ||
+        generation !== this.generation ||
+        editor.document.uri.toString() !== file.fileUri
+      ) return;
       for (const status of LINE_STATUSES) {
         const options = detail.lines
           .filter(line => line.status === status)

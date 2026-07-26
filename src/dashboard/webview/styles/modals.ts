@@ -1,7 +1,12 @@
 
-export const MODAL_STYLES = `    html:has(.rule-dialog[open]) {
-      overflow: hidden;
-      scrollbar-gutter: stable;
+export const MODAL_STYLES = `    html.modal-scroll-locked {
+      overscroll-behavior: none;
+    }
+    body:has(dialog[open]) {
+      overscroll-behavior: none;
+    }
+    dialog[open] {
+      overscroll-behavior: contain;
     }
     .rule-dialog {
       width: min(620px, calc(100vw - 48px));
