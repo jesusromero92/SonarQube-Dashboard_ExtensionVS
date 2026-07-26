@@ -42,6 +42,7 @@ import {
   AnalysisPermissionStatus,
   DashboardHotspot,
   DashboardIssue,
+  FolderSonarConfig,
   IssueMutationRequest,
   RefreshSummary,
   ScannerMode
@@ -61,7 +62,7 @@ export class DashboardPanel {
   private managedIssue: DashboardIssue | undefined;
   private pendingHotspotDetail: DashboardHotspot | undefined;
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
-  private panelDisposables: vscode.Disposable[] = [];
+  private readonly panelDisposables: vscode.Disposable[] = [];
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
@@ -249,7 +250,9 @@ export class DashboardPanel {
 
     this.panelDisposables.push(
       panel.webview.onDidReceiveMessage(
-        (message: DashboardWebviewMessage) => void this.handleMessage(message)
+        (message: DashboardWebviewMessage) => {
+          this.runBackgroundTask(this.handleMessage(message));
+        }
       ),
       panel.onDidDispose(() => {
         this.disposePanelListeners();
@@ -257,7 +260,7 @@ export class DashboardPanel {
       }),
       panel.onDidChangeViewState(event => {
         if (event.webviewPanel.visible) {
-          void this.sendState();
+          this.runBackgroundTask(this.sendState());
           this.setRefreshSummary(this.lastSummary);
           this.postMessage({
             type: 'analysisState',
@@ -574,38 +577,70 @@ export class DashboardPanel {
       return;
     }
 
-    const activeFolder = vscode.window.activeTextEditor
-      ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
-      : undefined;
-    const folder = this.getWorkspaceFolder(folderUri || this.selectedFolderUri)
-      ?? activeFolder
-      ?? vscode.workspace.workspaceFolders?.[0];
+    const folder = this.resolveAnalysisFolder(folderUri);
     if (!folder) {
       this.postStatus('error', 'Abre una carpeta antes de iniciar el análisis.');
       return;
     }
 
-    if (!vscode.workspace.isTrusted) {
-      const manageTrust = localizeRuntimeText('Gestionar confianza', this.language);
-      const action = await vscode.window.showWarningMessage(
-        localizeRuntimeText(
-          'Analizar el repositorio puede ejecutar herramientas y comandos del proyecto. Confía en el workspace antes de continuar.',
-          this.language
-        ),
-        manageTrust
-      );
-      if (action === manageTrust) {
-        await vscode.commands.executeCommand('workbench.trust.manage');
-      }
-      this.postStatus('error', 'Analizar el repositorio requiere confiar en el workspace.');
+    if (!(await this.ensureTrustedWorkspace())) {
       return;
     }
 
+    const analysisContext = await this.prepareAnalysis(folder);
+    if (!analysisContext) {
+      return;
+    }
+
+    this.navigate('data');
+    this.postMessage({ type: 'showAnalysisDialog' });
+
+    try {
+      await this.runAnalysis(analysisContext);
+    } catch (error) {
+      this.handleAnalysisFailure(error);
+    }
+  }
+
+  private resolveAnalysisFolder(folderUri?: string): vscode.WorkspaceFolder | undefined {
+    const requestedFolderUri = folderUri ?? this.selectedFolderUri;
+    const configuredFolder = this.getWorkspaceFolder(requestedFolderUri);
+    const activeEditorUri = vscode.window.activeTextEditor?.document.uri;
+    const activeFolder = activeEditorUri
+      ? vscode.workspace.getWorkspaceFolder(activeEditorUri)
+      : undefined;
+
+    return configuredFolder ?? activeFolder ?? vscode.workspace.workspaceFolders?.[0];
+  }
+
+  private async ensureTrustedWorkspace(): Promise<boolean> {
+    if (vscode.workspace.isTrusted) {
+      return true;
+    }
+
+    const manageTrust = localizeRuntimeText('Gestionar confianza', this.language);
+    const action = await vscode.window.showWarningMessage(
+      localizeRuntimeText(
+        'Analizar el repositorio puede ejecutar herramientas y comandos del proyecto. Confía en el workspace antes de continuar.',
+        this.language
+      ),
+      manageTrust
+    );
+    if (action === manageTrust) {
+      await vscode.commands.executeCommand('workbench.trust.manage');
+    }
+    this.postStatus('error', 'Analizar el repositorio requiere confiar en el workspace.');
+    return false;
+  }
+
+  private async prepareAnalysis(
+    folder: vscode.WorkspaceFolder
+  ): Promise<{ config: FolderSonarConfig; rootPath: string } | undefined> {
     const config = await getFolderConfig(this.context, folder);
     if (!config) {
       this.postStatus('error', 'Configura primero el servidor, el token y el proyecto.');
       this.navigate('configuration');
-      return;
+      return undefined;
     }
 
     const analysisPermission = await checkAnalysisPermission(config);
@@ -616,42 +651,54 @@ export class DashboardPanel {
         'error',
         'El token no tiene el permiso Ejecutar análisis para este proyecto de SonarQube.'
       );
-      return;
+      return undefined;
     }
 
     const rootPath = this.analysisRoot(folder, config.baseDir);
     if (!rootPath) {
       this.postStatus('error', 'La subcarpeta configurada no pertenece al workspace.');
+      return undefined;
+    }
+
+    return { config, rootPath };
+  }
+
+  private async runAnalysis(
+    analysisContext: { config: FolderSonarConfig; rootPath: string }
+  ): Promise<void> {
+    await this.analysisService.analyze(analysisContext);
+    this.analysisService.setRefreshing();
+
+    const summary = await this.refreshCallback('analysis');
+    this.setRefreshSummary(summary, true);
+    this.reportAnalysisRefreshResult(summary);
+    this.navigate('data');
+  }
+
+  private reportAnalysisRefreshResult(summary: RefreshSummary): void {
+    if (summary.errors.length > 0) {
+      const message = summary.errors.join(' | ');
+      this.analysisService.setRefreshError(message);
+      this.postStatus('error', message);
       return;
     }
 
-    this.navigate('data');
-    this.postMessage({ type: 'showAnalysisDialog' });
+    const message = `Análisis finalizado. ${summary.published} issues encontrados.`;
+    this.analysisService.setRefreshCompleted(message);
+    this.postStatus('success', message);
+  }
 
-    try {
-      await this.analysisService.analyze({ rootPath, config });
-      this.analysisService.setRefreshing();
-      const summary = await this.refreshCallback('analysis');
-      this.setRefreshSummary(summary, true);
-      if (summary.errors.length > 0) {
-        const message = summary.errors.join(' | ');
-        this.analysisService.setRefreshError(message);
-        this.postStatus('error', message);
-      } else {
-        const message = `Análisis finalizado. ${summary.published} issues encontrados.`;
-        this.analysisService.setRefreshCompleted(message);
-        this.postStatus('success', message);
-      }
-      this.navigate('data');
-    } catch (error) {
-      if (this.analysisService.getState().phase !== 'cancelled') {
-        const message = this.errorMessage(error);
-        if (this.analysisService.getState().phase === 'refreshing') {
-          this.analysisService.setRefreshError(message);
-        }
-        this.postStatus('error', message);
-      }
+  private handleAnalysisFailure(error: unknown): void {
+    const analysisState = this.analysisService.getState();
+    if (analysisState.phase === 'cancelled') {
+      return;
     }
+
+    const message = this.errorMessage(error);
+    if (analysisState.phase === 'refreshing') {
+      this.analysisService.setRefreshError(message);
+    }
+    this.postStatus('error', message);
   }
 
   private analysisRoot(folder: vscode.WorkspaceFolder, baseDir?: string): string | undefined {
@@ -723,7 +770,7 @@ export class DashboardPanel {
       });
       return;
     }
-    const folder = this.getWorkspaceFolder(message.folderUri || issue.folderUri);
+    const folder = this.getWorkspaceFolder(message.folderUri ?? issue.folderUri);
     if (!folder) {
       this.postMessage({ type: 'issueLifecycleError', message: 'La carpeta del defecto ya no está abierta.' });
       return;
@@ -748,36 +795,18 @@ export class DashboardPanel {
   }
 
   private async mutateIssue(message: DashboardWebviewMessage): Promise<void> {
-    const issue = this.findIssue(message.issueKey);
-    if (!issue || !message.mutationKind) {
-      this.postMessage({ type: 'issueLifecycleError', message: 'No se pudo identificar la acción del defecto.' });
+    const mutationContext = await this.getIssueMutationContext(message);
+    if (!mutationContext) {
       return;
     }
-    const folder = this.getWorkspaceFolder(message.folderUri || issue.folderUri);
-    const config = folder ? await getFolderConfig(this.context, folder) : undefined;
-    if (!folder || !config) {
-      this.postMessage({ type: 'issueLifecycleError', message: 'La carpeta no tiene una conexión válida con SonarQube.' });
+
+    if (!(await this.confirmIssueMutation(message))) {
       return;
     }
-    const spanish = this.language === 'es';
-    const actionLabel = message.mutationKind === 'transition'
-      ? `${spanish ? 'cambiar el estado mediante' : 'change the status using'} “${message.transition ?? ''}”`
-      : message.mutationKind === 'assign'
-        ? `${spanish ? 'asignar el defecto a' : 'assign the issue to'} “${message.assignee || (spanish ? 'Sin asignar' : 'Unassigned')}”`
-        : (spanish ? 'añadir el comentario' : 'add the comment');
-    const confirm = spanish ? 'Confirmar' : 'Confirm';
-    const selected = await vscode.window.showWarningMessage(
-      spanish
-        ? `¿Quieres ${actionLabel}? Esta acción modificará SonarQube.`
-        : `Do you want to ${actionLabel}? This action will modify SonarQube.`,
-      { modal: true },
-      confirm
-    );
-    if (selected !== confirm) {
-      return;
-    }
+
+    const { issue, folder, config } = mutationContext;
     const request: IssueMutationRequest = {
-      kind: message.mutationKind,
+      kind: mutationContext.mutationKind,
       issueKey: issue.key,
       folderUri: folder.uri.toString(),
       transition: message.transition,
@@ -800,6 +829,93 @@ export class DashboardPanel {
         message: `No se pudo modificar el defecto: ${this.errorMessage(error)}`
       });
     }
+  }
+
+  private async getIssueMutationContext(
+    message: DashboardWebviewMessage
+  ): Promise<{
+    issue: DashboardIssue;
+    folder: vscode.WorkspaceFolder;
+    config: FolderSonarConfig;
+    mutationKind: IssueMutationRequest['kind'];
+  } | undefined> {
+    const issue = this.findIssue(message.issueKey);
+    if (!issue || !message.mutationKind) {
+      this.postMessage({
+        type: 'issueLifecycleError',
+        message: 'No se pudo identificar la acción del defecto.'
+      });
+      return undefined;
+    }
+
+    const folder = this.getWorkspaceFolder(message.folderUri ?? issue.folderUri);
+    if (!folder) {
+      this.postMessage({
+        type: 'issueLifecycleError',
+        message: 'La carpeta no tiene una conexión válida con SonarQube.'
+      });
+      return undefined;
+    }
+
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      this.postMessage({
+        type: 'issueLifecycleError',
+        message: 'La carpeta no tiene una conexión válida con SonarQube.'
+      });
+      return undefined;
+    }
+
+    return {
+      issue,
+      folder,
+      config,
+      mutationKind: message.mutationKind
+    };
+  }
+
+  private async confirmIssueMutation(message: DashboardWebviewMessage): Promise<boolean> {
+    const actionLabel = this.issueMutationActionLabel(message);
+    const confirmLabel = this.language === 'es' ? 'Confirmar' : 'Confirm';
+    const confirmationMessage = this.language === 'es'
+      ? `¿Quieres ${actionLabel}? Esta acción modificará SonarQube.`
+      : `Do you want to ${actionLabel}? This action will modify SonarQube.`;
+    const selected = await vscode.window.showWarningMessage(
+      confirmationMessage,
+      { modal: true },
+      confirmLabel
+    );
+    return selected === confirmLabel;
+  }
+
+  private issueMutationActionLabel(message: DashboardWebviewMessage): string {
+    switch (message.mutationKind) {
+      case 'transition':
+        return this.transitionMutationLabel(message.transition);
+      case 'assign':
+        return this.assignmentMutationLabel(message.assignee);
+      case 'comment':
+        return this.language === 'es' ? 'añadir el comentario' : 'add the comment';
+      default:
+        return this.language === 'es' ? 'modificar el defecto' : 'modify the issue';
+    }
+  }
+
+  private transitionMutationLabel(transition?: string): string {
+    const operation = this.language === 'es'
+      ? 'cambiar el estado mediante'
+      : 'change the status using';
+    return `${operation} “${transition ?? ''}”`;
+  }
+
+  private assignmentMutationLabel(assignee?: string): string {
+    const operation = this.language === 'es'
+      ? 'asignar el defecto a'
+      : 'assign the issue to';
+    const normalizedAssignee = assignee?.trim();
+    let target = normalizedAssignee?.length ? normalizedAssignee : undefined;
+    target ??= this.language === 'es' ? 'Sin asignar' : 'Unassigned';
+    return `${operation} “${target}”`;
   }
 
   private async loadCoverageDetail(message: DashboardWebviewMessage): Promise<void> {
@@ -930,6 +1046,11 @@ export class DashboardPanel {
   }
 
   private postMessage(message: unknown): void {
+    const webview = this.panel?.webview;
+    if (!webview) {
+      return;
+    }
+
     if (
       message &&
       typeof message === 'object' &&
@@ -937,13 +1058,27 @@ export class DashboardPanel {
       typeof (message as { message?: unknown }).message === 'string'
     ) {
       const value = message as { message: string };
-      void this.panel?.webview.postMessage({
+      this.sendWebviewMessage(webview, {
         ...value,
         message: localizeRuntimeText(value.message, this.language)
       });
       return;
     }
-    void this.panel?.webview.postMessage(message);
+    this.sendWebviewMessage(webview, message);
+  }
+
+  private sendWebviewMessage(webview: vscode.Webview, message: unknown): void {
+    webview.postMessage(message).then(
+      () => undefined,
+      () => undefined
+    );
+  }
+
+  private runBackgroundTask(task: Promise<unknown>): void {
+    task.then(
+      () => undefined,
+      error => this.postStatus('error', this.errorMessage(error))
+    );
   }
 
   private postPendingIssueDetail(): void {

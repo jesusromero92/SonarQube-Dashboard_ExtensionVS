@@ -19,9 +19,42 @@ import {
   SonarIssueLocation
 } from './types';
 
+function normalizedUpperCase(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    if (value !== undefined && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function locationRole(
+  index: number,
+  total: number
+): DashboardIssueLocation['role'] {
+  if (total <= 1) {
+    return 'related';
+  }
+  if (index === 0) {
+    return 'source';
+  }
+  if (index === total - 1) {
+    return 'sink';
+  }
+  return 'intermediate';
+}
+
 function highestImpact(impacts: SonarImpact[] | undefined): string | undefined {
   return [...(impacts ?? [])]
-    .map(impact => impact.severity?.trim().toUpperCase())
+    .map(impact => normalizedUpperCase(impact.severity))
     .filter((severity): severity is string => Boolean(severity))
     .sort((left, right) => issueSeverityRank(right) - issueSeverityRank(left))[0];
 }
@@ -30,16 +63,16 @@ export function issueSeverityLabel(
   issue: SonarIssue,
   instanceMode: SonarInstanceMode
 ): DashboardSeverity {
-  const standardSeverity = issue.severity?.trim().toUpperCase();
+  const standardSeverity = normalizedUpperCase(issue.severity);
   const impactSeverity = highestImpact(issue.impacts);
 
   if (instanceMode === 'MQR') {
-    return impactSeverity || standardSeverity || 'UNKNOWN';
+    return impactSeverity ?? standardSeverity ?? 'UNKNOWN';
   }
   if (instanceMode === 'STANDARD') {
-    return standardSeverity || impactSeverity || 'UNKNOWN';
+    return standardSeverity ?? impactSeverity ?? 'UNKNOWN';
   }
-  return impactSeverity || standardSeverity || 'UNKNOWN';
+  return impactSeverity ?? standardSeverity ?? 'UNKNOWN';
 }
 
 export function issueSeverityRank(severity: DashboardSeverity): number {
@@ -134,7 +167,7 @@ export async function resolveLocalFile(
   if (!issuePath) {
     return undefined;
   }
-  const baseSegments = normalizeRelativePath(baseDir?.trim() || '')?.split('/') ?? [];
+  const baseSegments = normalizeRelativePath(baseDir?.trim() ?? '')?.split('/') ?? [];
   const relativePath = [...baseSegments, ...issuePath.split('/')].join('/');
   const uri = vscode.Uri.joinPath(folder.uri, ...relativePath.split('/'));
   if (
@@ -189,13 +222,7 @@ async function mapIssueFlows(
   const mappedFlows = await Promise.all((issue.flows ?? []).map(async (flow, flowIndex) => {
     const rawLocations = flow.locations ?? [];
     const mapped = await Promise.all(rawLocations.map((location, index) => {
-      const role: DashboardIssueLocation['role'] = rawLocations.length <= 1
-        ? 'related'
-        : index === 0
-          ? 'source'
-          : index === rawLocations.length - 1
-            ? 'sink'
-            : 'intermediate';
+      const role = locationRole(index, rawLocations.length);
       return mapLocation(folder, projectKey, baseDir, componentPaths, location, role);
     }));
     return {
@@ -230,7 +257,7 @@ async function toDashboardIssue(
   const severity = issueSeverityLabel(issue, loaded.instanceMode);
   const flowData = await mapIssueFlows(
     folder,
-    issue.project || projectKey,
+    firstNonEmpty(issue.project, projectKey) ?? projectKey,
     baseDir,
     loaded.componentPaths,
     issue
@@ -238,20 +265,20 @@ async function toDashboardIssue(
   return {
     key: issue.key,
     rule: issue.rule,
-    ruleName: issue.ruleName || issue.rule,
-    status: issue.issueStatus || issue.status || '',
+    ruleName: firstNonEmpty(issue.ruleName, issue.rule) ?? issue.rule,
+    status: firstNonEmpty(issue.issueStatus, issue.status) ?? '',
     resolution: issue.resolution ?? '',
     assignee: issue.assignee ?? '',
     author: issue.author ?? '',
     creationDate: issue.creationDate ?? '',
     updateDate: issue.updateDate ?? '',
-    project: issue.project || projectKey,
+    project: firstNonEmpty(issue.project, projectKey) ?? projectKey,
     component: issue.component,
     folderUri: folder.uri.toString(),
-    impacts: issue.impacts || [],
+    impacts: issue.impacts ?? [],
     severity,
     severityRank: issueSeverityRank(severity),
-    type: issue.type || 'ISSUE',
+    type: firstNonEmpty(issue.type) ?? 'ISSUE',
     message: issue.message,
     relativePath: local.relativePath,
     fileUri: local.uri.toString(),
@@ -276,11 +303,12 @@ export async function mapFolderIssues(
 
 function hotspotPriority(hotspot: SonarHotspot): string {
   return (
-    hotspot.securityReviewPriority ||
-    hotspot.vulnerabilityProbability ||
-    hotspot.priority ||
-    hotspot.securitySeverity ||
-    'UNKNOWN'
+    firstNonEmpty(
+      hotspot.securityReviewPriority,
+      hotspot.vulnerabilityProbability,
+      hotspot.priority,
+      hotspot.securitySeverity
+    ) ?? 'UNKNOWN'
   ).toUpperCase();
 }
 
@@ -294,7 +322,7 @@ export async function mapFolderHotspots(
   const mapped = await Promise.all(hotspots.map(async hotspot => {
     const local = await resolveLocalFile(
       folder,
-      hotspot.project || projectKey,
+      firstNonEmpty(hotspot.project, projectKey) ?? projectKey,
       baseDir,
       hotspot.component,
       loaded.componentPaths
@@ -305,7 +333,7 @@ export async function mapFolderHotspots(
     return {
       key: hotspot.key,
       ruleKey: hotspot.rule ?? hotspot.ruleKey ?? '',
-      project: hotspot.project || projectKey,
+      project: firstNonEmpty(hotspot.project, projectKey) ?? projectKey,
       component: hotspot.component,
       message: hotspot.message ?? '',
       status: hotspot.status ?? '',
@@ -384,7 +412,7 @@ export async function publishFolderDiagnostics(
     }
     const diagnostic = new vscode.Diagnostic(
       issueRange(issue),
-      `[${issue.ruleName || issue.rule}] ${issue.message}`,
+      `[${firstNonEmpty(issue.ruleName, issue.rule) ?? issue.rule}] ${issue.message}`,
       vscodeSeverity(issue, loaded.instanceMode)
     );
     diagnostic.source = 'SonarQube Dashboard';

@@ -221,197 +221,365 @@ function recomputeCoverageTotals(summary: CoverageSummary): void {
   }
 }
 
-async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'analysis' = 'sync'): Promise<RefreshSummary> {
-  const folders = vscode.workspace.workspaceFolders ?? [];
-  const summary = createEmptyRefreshSummary();
-  const notificationScopes: NotificationScope[] = [];
-  const previousSummary = dashboardPanel?.getRefreshSummary() ?? createEmptyRefreshSummary();
-  dashboardPanel?.setLoading(true);
+type LoadedSonarData = Awaited<ReturnType<typeof fetchAllIssues>>;
 
-  if (folders.length === 0) {
-    diagnostics.clear();
-    issueDecorations.clear();
-    coverageDecorations.clear();
-    issueNavigation.clear();
-    flowController.clear();
-    dashboardPanel?.setRefreshSummary(summary);
-    dashboardPanel?.setLoading(false);
-    return summary;
+interface RefreshOperation {
+  controller: AbortController;
+  signal: AbortSignal;
+  pendingDiagnostics: vscode.DiagnosticCollection;
+}
+
+function runAsync(task: Promise<unknown> | undefined, operation: string): void {
+  task?.catch(error => {
+    console.error(`SonarQube Dashboard ${operation} failed:`, error);
+  });
+}
+
+function clearWorkspaceData(summary: RefreshSummary): RefreshSummary {
+  diagnostics.clear();
+  issueDecorations.clear();
+  coverageDecorations.clear();
+  issueNavigation.clear();
+  flowController.clear();
+  dashboardPanel?.setRefreshSummary(summary);
+  dashboardPanel?.setLoading(false);
+  return summary;
+}
+
+function startRefreshOperation(): RefreshOperation {
+  activeRefresh?.abort();
+  const controller = new AbortController();
+  activeRefresh = controller;
+
+  return {
+    controller,
+    signal: controller.signal,
+    pendingDiagnostics: vscode.languages.createDiagnosticCollection(
+      'sonarqube-dashboard-pending'
+    )
+  };
+}
+
+function appendRatings(
+  summary: RefreshSummary,
+  loaded: LoadedSonarData
+): void {
+  for (const scope of ['overall', 'newCode'] as const) {
+    for (const rating of [
+      'maintainability',
+      'reliability',
+      'security',
+      'securityReview'
+    ] as const) {
+      summary.ratings[scope][rating] = worstRating(
+        summary.ratings[scope][rating],
+        loaded.ratings[scope][rating]
+      );
+    }
+  }
+}
+
+function appendFolderData(
+  summary: RefreshSummary,
+  loaded: LoadedSonarData,
+  publishedCount: number,
+  issues: DashboardIssue[],
+  newIssues: DashboardIssue[],
+  hotspots: DashboardHotspot[],
+  newHotspots: DashboardHotspot[],
+  coverage: CoverageSummary
+): void {
+  summary.published += publishedCount;
+  summary.newPublished += newIssues.length;
+  summary.issues.push(...issues);
+  summary.newIssues.push(...newIssues);
+  summary.hotspots.push(...hotspots);
+  summary.newHotspots.push(...newHotspots);
+  summary.coverage.files.push(...coverage.files);
+
+  if (summary.configuredFolders === 1) {
+    summary.coverage.overall = coverage.overall;
+    summary.coverage.newCode = coverage.newCode;
   }
 
-  activeRefresh?.abort();
-  activeRefresh = new AbortController();
-  const refreshController = activeRefresh;
-  const signal = refreshController.signal;
-  const pendingDiagnostics = vscode.languages.createDiagnosticCollection(
-    'sonarqube-dashboard-pending'
+  summary.evolution.push(...loaded.evolution);
+  summary.qualityGate.status = worstQualityGateStatus(
+    summary.qualityGate.status,
+    loaded.qualityGate.status
+  );
+  summary.qualityGate.conditions.push(...loaded.qualityGate.conditions);
+  appendRatings(summary, loaded);
+}
+
+async function refreshWorkspaceFolder(
+  context: vscode.ExtensionContext,
+  folder: vscode.WorkspaceFolder,
+  summary: RefreshSummary,
+  notificationScopes: NotificationScope[],
+  pendingDiagnostics: vscode.DiagnosticCollection,
+  signal: AbortSignal
+): Promise<void> {
+  const config = await getFolderConfig(context, folder);
+  if (!config) {
+    return;
+  }
+
+  summary.configuredFolders += 1;
+
+  try {
+    const loaded = await fetchAllIssues(config, signal);
+    const result = await publishFolderDiagnostics(
+      pendingDiagnostics,
+      folder,
+      config.projectKey,
+      config.baseDir,
+      loaded
+    );
+    summary.skipped += result.skipped;
+
+    const [newIssues, hotspots, newHotspots, coverage] = await Promise.all([
+      mapFolderIssues(folder, config.projectKey, config.baseDir, loaded, loaded.newIssues),
+      mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.hotspots),
+      mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.newHotspots),
+      mapFolderCoverage(folder, config.projectKey, config.baseDir, loaded.coverage)
+    ]);
+
+    appendFolderData(
+      summary,
+      loaded,
+      result.published,
+      result.issues,
+      newIssues,
+      hotspots,
+      newHotspots,
+      coverage
+    );
+
+    notificationScopes.push({
+      id: [
+        folder.uri.toString(),
+        config.serverUrl,
+        config.projectKey,
+        config.branch?.trim() ?? ''
+      ].join('|'),
+      issues: result.issues,
+      hotspots,
+      qualityGate: loaded.qualityGate.status
+    });
+  } catch (error) {
+    if (signal.aborted) {
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    summary.errors.push(
+      `${folder.name}: ${localizeRuntimeText(message, getDashboardLanguage())}`
+    );
+  }
+}
+
+async function refreshWorkspaceFolders(
+  context: vscode.ExtensionContext,
+  folders: readonly vscode.WorkspaceFolder[],
+  summary: RefreshSummary,
+  notificationScopes: NotificationScope[],
+  operation: RefreshOperation
+): Promise<void> {
+  for (const folder of folders) {
+    if (operation.signal.aborted) {
+      return;
+    }
+
+    await refreshWorkspaceFolder(
+      context,
+      folder,
+      summary,
+      notificationScopes,
+      operation.pendingDiagnostics,
+      operation.signal
+    );
+  }
+}
+
+function isObsoleteRefresh(operation: RefreshOperation): boolean {
+  return operation.signal.aborted || activeRefresh !== operation.controller;
+}
+
+function finishObsoleteRefresh(
+  operation: RefreshOperation,
+  previousSummary: RefreshSummary
+): RefreshSummary {
+  operation.pendingDiagnostics.dispose();
+
+  if (activeRefresh === operation.controller) {
+    dashboardPanel?.setLoading(false);
+  }
+
+  return dashboardPanel?.getRefreshSummary() ?? previousSummary;
+}
+
+function preserveSummaryAfterErrors(
+  summary: RefreshSummary,
+  previousSummary: RefreshSummary,
+  pendingDiagnostics: vscode.DiagnosticCollection
+): RefreshSummary {
+  pendingDiagnostics.dispose();
+  const preserved = {
+    ...previousSummary,
+    errors: [...summary.errors]
+  };
+
+  dashboardPanel?.setRefreshSummary(
+    preserved,
+    previousSummary.configuredFolders > 0
+  );
+  dashboardPanel?.setLoading(false);
+  vscode.window.setStatusBarMessage(
+    localizeRuntimeText(
+      `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
+      getDashboardLanguage()
+    ),
+    6000
   );
 
-  for (const folder of folders) {
-    if (signal.aborted) {
-      break;
-    }
+  return preserved;
+}
 
-    const config = await getFolderConfig(context, folder);
-    if (!config) {
-      continue;
-    }
+function compareIssues(left: DashboardIssue, right: DashboardIssue): number {
+  const locale = localeTag(getDashboardLanguage());
+  return (
+    right.severityRank - left.severityRank ||
+    left.relativePath.localeCompare(right.relativePath, locale, {
+      sensitivity: 'base'
+    }) ||
+    left.line - right.line ||
+    left.ruleName.localeCompare(right.ruleName, locale, {
+      sensitivity: 'base'
+    })
+  );
+}
 
-    summary.configuredFolders += 1;
+function hotspotPriorityRank(priority: string): number {
+  return ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[priority.toUpperCase()] ?? 0);
+}
 
-    try {
-      const loaded = await fetchAllIssues(config, signal);
-      const result = await publishFolderDiagnostics(
-        pendingDiagnostics,
-        folder,
-        config.projectKey,
-        config.baseDir,
-        loaded
-      );
-      summary.published += result.published;
-      summary.skipped += result.skipped;
-      summary.issues.push(...result.issues);
-      const [newIssues, hotspots, newHotspots, coverage] = await Promise.all([
-        mapFolderIssues(folder, config.projectKey, config.baseDir, loaded, loaded.newIssues),
-        mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.hotspots),
-        mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.newHotspots),
-        mapFolderCoverage(folder, config.projectKey, config.baseDir, loaded.coverage)
-      ]);
-      summary.newIssues.push(...newIssues);
-      summary.newPublished += newIssues.length;
-      summary.hotspots.push(...hotspots);
-      summary.newHotspots.push(...newHotspots);
-      notificationScopes.push({
-        id: [
-          folder.uri.toString(),
-          config.serverUrl,
-          config.projectKey,
-          config.branch?.trim() ?? ''
-        ].join('|'),
-        issues: result.issues,
-        hotspots,
-        qualityGate: loaded.qualityGate.status
-      });
-      summary.coverage.files.push(...coverage.files);
-      if (summary.configuredFolders === 1) {
-        summary.coverage.overall = coverage.overall;
-        summary.coverage.newCode = coverage.newCode;
-      }
-      summary.evolution.push(...loaded.evolution);
-      summary.qualityGate.status = worstQualityGateStatus(
-        summary.qualityGate.status,
-        loaded.qualityGate.status
-      );
-      summary.qualityGate.conditions.push(...loaded.qualityGate.conditions);
-      for (const scope of ['overall', 'newCode'] as const) {
-        for (const rating of [
-          'maintainability',
-          'reliability',
-          'security',
-          'securityReview'
-        ] as const) {
-          summary.ratings[scope][rating] = worstRating(
-            summary.ratings[scope][rating],
-            loaded.ratings[scope][rating]
-          );
-        }
-      }
-    } catch (error) {
-      if (signal.aborted) {
-        break;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      summary.errors.push(
-        `${folder.name}: ${localizeRuntimeText(message, getDashboardLanguage())}`
-      );
-    }
-  }
+function compareHotspots(
+  left: DashboardHotspot,
+  right: DashboardHotspot
+): number {
+  return (
+    hotspotPriorityRank(right.priority) -
+      hotspotPriorityRank(left.priority) ||
+    left.relativePath.localeCompare(
+      right.relativePath,
+      localeTag(getDashboardLanguage()),
+      { sensitivity: 'base' }
+    ) ||
+    left.line - right.line
+  );
+}
 
-  if (signal.aborted || activeRefresh !== refreshController) {
-    pendingDiagnostics.dispose();
-    if (activeRefresh === refreshController) {
-      dashboardPanel?.setLoading(false);
-    }
-    return dashboardPanel?.getRefreshSummary() ?? previousSummary;
-  }
-
-  if (summary.errors.length > 0) {
-    pendingDiagnostics.dispose();
-    const preserved = {
-      ...previousSummary,
-      errors: [...summary.errors]
-    };
-    dashboardPanel?.setRefreshSummary(preserved, previousSummary.configuredFolders > 0);
-    dashboardPanel?.setLoading(false);
-    void vscode.window.setStatusBarMessage(
-      localizeRuntimeText(
-        `SonarQube Dashboard: error al sincronizar ${summary.errors.length} carpeta(s)`,
-        getDashboardLanguage()
-      ),
-      6000
-    );
-    return preserved;
-  }
-
+function prepareRefreshSummary(summary: RefreshSummary): void {
   summary.severity = aggregateSeverity(summary.issues);
   summary.newSeverity = aggregateSeverity(summary.newIssues);
   summary.types = aggregateTypes(summary.issues, summary.hotspots);
   summary.newTypes = aggregateTypes(summary.newIssues, summary.newHotspots);
   summary.evolution = aggregateEvolution(summary.evolution);
   recomputeCoverageTotals(summary.coverage);
-  summary.issues.sort((left, right) =>
-    right.severityRank - left.severityRank ||
-    left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
-    left.line - right.line ||
-    left.ruleName.localeCompare(right.ruleName, localeTag(getDashboardLanguage()), { sensitivity: 'base' })
-  );
-  summary.newIssues.sort((left, right) =>
-    right.severityRank - left.severityRank ||
-    left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
-    left.line - right.line ||
-    left.ruleName.localeCompare(right.ruleName, localeTag(getDashboardLanguage()), { sensitivity: 'base' })
-  );
-  const hotspotRank = (priority: string) =>
-    ({ HIGH: 3, MEDIUM: 2, LOW: 1 }[priority.toUpperCase()] ?? 0);
-  const sortHotspots = (left: typeof summary.hotspots[number], right: typeof summary.hotspots[number]) =>
-    hotspotRank(right.priority) - hotspotRank(left.priority) ||
-    left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
-    left.line - right.line;
-  summary.hotspots.sort(sortHotspots);
-  summary.newHotspots.sort(sortHotspots);
+  summary.issues.sort(compareIssues);
+  summary.newIssues.sort(compareIssues);
+  summary.hotspots.sort(compareHotspots);
+  summary.newHotspots.sort(compareHotspots);
+}
+
+function publishPendingDiagnostics(
+  pendingDiagnostics: vscode.DiagnosticCollection
+): void {
   diagnostics.clear();
   pendingDiagnostics.forEach((uri, fileDiagnostics) => {
     diagnostics.set(uri, fileDiagnostics);
   });
   pendingDiagnostics.dispose();
+}
+
+function applyRefreshSummary(
+  summary: RefreshSummary,
+  operation: RefreshOperation
+): void {
+  publishPendingDiagnostics(operation.pendingDiagnostics);
   issueDecorations.setIssues(summary.issues, summary.hotspots);
   coverageDecorations.setCoverage(summary.coverage);
   issueNavigation.setIssues(summary.issues, summary.newIssues);
   issueTree.refresh();
-
   dashboardPanel?.setRefreshSummary(
     summary,
     summary.configuredFolders > 0
   );
 
-  if (activeRefresh === refreshController) {
+  if (activeRefresh === operation.controller) {
     dashboardPanel?.setLoading(false);
   }
+}
 
-  void notifications.evaluate(notificationScopes, source).catch(error => {
-    console.error('SonarQube Dashboard notification evaluation failed:', error);
-  });
+function showSuccessfulRefreshStatus(summary: RefreshSummary): void {
+  if (summary.configuredFolders === 0) {
+    return;
+  }
 
-  if (summary.configuredFolders > 0) {
-    void vscode.window.setStatusBarMessage(
-      localizeRuntimeText(
-        `SonarQube Dashboard: ${summary.published} issues encontrados` +
-          (summary.skipped ? `, ${summary.skipped} omitidos` : ''),
-        getDashboardLanguage()
-      ),
-      5000
+  vscode.window.setStatusBarMessage(
+    localizeRuntimeText(
+      `SonarQube Dashboard: ${summary.published} issues encontrados` +
+        (summary.skipped ? `, ${summary.skipped} omitidos` : ''),
+      getDashboardLanguage()
+    ),
+    5000
+  );
+}
+
+async function refreshAll(
+  context: vscode.ExtensionContext,
+  source: 'sync' | 'analysis' = 'sync'
+): Promise<RefreshSummary> {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  const summary = createEmptyRefreshSummary();
+  const notificationScopes: NotificationScope[] = [];
+  const previousSummary =
+    dashboardPanel?.getRefreshSummary() ?? createEmptyRefreshSummary();
+
+  dashboardPanel?.setLoading(true);
+
+  if (folders.length === 0) {
+    return clearWorkspaceData(summary);
+  }
+
+  const operation = startRefreshOperation();
+  await refreshWorkspaceFolders(
+    context,
+    folders,
+    summary,
+    notificationScopes,
+    operation
+  );
+
+  if (isObsoleteRefresh(operation)) {
+    return finishObsoleteRefresh(operation, previousSummary);
+  }
+
+  if (summary.errors.length > 0) {
+    return preserveSummaryAfterErrors(
+      summary,
+      previousSummary,
+      operation.pendingDiagnostics
     );
   }
+
+  prepareRefreshSummary(summary);
+  applyRefreshSummary(summary, operation);
+  runAsync(
+    notifications.evaluate(notificationScopes, source),
+    'notification evaluation'
+  );
+  showSuccessfulRefreshStatus(summary);
 
   return summary;
 }
@@ -428,7 +596,7 @@ function configureRefreshTimer(context: vscode.ExtensionContext): void {
 
   if (minutes > 0) {
     refreshTimer = setInterval(() => {
-      void refreshAll(context);
+      runAsync(refreshAll(context), 'scheduled refresh');
     }, minutes * 60_000);
   }
 }
@@ -440,8 +608,39 @@ function scheduleWorkspaceStateRefresh(): void {
 
   configurationRefreshTimer = setTimeout(() => {
     configurationRefreshTimer = undefined;
-    void dashboardPanel?.refreshWorkspaceState();
+    runAsync(
+      dashboardPanel?.refreshWorkspaceState(),
+      'workspace state refresh'
+    );
   }, 150);
+}
+
+function currentFileFilterMessage(enabled: boolean): string {
+  const spanish = getDashboardLanguage() === 'es';
+
+  if (enabled) {
+    return spanish
+      ? 'Mostrando solo los defectos del archivo abierto.'
+      : 'Showing only issues from the open file.';
+  }
+
+  return spanish
+    ? 'Mostrando los defectos de todo el workspace.'
+    : 'Showing issues from the whole workspace.';
+}
+
+function issueTreeGroupLabel(
+  value: typeof ISSUE_TREE_GROUPS[number],
+  spanish: boolean
+): string {
+  switch (value) {
+    case 'file':
+      return spanish ? 'Archivo' : 'File';
+    case 'rule':
+      return spanish ? 'Regla' : 'Rule';
+    default:
+      return spanish ? 'Severidad' : 'Severity';
+  }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -573,11 +772,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(DASHBOARD_COMMANDS.nextCriticalIssue, () => issueNavigation.nextCritical()),
     vscode.commands.registerCommand(DASHBOARD_COMMANDS.toggleCurrentFileIssues, async () => {
       const enabled = issueNavigation.toggleCurrentFileOnly();
-      const spanish = getDashboardLanguage() === 'es';
       await vscode.window.showInformationMessage(
-        enabled
-          ? (spanish ? 'Mostrando solo los defectos del archivo abierto.' : 'Showing only issues from the open file.')
-          : (spanish ? 'Mostrando los defectos de todo el workspace.' : 'Showing issues from the whole workspace.')
+        currentFileFilterMessage(enabled)
       );
     }),
     vscode.commands.registerCommand(DASHBOARD_COMMANDS.groupIssues, async () => {
@@ -585,11 +781,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const selected = await vscode.window.showQuickPick(
         ISSUE_TREE_GROUPS.map(value => ({
           value,
-          label: value === 'file'
-            ? (spanish ? 'Archivo' : 'File')
-            : value === 'rule'
-              ? (spanish ? 'Regla' : 'Rule')
-              : (spanish ? 'Severidad' : 'Severity')
+          label: issueTreeGroupLabel(value, spanish)
         })),
         { placeHolder: spanish ? 'Agrupar defectos por…' : 'Group issues by…' }
       );
@@ -622,17 +814,23 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void dashboardPanel?.refreshWorkspaceState();
+      runAsync(
+        dashboardPanel?.refreshWorkspaceState(),
+        'workspace state refresh'
+      );
       if (
         vscode.workspace
           .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
           .get<boolean>(DASHBOARD_CONFIGURATION_KEYS.autoRefresh, true)
       ) {
-        void refreshAll(context);
+        runAsync(refreshAll(context), 'workspace refresh');
       }
     }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => {
-      void dashboardPanel?.refreshWorkspaceState();
+      runAsync(
+        dashboardPanel?.refreshWorkspaceState(),
+        'workspace trust refresh'
+      );
     }),
     vscode.workspace.onDidChangeConfiguration(
       (event: vscode.ConfigurationChangeEvent) => {
@@ -642,7 +840,10 @@ export function activate(context: vscode.ExtensionContext): void {
         ) {
           configureRefreshTimer(context);
           if (event.affectsConfiguration(`${DASHBOARD_CONFIGURATION_SECTION}.${DASHBOARD_CONFIGURATION_KEYS.language}`)) {
-            void dashboardPanel?.refreshLanguage();
+            runAsync(
+              dashboardPanel?.refreshLanguage(),
+              'language refresh'
+            );
             issueDecorations.refreshLanguage();
             coverageDecorations.refreshLanguage();
             flowController.refreshLanguage();
@@ -674,7 +875,7 @@ export function activate(context: vscode.ExtensionContext): void {
       .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
       .get<boolean>(DASHBOARD_CONFIGURATION_KEYS.autoRefresh, true)
   ) {
-    void refreshAll(context);
+    runAsync(refreshAll(context), 'startup refresh');
   }
 }
 
