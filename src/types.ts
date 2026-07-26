@@ -175,6 +175,7 @@ export interface SonarSettingsResponse {
 
 export type SonarInstanceMode = 'MQR' | 'STANDARD' | 'UNKNOWN';
 export type ScannerMode = 'auto' | 'maven' | 'gradle' | 'dotnet' | 'npm' | 'docker' | 'custom';
+export type AnalysisPermissionStatus = 'allowed' | 'denied' | 'unknown';
 
 export interface FolderSonarConfig {
   serverUrl: string;

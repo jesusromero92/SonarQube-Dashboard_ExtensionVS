@@ -6,6 +6,7 @@ import {
   SONAR_SUMMARY_METRICS
 } from './constants';
 import {
+  AnalysisPermissionStatus,
   FolderSonarConfig,
   EvolutionPoint,
   LoadedIssues,
@@ -76,6 +77,59 @@ class SonarHttpError extends Error {
     super(message);
     this.name = 'SonarHttpError';
   }
+}
+
+export async function checkAnalysisPermission(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<AnalysisPermissionStatus> {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/analysis_cache/get`);
+  url.searchParams.set('project', config.projectKey);
+  if (config.branch?.trim()) {
+    url.searchParams.set('branch', config.branch.trim());
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/octet-stream',
+        Authorization: `Bearer ${config.token}`
+      },
+      signal
+    });
+
+    if (response.ok) {
+      // La respuesta puede contener una caché grande. Para validar el permiso
+      // solo necesitamos el status HTTP, no descargarla.
+      await response.body?.cancel();
+      return 'allowed';
+    }
+
+    const detail = (await response.text()).trim();
+    if (response.status === 401 || response.status === 403) {
+      return 'denied';
+    }
+    if (/not authorized|not authorised|unauthorized|forbidden|insufficient privileges/i.test(detail)) {
+      return 'denied';
+    }
+    if (
+      response.status === 404 &&
+      /no cache|cache (?:data )?is (?:empty|not available)|no cached data/i.test(detail)
+    ) {
+      // No tener caché es normal en el primer análisis; llegar a esta respuesta
+      // confirma que SonarQube aceptó el permiso Execute Analysis.
+      return 'allowed';
+    }
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+  }
+
+  // SonarQube anterior a 9.4, proxies o endpoints deshabilitados no deben
+  // producir un falso negativo. El scanner realizará la comprobación final.
+  return 'unknown';
 }
 
 async function fetchProjectPages(

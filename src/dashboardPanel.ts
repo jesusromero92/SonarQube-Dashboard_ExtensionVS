@@ -16,8 +16,16 @@ import {
 import { createEmptyRefreshSummary } from './dashboard/summary';
 import { getDashboardHtml } from './dashboard/webview';
 import { AnalysisService } from './scanner/analysisService';
-import { fetchHotspotDetail, fetchVisibleProjects } from './sonarClient';
-import { RefreshSummary, ScannerMode } from './types';
+import {
+  checkAnalysisPermission,
+  fetchHotspotDetail,
+  fetchVisibleProjects
+} from './sonarClient';
+import {
+  AnalysisPermissionStatus,
+  RefreshSummary,
+  ScannerMode
+} from './types';
 
 export class DashboardPanel {
   private panel: vscode.WebviewPanel | undefined;
@@ -28,6 +36,7 @@ export class DashboardPanel {
   private savingConfig = false;
   private loading = false;
   private currentPage: DashboardPage = 'data';
+  private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private panelDisposables: vscode.Disposable[] = [];
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
@@ -84,6 +93,7 @@ export class DashboardPanel {
     if (this.savingConfig) {
       return;
     }
+    this.analysisPermissions.clear();
     await this.sendState();
   }
 
@@ -292,6 +302,7 @@ export class DashboardPanel {
     this.selectedFolderUri = selectedFolder.uri.toString();
 
     const config = await getFolderFormConfig(this.context, selectedFolder);
+    const analysisPermission = await this.analysisPermission(selectedFolder);
 
     this.postMessage({
       type: 'state',
@@ -301,7 +312,10 @@ export class DashboardPanel {
       })),
       selectedFolderUri: this.selectedFolderUri,
       workspaceTrusted: vscode.workspace.isTrusted,
-      config
+      config: {
+        ...config,
+        analysisPermission
+      }
     });
   }
 
@@ -396,6 +410,12 @@ export class DashboardPanel {
         buildCommand: message.buildCommand ?? '',
         customScannerCommand: message.customScannerCommand ?? ''
       });
+      this.analysisPermissions.delete(folder.uri.toString());
+      const savedConfig = await getFolderConfig(this.context, folder);
+      const analysisPermission = savedConfig
+        ? await checkAnalysisPermission(savedConfig)
+        : 'unknown';
+      this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
 
       this.postMessage({
         type: 'configurationSaved',
@@ -405,6 +425,7 @@ export class DashboardPanel {
           branch: message.branch ?? '',
           baseDir: message.baseDir ?? '',
           hasToken: Boolean(token || existingToken),
+          analysisPermission,
           scannerMode,
           buildCommand: message.buildCommand ?? '',
           customScannerCommand: message.customScannerCommand ?? ''
@@ -467,6 +488,17 @@ export class DashboardPanel {
       return;
     }
 
+    const analysisPermission = await checkAnalysisPermission(config);
+    this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
+    if (analysisPermission === 'denied') {
+      await this.sendState();
+      this.postStatus(
+        'error',
+        'El token no tiene el permiso Ejecutar análisis para este proyecto de SonarQube.'
+      );
+      return;
+    }
+
     const rootPath = this.analysisRoot(folder, config.baseDir);
     if (!rootPath) {
       this.postStatus('error', 'La subcarpeta configurada no pertenece al workspace.');
@@ -513,6 +545,25 @@ export class DashboardPanel {
       return undefined;
     }
     return root;
+  }
+
+  private async analysisPermission(
+    folder: vscode.WorkspaceFolder
+  ): Promise<AnalysisPermissionStatus> {
+    const key = folder.uri.toString();
+    const cached = this.analysisPermissions.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      return 'unknown';
+    }
+
+    const permission = await checkAnalysisPermission(config);
+    this.analysisPermissions.set(key, permission);
+    return permission;
   }
 
   private async refreshFromPanel(): Promise<void> {

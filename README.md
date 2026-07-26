@@ -210,6 +210,8 @@ SonarScanner for NPM lee el `package.json` del proyecto. La extensión no crea u
 
 La extensión muestra el progreso y el registro completo, permite cancelar el proceso, espera a que SonarQube termine la tarea en segundo plano y después actualiza automáticamente el dashboard y **Problems**. El modal puede cerrarse durante la ejecución sin detener el análisis; **Ver registro** permite abrirlo de nuevo. Únicamente **Cancelar análisis** finaliza el scanner. El token se oculta en el registro.
 
+Antes de habilitar esta sección, la extensión consulta el endpoint de caché de análisis que utiliza SonarScanner y que requiere el permiso **Execute Analysis / Ejecutar análisis**. Si SonarQube rechaza la petición, se ocultan los controles de análisis y se indica el motivo en Configuración. Una respuesta que simplemente indique que todavía no existe caché se considera válida. La comprobación se repite en el backend antes de iniciar cualquier scanner.
+
 ### Requisitos de las herramientas
 
 La extensión incluye la orquestación y descarga automáticamente SonarScanner for .NET, pero no incluye compiladores ni SDK completos:

@@ -150,6 +150,10 @@ export function getBootstrapScript(): string {
       );
     }
 
+    function canAnalyze() {
+      return currentConfig.analysisPermission !== 'denied';
+    }
+
     function values() {
       return {
         folderUri: elements.folder.value,
@@ -221,7 +225,7 @@ export function getBootstrapScript(): string {
       const showResults = hasWorkspace && configured && summaryVisible;
       elements.results.hidden = !showResults;
       elements.dataEmpty.hidden = showResults;
-      elements.analysisPanel.hidden = !showResults;
+      elements.analysisPanel.hidden = !showResults || !canAnalyze();
 
       if (showResults) {
         return;
@@ -229,7 +233,7 @@ export function getBootstrapScript(): string {
 
       elements.emptyProject.hidden = !configured;
       elements.emptyProject.textContent = configured ? currentConfig.projectKey : '';
-      elements.analyzeEmpty.hidden = !configured;
+      elements.analyzeEmpty.hidden = !configured || !canAnalyze();
       elements.syncEmpty.hidden = !configured;
 
       if (!hasWorkspace) {
@@ -289,7 +293,9 @@ export function getBootstrapScript(): string {
         ? 'Token guardado · escribe otro para sustituirlo'
         : 'Introduce el token';
       elements.tokenHint.textContent = currentConfig.hasToken
-        ? 'Hay un token guardado de forma segura para esta carpeta.'
+        ? currentConfig.analysisPermission === 'denied'
+          ? 'El token puede consultar datos, pero no tiene permiso para ejecutar análisis en este proyecto.'
+          : 'Hay un token guardado de forma segura para esta carpeta.'
         : 'El token se guardará en SecretStorage, no en settings.json.';
       elements.branch.value = currentConfig.branch || '';
       elements.baseDir.value = currentConfig.baseDir || '';
@@ -342,6 +348,9 @@ export function getBootstrapScript(): string {
       elements.token.value = '';
       elements.token.placeholder = 'Token guardado · escribe otro para sustituirlo';
       elements.tokenHint.textContent = 'Hay un token guardado de forma segura para esta carpeta.';
+      if (config.analysisPermission === 'denied') {
+        elements.tokenHint.textContent = 'El token puede consultar datos, pero no tiene permiso para ejecutar análisis en este proyecto.';
+      }
       elements.scannerMode.value = config.scannerMode || 'auto';
       elements.buildCommand.value = config.buildCommand || '';
       elements.customScannerCommand.value = config.customScannerCommand || '';

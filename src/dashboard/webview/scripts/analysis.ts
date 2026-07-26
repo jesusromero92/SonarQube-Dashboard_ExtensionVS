@@ -4,6 +4,10 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         setStatus('error', 'Configura primero la conexión y el proyecto.');
         return;
       }
+      if (!canAnalyze()) {
+        setStatus('error', 'El token no tiene permiso para ejecutar análisis en este proyecto.');
+        return;
+      }
       if (!elements.analysisDialog.open) elements.analysisDialog.showModal();
       vscode.postMessage({ type: 'analyze', folderUri: currentFolderUri });
     }
