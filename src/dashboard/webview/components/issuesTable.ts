@@ -13,6 +13,7 @@ export const ISSUES_TABLE_MARKUP = `          <section class="panel">
                     <th class="col-type">Tipo</th>
                     <th class="col-file">Archivo</th>
                     <th class="col-rule">Regla</th>
+                    <th class="col-actions">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="issuesBody"></tbody>

@@ -3,6 +3,7 @@ import { ISSUES_TABLE_MARKUP } from '../components/issuesTable';
 import { RANKING_TABLES_MARKUP } from '../components/rankingTables';
 import { EVOLUTION_CHARTS_MARKUP } from '../components/evolutionCharts';
 import { HOTSPOTS_TABLE_MARKUP } from '../components/hotspotsTable';
+import { COVERAGE_VIEW_MARKUP } from '../components/coverageView';
 
 const DATA_PAGE_PREFIX = `      <section id="dataPage" class="page">
         <section id="dataLoading" class="dashboard-loading">
@@ -36,6 +37,7 @@ ${ANALYSIS_CONTROL_MARKUP}        <section id="results" hidden>
               <button id="hotspotsViewTab" type="button">
                 Security Hotspots <span id="hotspotsTabCount">0</span>
               </button>
+              <button id="coverageViewTab" type="button">Cobertura y duplicación</button>
             </nav>
             <nav class="segmented scope-control" aria-label="Ámbito del análisis">
               <button id="overallScope" class="active" type="button">Overall</button>
@@ -57,6 +59,7 @@ export function getDataPageMarkup(): string {
     ISSUES_TABLE_MARKUP,
     RANKING_TABLES_MARKUP,
     EVOLUTION_CHARTS_MARKUP,
+    COVERAGE_VIEW_MARKUP,
     HOTSPOTS_TABLE_MARKUP
   ].join('');
 }

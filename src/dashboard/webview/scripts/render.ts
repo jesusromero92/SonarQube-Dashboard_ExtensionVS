@@ -1,10 +1,14 @@
 
 export const RENDER_SCRIPT = `    function renderDataView() {
       const showIssues = currentDataView === 'issues';
+      const showHotspots = currentDataView === 'hotspots';
+      const showCoverage = currentDataView === 'coverage';
       elements.issuesView.hidden = !showIssues;
-      elements.hotspotsView.hidden = showIssues;
+      elements.hotspotsView.hidden = !showHotspots;
+      elements.coverageView.hidden = !showCoverage;
       elements.issuesViewTab.classList.toggle('active', showIssues);
-      elements.hotspotsViewTab.classList.toggle('active', !showIssues);
+      elements.hotspotsViewTab.classList.toggle('active', showHotspots);
+      elements.coverageViewTab.classList.toggle('active', showCoverage);
     }
 
     function applyScope() {
@@ -21,6 +25,7 @@ export const RENDER_SCRIPT = `    function renderDataView() {
       renderHotspots();
       renderEvolutionCharts();
       renderQualityGateButton();
+      renderCoverageView();
       renderDataView();
     }
 

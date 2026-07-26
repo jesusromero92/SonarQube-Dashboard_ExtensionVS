@@ -1,6 +1,10 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { DASHBOARD_PANEL_VIEW_TYPE } from './constants';
+import {
+  DASHBOARD_CONFIGURATION_KEYS,
+  DASHBOARD_CONFIGURATION_SECTION,
+  DASHBOARD_PANEL_VIEW_TYPE
+} from './constants';
 import {
   DashboardLanguage,
   getDashboardLanguage,
@@ -24,15 +28,20 @@ import {
 import { createEmptyRefreshSummary } from './dashboard/summary';
 import { getDashboardHtml } from './dashboard/webview';
 import { AnalysisService } from './scanner/analysisService';
+import { CoverageDecorationManager } from './coverageDecorations';
+import { IssueFlowController } from './issueFlowController';
 import {
   checkAnalysisPermission,
   fetchHotspotDetail,
-  fetchVisibleProjects
+  fetchIssueLifecycle,
+  fetchVisibleProjects,
+  mutateIssue
 } from './sonarClient';
 import {
   AnalysisPermissionStatus,
   DashboardHotspot,
   DashboardIssue,
+  IssueMutationRequest,
   RefreshSummary,
   ScannerMode
 } from './types';
@@ -65,7 +74,9 @@ export class DashboardPanel {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly refreshCallback: RefreshCallback,
-    private readonly clearCallback: ClearCallback
+    private readonly clearCallback: ClearCallback,
+    private readonly coverageDecorations: CoverageDecorationManager,
+    private readonly flowController: IssueFlowController
   ) {
     this.analysisService = new AnalysisService(context, state => {
       this.postMessage({
@@ -170,7 +181,13 @@ export class DashboardPanel {
     this.postMessage({ type: 'showQualityGate' });
   }
 
+  async showCoverage(fileUri?: string): Promise<void> {
+    await this.show('data');
+    this.postMessage({ type: 'showCoverageView', fileUri });
+  }
+
   async showIssueDetail(issue: DashboardIssue): Promise<void> {
+    this.flowController.setIssue(issue);
     const panelWasOpen = Boolean(this.panel);
     this.pendingIssueDetail = issue;
     await this.show('data');
@@ -280,6 +297,18 @@ export class DashboardPanel {
       case 'loadHotspotDetail':
         await this.loadHotspotDetail(message);
         break;
+      case 'loadIssueLifecycle':
+        await this.loadIssueLifecycle(message);
+        break;
+      case 'mutateIssue':
+        await this.mutateIssue(message);
+        break;
+      case 'loadCoverageDetail':
+        await this.loadCoverageDetail(message);
+        break;
+      case 'selectFlowLocation':
+        await this.selectFlowLocation(message);
+        break;
       case 'loadProjects':
         await this.loadProjects(message);
         break;
@@ -340,7 +369,10 @@ export class DashboardPanel {
           hasToken: false,
           scannerMode: 'auto',
           buildCommand: '',
-          customScannerCommand: ''
+          customScannerCommand: '',
+          notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
+          significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
+          significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
         }
       });
       return;
@@ -368,7 +400,10 @@ export class DashboardPanel {
       language: this.language,
       config: {
         ...config,
-        analysisPermission
+        analysisPermission,
+        notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
+        significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
+        significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
       }
     });
   }
@@ -454,6 +489,12 @@ export class DashboardPanel {
     this.savingConfig = true;
     try {
       const scannerMode = this.normalizeScannerMode(message.scannerMode);
+      const dashboardConfiguration = vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION);
+      await Promise.all([
+        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, message.notificationsEnabled !== false, vscode.ConfigurationTarget.Global),
+        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, Math.max(1, Number(message.significantIncreasePercent) || 20), vscode.ConfigurationTarget.Global),
+        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, Math.max(1, Number(message.significantIncreaseMinimum) || 5), vscode.ConfigurationTarget.Global)
+      ]);
       await saveFolderConfig(this.context, folder, {
         serverUrl,
         projectKey,
@@ -482,11 +523,14 @@ export class DashboardPanel {
           analysisPermission,
           scannerMode,
           buildCommand: message.buildCommand ?? '',
-          customScannerCommand: message.customScannerCommand ?? ''
+          customScannerCommand: message.customScannerCommand ?? '',
+          notificationsEnabled: message.notificationsEnabled !== false,
+          significantIncreasePercent: Math.max(1, Number(message.significantIncreasePercent) || 20),
+          significantIncreaseMinimum: Math.max(1, Number(message.significantIncreaseMinimum) || 5)
         }
       });
       this.postStatus('loading', 'Configuración guardada. Sincronizando issues…');
-      const summary = await this.refreshCallback();
+      const summary = await this.refreshCallback('sync');
       this.setRefreshSummary(summary, true);
 
       if (summary.errors.length > 0) {
@@ -568,7 +612,7 @@ export class DashboardPanel {
     try {
       await this.analysisService.analyze({ rootPath, config });
       this.analysisService.setRefreshing();
-      const summary = await this.refreshCallback();
+      const summary = await this.refreshCallback('analysis');
       this.setRefreshSummary(summary, true);
       if (summary.errors.length > 0) {
         const message = summary.errors.join(' | ');
@@ -636,6 +680,133 @@ export class DashboardPanel {
     } else {
       this.postStatus('success', `${summary.published} issues encontrados.`);
       this.navigate('data');
+    }
+  }
+
+
+  private findIssue(issueKey?: string): DashboardIssue | undefined {
+    if (!issueKey) return undefined;
+    return [...this.lastSummary.issues, ...this.lastSummary.newIssues]
+      .find(issue => issue.key === issueKey);
+  }
+
+  private async loadIssueLifecycle(message: DashboardWebviewMessage): Promise<void> {
+    const issue = this.findIssue(message.issueKey);
+    if (!issue) {
+      this.postMessage({
+        type: 'issueLifecycleError',
+        message: 'El defecto ya no está disponible. Actualiza los datos de SonarQube.'
+      });
+      return;
+    }
+    const folder = this.getWorkspaceFolder(message.folderUri || issue.folderUri);
+    if (!folder) {
+      this.postMessage({ type: 'issueLifecycleError', message: 'La carpeta del defecto ya no está abierta.' });
+      return;
+    }
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      this.postMessage({ type: 'issueLifecycleError', message: 'La carpeta no tiene una conexión válida con SonarQube.' });
+      return;
+    }
+    this.flowController.setIssue(issue, message.flowIndex ?? 0);
+    this.postMessage({ type: 'issueLifecycleLoading', issueKey: issue.key });
+    try {
+      const detail = await fetchIssueLifecycle(config, issue);
+      this.postMessage({ type: 'issueLifecycle', detail });
+    } catch (error) {
+      this.postMessage({
+        type: 'issueLifecycleError',
+        message: `No se pudo cargar la gestión del defecto: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async mutateIssue(message: DashboardWebviewMessage): Promise<void> {
+    const issue = this.findIssue(message.issueKey);
+    if (!issue || !message.mutationKind) {
+      this.postMessage({ type: 'issueLifecycleError', message: 'No se pudo identificar la acción del defecto.' });
+      return;
+    }
+    const folder = this.getWorkspaceFolder(message.folderUri || issue.folderUri);
+    const config = folder ? await getFolderConfig(this.context, folder) : undefined;
+    if (!folder || !config) {
+      this.postMessage({ type: 'issueLifecycleError', message: 'La carpeta no tiene una conexión válida con SonarQube.' });
+      return;
+    }
+    const spanish = this.language === 'es';
+    const actionLabel = message.mutationKind === 'transition'
+      ? `${spanish ? 'cambiar el estado mediante' : 'change the status using'} “${message.transition ?? ''}”`
+      : message.mutationKind === 'assign'
+        ? `${spanish ? 'asignar el defecto a' : 'assign the issue to'} “${message.assignee || (spanish ? 'Sin asignar' : 'Unassigned')}”`
+        : (spanish ? 'añadir el comentario' : 'add the comment');
+    const confirm = spanish ? 'Confirmar' : 'Confirm';
+    const selected = await vscode.window.showWarningMessage(
+      spanish
+        ? `¿Quieres ${actionLabel}? Esta acción modificará SonarQube.`
+        : `Do you want to ${actionLabel}? This action will modify SonarQube.`,
+      { modal: true },
+      confirm
+    );
+    if (selected !== confirm) {
+      return;
+    }
+    const request: IssueMutationRequest = {
+      kind: message.mutationKind,
+      issueKey: issue.key,
+      folderUri: folder.uri.toString(),
+      transition: message.transition,
+      assignee: message.assignee,
+      comment: message.comment
+    };
+    this.postMessage({ type: 'issueMutationLoading' });
+    try {
+      await mutateIssue(config, request);
+      const summary = await this.refreshCallback('sync');
+      this.setRefreshSummary(summary, true);
+      const refreshed = this.findIssue(issue.key) ?? issue;
+      const detail = await fetchIssueLifecycle(config, refreshed);
+      this.postMessage({ type: 'issueLifecycle', detail });
+      this.postStatus('success', 'El defecto se ha actualizado en SonarQube.');
+    } catch (error) {
+      this.postMessage({
+        type: 'issueLifecycleError',
+        message: `No se pudo modificar el defecto: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async loadCoverageDetail(message: DashboardWebviewMessage): Promise<void> {
+    if (!message.fileUri) {
+      this.postMessage({ type: 'coverageDetailError', message: 'No se pudo identificar el archivo.' });
+      return;
+    }
+    this.postMessage({ type: 'coverageDetailLoading', fileUri: message.fileUri });
+    try {
+      const detail = await this.coverageDecorations.getDetail(message.fileUri);
+      if (!detail) {
+        throw new Error('No hay datos de cobertura para el archivo seleccionado.');
+      }
+      this.postMessage({ type: 'coverageDetail', detail });
+    } catch (error) {
+      this.postMessage({
+        type: 'coverageDetailError',
+        message: `No se pudo cargar la cobertura y duplicaciones: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async selectFlowLocation(message: DashboardWebviewMessage): Promise<void> {
+    const issue = this.findIssue(message.issueKey);
+    if (!issue) return;
+    const flowIndex = Math.max(0, message.flowIndex ?? 0);
+    const locationIndex = Math.max(0, message.locationIndex ?? 0);
+    this.flowController.setIssue(issue, flowIndex);
+    this.flowController.select(flowIndex, locationIndex);
+    const location = issue.flows[flowIndex]?.locations[locationIndex]
+      ?? issue.secondaryLocations[locationIndex];
+    if (location) {
+      await this.flowController.openLocation(location);
     }
   }
 

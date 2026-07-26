@@ -27,5 +27,18 @@
   "configuration.scannerMode.custom": "Runs the configured custom command.",
   "configuration.sonar_buildCommand.description": "Optional build command run before the generic scanner or instead of dotnet build.",
   "configuration.sonar_customScannerCommand.description": "Custom analysis command. The token is provided through SONAR_TOKEN.",
-  "capabilities.untrusted.description": "The dashboard can query SonarQube, but repository analysis requires a trusted workspace."
+  "capabilities.untrusted.description": "The dashboard can query SonarQube, but repository analysis requires a trusted workspace.",
+  "views.issues.name": "Issue explorer",
+  "command.nextIssue": "SonarQube Dashboard: Go to next issue",
+  "command.previousIssue": "SonarQube Dashboard: Go to previous issue",
+  "command.nextIssueSameType": "SonarQube Dashboard: Next issue of the same type",
+  "command.nextCriticalIssue": "SonarQube Dashboard: Next Blocker/Critical issue",
+  "command.toggleCurrentFileIssues": "SonarQube Dashboard: Toggle current-file issues",
+  "command.groupIssues": "SonarQube Dashboard: Group issues",
+  "command.previousFlowLocation": "SonarQube Dashboard: Previous flow location",
+  "command.nextFlowLocation": "SonarQube Dashboard: Next flow location",
+  "command.showCoverage": "SonarQube Dashboard: Show coverage and duplications",
+  "configuration.notifications.enabled": "Shows notifications when critical issues appear, the Quality Gate fails, issue count increases, hotspots appear, or an analysis finishes.",
+  "configuration.notifications.significantIncreasePercent": "Percentage increase required to consider issue growth significant.",
+  "configuration.notifications.significantIncreaseMinimum": "Minimum number of new issues required before showing the increase notification."
 }

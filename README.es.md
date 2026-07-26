@@ -33,6 +33,11 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Ratings de Maintainability, Reliability, Security y Security Review.
 - Estado y detalle completo del Quality Gate.
 - Tabla de defectos con filtro y navegación al código.
+- Gestión del ciclo de vida del defecto sin salir de VS Code: aceptar, falso positivo, reapertura, asignación, comentarios, historial y responsable actual.
+- Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias, CodeLens y decoraciones en el editor.
+- Vista de cobertura y duplicación con métricas globales/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico.
+- Navegación mediante atajos, contador en la barra de estado y explorador agrupado por archivo, regla o severidad.
+- Notificaciones automáticas de regresiones, fallos del Quality Gate, nuevos hotspots y análisis completados.
 - Tabla específica de Security Hotspots.
 - Rankings de archivos y reglas con ordenación por columnas.
 - Evolución histórica por tipo de issue y criticidad.
@@ -185,6 +190,73 @@ Las condiciones fallidas aparecen primero. El modal diferencia entre el total de
 
 El modal está dividido en **header**, **body** y **footer**. Solo el body tiene scroll, por lo que el título y los botones permanecen siempre visibles.
 
+
+## Gestión del ciclo de vida del defecto
+
+Selecciona **Gestionar defecto** desde la tabla de Defectos, el tooltip del editor o el explorador para abrir el modal de gestión. Según las operaciones que SonarQube devuelva para el token actual, permite:
+
+- aceptar un defecto;
+- marcarlo como falso positivo o como no se corregirá;
+- reabrirlo, confirmarlo o resolverlo;
+- asignar o quitar el responsable;
+- añadir comentarios;
+- consultar comentarios, historial de cambios, autor, fechas, estado, resolución y responsable.
+
+Antes de cualquier operación de escritura se muestra una confirmación nativa. Los botones de estado se crean únicamente a partir de las transiciones devueltas por `/api/issues/transitions`, y la asignación solo se muestra cuando el token puede obtener usuarios asignables. La autorización del servidor sigue siendo la fuente final de verdad y los errores de la API se muestran sin descartar el estado actual del dashboard.
+
+## Flujos de seguridad y ubicaciones secundarias
+
+Los defectos que incluyen execution flows muestran todas las ubicaciones locales implicadas:
+
+- source;
+- pasos intermedios;
+- sink;
+- otras ubicaciones relacionadas.
+
+El modal incluye los botones **Anterior** y **Siguiente**, además de la lista completa de ubicaciones. Al seleccionar una ubicación se abre su archivo y línea. Mientras el flujo está activo, VS Code muestra decoraciones de línea y CodeLens para recorrer el camino directamente desde el editor.
+
+## Cobertura y duplicaciones
+
+La pestaña **Cobertura y duplicación** incluye vistas independientes para Overall y New Code de:
+
+- cobertura, cobertura de líneas y cobertura de condiciones;
+- líneas a cubrir y líneas sin cubrir;
+- densidad de líneas duplicadas, bloques duplicados y líneas duplicadas;
+- archivos con menor cobertura;
+- archivos con mayor duplicación;
+- evolución histórica de cobertura y duplicación.
+
+Al seleccionar un archivo se cargan los datos por línea bajo demanda. Las líneas cubiertas, parcialmente cubiertas y no cubiertas se marcan en el gutter y el overview ruler. Las líneas duplicadas utilizan una decoración propia, y el modal de detalle enumera cada bloque duplicado junto con todos los archivos y rangos locales coincidentes.
+
+La cobertura depende de que los informes de pruebas correspondientes se hayan importado durante el análisis. Cuando SonarQube no contiene cobertura para un archivo, la extensión no añade decoraciones.
+
+## Navegación rápida entre defectos
+
+La extensión añade un **Explorador de defectos** bajo el resumen lateral. Puede agrupar los defectos locales por archivo, regla o severidad y limitarse al archivo activo.
+
+Atajos predeterminados:
+
+| Acción | Windows/Linux | macOS |
+|---|---|---|
+| Siguiente defecto | `Ctrl+Alt+Down` | `Cmd+Alt+Down` |
+| Defecto anterior | `Ctrl+Alt+Up` | `Cmd+Alt+Up` |
+| Siguiente defecto del mismo tipo | `Ctrl+Alt+T` | `Cmd+Alt+T` |
+| Siguiente Blocker/Critical | `Ctrl+Alt+C` | `Cmd+Alt+C` |
+
+La barra de estado muestra la posición actual, por ejemplo `3/12`, y abre el siguiente defecto al seleccionarla.
+
+## Notificaciones automáticas
+
+Las notificaciones pueden activarse o desactivarse desde la configuración del dashboard o desde los ajustes de VS Code. La extensión avisa cuando una sincronización detecta:
+
+- nuevos defectos Blocker, Critical o High;
+- un Quality Gate que pasa de OK a WARN/ERROR;
+- un aumento significativo configurable de defectos locales;
+- nuevos Security Hotspots;
+- finalización de un análisis iniciado por la extensión.
+
+El umbral predeterminado es un aumento del 20% y al menos cinco defectos adicionales. Puede modificarse mediante `sonarQubeDashboard.notifications.significantIncreasePercent` y `sonarQubeDashboard.notifications.significantIncreaseMinimum`.
+
 ## Security Hotspots
 
 ![Tabla y detalle de Security Hotspots](docs/images/security-hotspots2.png)
@@ -318,7 +390,10 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
   "sonarQubeDashboard.sonar.buildCommand": "",
   "sonarQubeDashboard.sonar.customScannerCommand": "",
   "sonarQubeDashboard.autoRefresh": true,
-  "sonarQubeDashboard.refreshIntervalMinutes": 0
+  "sonarQubeDashboard.refreshIntervalMinutes": 0,
+  "sonarQubeDashboard.notifications.enabled": true,
+  "sonarQubeDashboard.notifications.significantIncreasePercent": 20,
+  "sonarQubeDashboard.notifications.significantIncreaseMinimum": 5
 }
 ```
 

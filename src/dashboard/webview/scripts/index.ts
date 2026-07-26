@@ -10,6 +10,8 @@ import { HOTSPOTS_TABLE_SCRIPT } from './tables/hotspotsTable';
 import { ISSUES_TABLE_SCRIPT } from './tables/issuesTable';
 import { RANKING_TABLES_SCRIPT } from './tables/rankingTables';
 import { ANALYSIS_SCRIPT } from './analysis';
+import { ISSUE_DIALOG_SCRIPT } from './modals/issueDialog';
+import { COVERAGE_SCRIPT } from './coverage';
 
 export function getDashboardScript(language: DashboardLanguage, locale: string): string {
   return [
@@ -19,8 +21,10 @@ export function getDashboardScript(language: DashboardLanguage, locale: string):
     HOTSPOTS_TABLE_SCRIPT,
     HOTSPOT_DIALOG_SCRIPT,
     QUALITY_GATE_DIALOG_SCRIPT,
+    ISSUE_DIALOG_SCRIPT,
     RANKING_TABLES_SCRIPT,
     CHARTS_SCRIPT,
+    COVERAGE_SCRIPT,
     ANALYSIS_SCRIPT,
     RENDER_SCRIPT,
     EVENTS_SCRIPT

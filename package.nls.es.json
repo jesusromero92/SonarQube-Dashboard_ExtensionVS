@@ -27,5 +27,18 @@
   "configuration.scannerMode.custom": "Ejecuta el comando personalizado configurado.",
   "configuration.sonar_buildCommand.description": "Comando de compilación opcional ejecutado antes del scanner genérico o en lugar de dotnet build.",
   "configuration.sonar_customScannerCommand.description": "Comando personalizado de análisis. El token se proporciona mediante SONAR_TOKEN.",
-  "capabilities.untrusted.description": "El dashboard puede consultar SonarQube, pero analizar el repositorio requiere confiar en el workspace."
+  "capabilities.untrusted.description": "El dashboard puede consultar SonarQube, pero analizar el repositorio requiere confiar en el workspace.",
+  "views.issues.name": "Explorador de defectos",
+  "command.nextIssue": "SonarQube Dashboard: Ir al siguiente defecto",
+  "command.previousIssue": "SonarQube Dashboard: Ir al defecto anterior",
+  "command.nextIssueSameType": "SonarQube Dashboard: Siguiente defecto del mismo tipo",
+  "command.nextCriticalIssue": "SonarQube Dashboard: Siguiente Blocker/Critical",
+  "command.toggleCurrentFileIssues": "SonarQube Dashboard: Alternar defectos del archivo abierto",
+  "command.groupIssues": "SonarQube Dashboard: Agrupar defectos",
+  "command.previousFlowLocation": "SonarQube Dashboard: Ubicación anterior del flujo",
+  "command.nextFlowLocation": "SonarQube Dashboard: Siguiente ubicación del flujo",
+  "command.showCoverage": "SonarQube Dashboard: Mostrar cobertura y duplicaciones",
+  "configuration.notifications.enabled": "Muestra avisos cuando aparecen defectos críticos, falla el Quality Gate, aumentan los defectos, aparecen hotspots o termina un análisis.",
+  "configuration.notifications.significantIncreasePercent": "Porcentaje de aumento necesario para considerar significativo el crecimiento de defectos.",
+  "configuration.notifications.significantIncreaseMinimum": "Número mínimo de defectos nuevos necesario antes de mostrar el aviso de aumento."
 }

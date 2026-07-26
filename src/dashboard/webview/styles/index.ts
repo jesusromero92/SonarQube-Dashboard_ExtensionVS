@@ -5,6 +5,7 @@ import { MODAL_STYLES } from './modals';
 import { CHART_STYLES } from './charts';
 import { RESPONSIVE_STYLES } from './responsive';
 import { ANALYSIS_STYLES } from './analysis';
+import { FEATURE_STYLES } from './features';
 
 export function getDashboardStyles(assets: DashboardWebviewAssets): string {
   return [
@@ -13,6 +14,7 @@ export function getDashboardStyles(assets: DashboardWebviewAssets): string {
     MODAL_STYLES,
     CHART_STYLES,
     ANALYSIS_STYLES,
+    FEATURE_STYLES,
     RESPONSIVE_STYLES
   ].join('');
 }

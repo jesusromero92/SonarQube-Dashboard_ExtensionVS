@@ -32,6 +32,11 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Maintainability, Reliability, Security, and Security Review ratings.
 - Quality Gate status and full condition details.
 - Filterable issue table with direct navigation to source code.
+- Issue lifecycle management without leaving VS Code: accept, false positive, reopen, assignment, comments, history, and current assignee.
+- Security execution-flow navigation with source, intermediate steps, sink, secondary locations, CodeLens, and editor decorations.
+- Coverage and duplication view with global/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and historical trends.
+- Keyboard navigation, status-bar counter, and an issue explorer grouped by file, rule, or severity.
+- Automatic regression notifications for critical issues, Quality Gate failures, issue increases, new hotspots, and completed analyses.
 - Dedicated Security Hotspots table.
 - File and rule rankings with sortable columns.
 - Historical evolution by issue type and severity.
@@ -184,6 +189,73 @@ Failed conditions are listed first. The dialog distinguishes between the total n
 
 The dialog is divided into **header**, **body**, and **footer**. Only the body scrolls, so the title and action buttons remain visible.
 
+
+## Issue lifecycle management
+
+Select **Manage issue** from the Issues table, an editor hover, or the issue explorer to open the lifecycle dialog. Depending on the operations returned by SonarQube for the current token, the dialog can:
+
+- accept an issue;
+- mark it as false positive or won’t fix;
+- reopen, confirm, or resolve it;
+- assign or unassign a user;
+- add comments;
+- inspect comments, change history, author, dates, status, resolution, and assignee.
+
+Every write operation displays a native confirmation dialog before SonarQube is modified. Status buttons are created only from the transitions returned by `/api/issues/transitions`; assignment controls are shown only when the token can list assignable users. Server-side authorization remains the final source of truth and API errors are displayed without discarding the current dashboard state.
+
+## Security flows and secondary locations
+
+Issues that include execution flows expose all local locations involved in the finding:
+
+- source;
+- intermediate steps;
+- sink;
+- other related locations.
+
+The lifecycle dialog includes **Previous** and **Next** controls and a complete location list. Selecting a location opens the corresponding file and line. While a flow is active, VS Code displays colored whole-line decorations and CodeLens entries so the path can be followed directly in the editor.
+
+## Coverage and duplications
+
+The **Coverage and duplication** data tab provides separate Overall and New Code views for:
+
+- coverage, line coverage, and condition coverage;
+- lines to cover and uncovered lines;
+- duplicated-line density, duplicated blocks, and duplicated lines;
+- files with the lowest coverage;
+- files with the highest duplication;
+- historical coverage and duplication charts.
+
+Selecting a file loads line-level data on demand. Covered, partially covered, and uncovered lines are marked in the gutter and overview ruler. Duplicated lines receive a dedicated decoration, and the detail dialog lists each duplicated block together with every matching local file and range.
+
+Coverage requires the corresponding test reports to have been imported by the scanner during analysis. When SonarQube has no coverage data for a file, the extension leaves it undecorated.
+
+## Quick issue navigation
+
+The extension contributes an **Issue explorer** below the side-panel summary. It can group local issues by file, rule, or severity and can be restricted to the active file.
+
+Default shortcuts:
+
+| Action | Windows/Linux | macOS |
+|---|---|---|
+| Next issue | `Ctrl+Alt+Down` | `Cmd+Alt+Down` |
+| Previous issue | `Ctrl+Alt+Up` | `Cmd+Alt+Up` |
+| Next issue of the same type | `Ctrl+Alt+T` | `Cmd+Alt+T` |
+| Next Blocker/Critical issue | `Ctrl+Alt+C` | `Cmd+Alt+C` |
+
+The status bar shows the current position, for example `3/12`, and opens the next issue when selected.
+
+## Automatic notifications
+
+Notifications can be enabled or disabled from the dashboard configuration or VS Code settings. The extension notifies when synchronization detects:
+
+- new Blocker, Critical, or High issues;
+- a Quality Gate change from OK to WARN/ERROR;
+- a configurable significant increase in local issues;
+- new Security Hotspots;
+- completion of an analysis launched by the extension.
+
+The default significant-increase threshold is 20% with at least five additional issues. These values can be changed through `sonarQubeDashboard.notifications.significantIncreasePercent` and `sonarQubeDashboard.notifications.significantIncreaseMinimum`.
+
 ## Security Hotspots
 
 ![Security Hotspots table and details](docs/images/security-hotspots2.png)
@@ -317,7 +389,10 @@ When the active folder changes, the extension selects the matching configuration
   "sonarQubeDashboard.sonar.buildCommand": "",
   "sonarQubeDashboard.sonar.customScannerCommand": "",
   "sonarQubeDashboard.autoRefresh": true,
-  "sonarQubeDashboard.refreshIntervalMinutes": 0
+  "sonarQubeDashboard.refreshIntervalMinutes": 0,
+  "sonarQubeDashboard.notifications.enabled": true,
+  "sonarQubeDashboard.notifications.significantIncreasePercent": 20,
+  "sonarQubeDashboard.notifications.significantIncreaseMinimum": 5
 }
 ```
 

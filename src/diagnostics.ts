@@ -2,15 +2,21 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { SEVERITY_RANKS } from './constants';
 import {
-  DashboardIssue,
+  CoverageFileSummary,
+  CoverageSummary,
   DashboardHotspot,
+  DashboardIssue,
+  DashboardIssueFlow,
+  DashboardIssueLocation,
   DashboardSeverity,
   LoadedIssues,
   PublishResult,
+  RemoteCoverageData,
   SonarImpact,
   SonarHotspot,
   SonarInstanceMode,
-  SonarIssue
+  SonarIssue,
+  SonarIssueLocation
 } from './types';
 
 function highestImpact(impacts: SonarImpact[] | undefined): string | undefined {
@@ -30,11 +36,9 @@ export function issueSeverityLabel(
   if (instanceMode === 'MQR') {
     return impactSeverity || standardSeverity || 'UNKNOWN';
   }
-
   if (instanceMode === 'STANDARD') {
     return standardSeverity || impactSeverity || 'UNKNOWN';
   }
-
   return impactSeverity || standardSeverity || 'UNKNOWN';
 }
 
@@ -47,7 +51,6 @@ function vscodeSeverity(
   instanceMode: SonarInstanceMode
 ): vscode.DiagnosticSeverity {
   const severity = issueSeverityLabel(issue, instanceMode).toUpperCase();
-
   switch (severity) {
     case 'BLOCKER':
     case 'CRITICAL':
@@ -69,27 +72,18 @@ function issueRange(issue: SonarIssue): vscode.Range {
     const startLine = Math.max(0, issue.textRange.startLine - 1);
     const endLine = Math.max(startLine, issue.textRange.endLine - 1);
     const startCharacter = Math.max(0, issue.textRange.startOffset);
-    const endCharacter =
-      endLine === startLine
-        ? Math.max(startCharacter + 1, issue.textRange.endOffset)
-        : Math.max(0, issue.textRange.endOffset);
-
-    return new vscode.Range(
-      startLine,
-      startCharacter,
-      endLine,
-      endCharacter
-    );
+    const endCharacter = endLine === startLine
+      ? Math.max(startCharacter + 1, issue.textRange.endOffset)
+      : Math.max(0, issue.textRange.endOffset);
+    return new vscode.Range(startLine, startCharacter, endLine, endCharacter);
   }
-
   const line = Math.max(0, (issue.line ?? 1) - 1);
   return new vscode.Range(line, 0, line, 1);
 }
 
-function normalizeRelativePath(candidate: string): string | undefined {
+export function normalizeRelativePath(candidate: string): string | undefined {
   const unixPath = candidate.replace(/\\/g, '/').replace(/^\/+/, '');
   const normalized = path.posix.normalize(unixPath);
-
   if (
     normalized === '.' ||
     normalized === '..' ||
@@ -98,37 +92,45 @@ function normalizeRelativePath(candidate: string): string | undefined {
   ) {
     return undefined;
   }
-
   return normalized;
 }
 
 function resolveIssuePath(
-  issue: SonarIssue,
+  component: string,
   projectKey: string,
   componentPaths: Map<string, string>
 ): string | undefined {
-  const componentPath = componentPaths.get(issue.component);
+  const componentPath = componentPaths.get(component);
   if (componentPath) {
     return normalizeRelativePath(componentPath);
   }
-
   const prefix = `${projectKey}:`;
-  if (issue.component.startsWith(prefix)) {
-    return normalizeRelativePath(issue.component.slice(prefix.length));
+  if (component.startsWith(prefix)) {
+    return normalizeRelativePath(component.slice(prefix.length));
   }
-
   return undefined;
 }
 
-async function resolveLocalFile(
+async function isFile(uri: vscode.Uri): Promise<boolean> {
+  try {
+    const stat = await vscode.workspace.fs.stat(uri);
+    return (stat.type & vscode.FileType.File) !== 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveLocalFile(
   folder: vscode.WorkspaceFolder,
   projectKey: string,
   baseDir: string | undefined,
   component: string,
-  componentPaths: Map<string, string>
+  componentPaths: Map<string, string>,
+  explicitPath?: string
 ): Promise<{ relativePath: string; uri: vscode.Uri } | undefined> {
-  const issueLike = { component } as SonarIssue;
-  const issuePath = resolveIssuePath(issueLike, projectKey, componentPaths);
+  const issuePath = explicitPath
+    ? normalizeRelativePath(explicitPath)
+    : resolveIssuePath(component, projectKey, componentPaths);
   if (!issuePath) {
     return undefined;
   }
@@ -142,6 +144,67 @@ async function resolveLocalFile(
     return undefined;
   }
   return { relativePath, uri };
+}
+
+async function mapLocation(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  componentPaths: Map<string, string>,
+  location: SonarIssueLocation,
+  role: DashboardIssueLocation['role']
+): Promise<DashboardIssueLocation | undefined> {
+  const local = await resolveLocalFile(
+    folder,
+    projectKey,
+    baseDir,
+    location.component,
+    componentPaths
+  );
+  if (!local) {
+    return undefined;
+  }
+  const line = Math.max(1, location.textRange?.startLine ?? 1);
+  return {
+    component: location.component,
+    message: location.msg ?? '',
+    relativePath: local.relativePath,
+    fileUri: local.uri.toString(),
+    line,
+    endLine: Math.max(line, location.textRange?.endLine ?? line),
+    role
+  };
+}
+
+async function mapIssueFlows(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  componentPaths: Map<string, string>,
+  issue: SonarIssue
+): Promise<{ flows: DashboardIssueFlow[]; secondaryLocations: DashboardIssueLocation[] }> {
+  const mappedFlows = await Promise.all((issue.flows ?? []).map(async (flow, flowIndex) => {
+    const rawLocations = flow.locations ?? [];
+    const mapped = await Promise.all(rawLocations.map((location, index) => {
+      const role: DashboardIssueLocation['role'] = rawLocations.length <= 1
+        ? 'related'
+        : index === 0
+          ? 'source'
+          : index === rawLocations.length - 1
+            ? 'sink'
+            : 'intermediate';
+      return mapLocation(folder, projectKey, baseDir, componentPaths, location, role);
+    }));
+    return {
+      index: flowIndex,
+      locations: mapped.filter((location): location is DashboardIssueLocation => Boolean(location))
+    };
+  }));
+  const flows = mappedFlows.filter(flow => flow.locations.length > 0);
+  return {
+    flows,
+    secondaryLocations: flows.flatMap(flow => flow.locations)
+  };
 }
 
 async function toDashboardIssue(
@@ -162,13 +225,26 @@ async function toDashboardIssue(
     return undefined;
   }
   const severity = issueSeverityLabel(issue, loaded.instanceMode);
+  const flowData = await mapIssueFlows(
+    folder,
+    issue.project || projectKey,
+    baseDir,
+    loaded.componentPaths,
+    issue
+  );
   return {
     key: issue.key,
     rule: issue.rule,
     ruleName: issue.ruleName || issue.rule,
     status: issue.status || '',
+    resolution: issue.resolution ?? '',
+    assignee: issue.assignee ?? '',
+    author: issue.author ?? '',
+    creationDate: issue.creationDate ?? '',
+    updateDate: issue.updateDate ?? '',
     project: issue.project || projectKey,
     component: issue.component,
+    folderUri: folder.uri.toString(),
     impacts: issue.impacts || [],
     severity,
     severityRank: issueSeverityRank(severity),
@@ -176,7 +252,9 @@ async function toDashboardIssue(
     message: issue.message,
     relativePath: local.relativePath,
     fileUri: local.uri.toString(),
-    line: Math.max(1, issue.textRange?.startLine ?? issue.line ?? 1)
+    line: Math.max(1, issue.textRange?.startLine ?? issue.line ?? 1),
+    flows: flowData.flows,
+    secondaryLocations: flowData.secondaryLocations
   };
 }
 
@@ -239,13 +317,48 @@ export async function mapFolderHotspots(
   return mapped.filter((hotspot): hotspot is DashboardHotspot => Boolean(hotspot));
 }
 
-async function isFile(uri: vscode.Uri): Promise<boolean> {
-  try {
-    const stat = await vscode.workspace.fs.stat(uri);
-    return (stat.type & vscode.FileType.File) !== 0;
-  } catch {
-    return false;
-  }
+const EMPTY_COVERAGE_TOTALS = {
+  coverage: null,
+  lineCoverage: null,
+  branchCoverage: null,
+  linesToCover: 0,
+  uncoveredLines: 0,
+  duplicatedLinesDensity: null,
+  duplicatedBlocks: 0,
+  duplicatedLines: 0
+} as const;
+
+export async function mapFolderCoverage(
+  folder: vscode.WorkspaceFolder,
+  projectKey: string,
+  baseDir: string | undefined,
+  coverage: RemoteCoverageData
+): Promise<CoverageSummary> {
+  const mapped = await Promise.all(coverage.files.map(async file => {
+    const local = await resolveLocalFile(
+      folder,
+      projectKey,
+      baseDir,
+      file.component,
+      new Map(),
+      file.path
+    );
+    if (!local) {
+      return undefined;
+    }
+    return {
+      ...file,
+      relativePath: local.relativePath,
+      fileUri: local.uri.toString(),
+      folderUri: folder.uri.toString(),
+      projectKey
+    } satisfies CoverageFileSummary;
+  }));
+  return {
+    overall: coverage.overall ?? { ...EMPTY_COVERAGE_TOTALS },
+    newCode: coverage.newCode ?? { ...EMPTY_COVERAGE_TOTALS },
+    files: mapped.filter((file): file is CoverageFileSummary => Boolean(file))
+  };
 }
 
 export async function publishFolderDiagnostics(
@@ -261,40 +374,27 @@ export async function publishFolderDiagnostics(
   let skipped = 0;
 
   for (const issue of loaded.issues) {
-    const dashboardIssue = await toDashboardIssue(
-      folder,
-      projectKey,
-      baseDir,
-      loaded,
-      issue
-    );
+    const dashboardIssue = await toDashboardIssue(folder, projectKey, baseDir, loaded, issue);
     if (!dashboardIssue) {
       skipped += 1;
       continue;
     }
-
     const diagnostic = new vscode.Diagnostic(
       issueRange(issue),
       `[${issue.ruleName || issue.rule}] ${issue.message}`,
       vscodeSeverity(issue, loaded.instanceMode)
     );
-
     diagnostic.source = 'SonarQube Dashboard';
     diagnostic.code = issue.key;
-
-    const uriString = dashboardIssue.fileUri;
-    const current = diagnosticsByUri.get(uriString) ?? [];
+    const current = diagnosticsByUri.get(dashboardIssue.fileUri) ?? [];
     current.push(diagnostic);
-    diagnosticsByUri.set(uriString, current);
-
+    diagnosticsByUri.set(dashboardIssue.fileUri, current);
     dashboardIssues.push(dashboardIssue);
-
     published += 1;
   }
 
   for (const [uriString, fileDiagnostics] of diagnosticsByUri) {
     collection.set(vscode.Uri.parse(uriString), fileDiagnostics);
   }
-
   return { published, skipped, issues: dashboardIssues };
 }

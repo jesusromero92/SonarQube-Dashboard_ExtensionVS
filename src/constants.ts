@@ -21,7 +21,10 @@ export const SONAR_CONFIGURATION_KEYS = {
 export const DASHBOARD_CONFIGURATION_KEYS = {
   language: 'language',
   autoRefresh: 'autoRefresh',
-  refreshIntervalMinutes: 'refreshIntervalMinutes'
+  refreshIntervalMinutes: 'refreshIntervalMinutes',
+  notificationsEnabled: 'notifications.enabled',
+  significantIncreasePercent: 'notifications.significantIncreasePercent',
+  significantIncreaseMinimum: 'notifications.significantIncreaseMinimum'
 } as const;
 
 export const DASHBOARD_COMMANDS = {
@@ -31,7 +34,19 @@ export const DASHBOARD_COMMANDS = {
   analyze: 'sonarQubeDashboard.analyze',
   cancelAnalysis: 'sonarQubeDashboard.cancelAnalysis',
   showIssueDetail: 'sonarQubeDashboard.showIssueDetail',
-  showHotspotDetail: 'sonarQubeDashboard.showHotspotDetail'
+  showHotspotDetail: 'sonarQubeDashboard.showHotspotDetail',
+  nextIssue: 'sonarQubeDashboard.nextIssue',
+  previousIssue: 'sonarQubeDashboard.previousIssue',
+  nextIssueSameType: 'sonarQubeDashboard.nextIssueSameType',
+  nextCriticalIssue: 'sonarQubeDashboard.nextCriticalIssue',
+  toggleCurrentFileIssues: 'sonarQubeDashboard.toggleCurrentFileIssues',
+  groupIssues: 'sonarQubeDashboard.groupIssues',
+  openIssue: 'sonarQubeDashboard.openIssue',
+  previousFlowLocation: 'sonarQubeDashboard.previousFlowLocation',
+  nextFlowLocation: 'sonarQubeDashboard.nextFlowLocation',
+  openFlowLocation: 'sonarQubeDashboard.openFlowLocation',
+  showCoverage: 'sonarQubeDashboard.showCoverage',
+  showDuplications: 'sonarQubeDashboard.showDuplications'
 } as const;
 
 
@@ -66,6 +81,18 @@ export const DASHBOARD_COLORS = {
     OK: '#22a447',
     WARN: '#eabf00',
     ERROR: '#d4333f'
+  },
+  coverage: {
+    covered: '#22a447',
+    partial: '#eabf00',
+    uncovered: '#d4333f',
+    duplicated: '#8b5cf6'
+  },
+  flows: {
+    source: '#2563eb',
+    intermediate: '#eabf00',
+    sink: '#d4333f',
+    related: '#8b5cf6'
   },
   ratings: {
     A: { foreground: '#00aa00', background: '#e6f7e8' },
@@ -133,7 +160,11 @@ export const SONAR_EVOLUTION_METRICS = [
   'new_critical_violations',
   'new_major_violations',
   'new_minor_violations',
-  'new_info_violations'
+  'new_info_violations',
+  'coverage',
+  'new_coverage',
+  'duplicated_lines_density',
+  'new_duplicated_lines_density'
 ] as const;
 
 export const SONAR_SUMMARY_METRICS = [
@@ -154,6 +185,29 @@ export const SONAR_SUMMARY_METRICS = [
   'new_vulnerabilities',
   'new_security_hotspots'
 ] as const;
+
+
+
+export const SONAR_COVERAGE_METRICS = [
+  'coverage',
+  'new_coverage',
+  'line_coverage',
+  'new_line_coverage',
+  'branch_coverage',
+  'new_branch_coverage',
+  'lines_to_cover',
+  'new_lines_to_cover',
+  'uncovered_lines',
+  'new_uncovered_lines',
+  'duplicated_lines_density',
+  'new_duplicated_lines_density',
+  'duplicated_blocks',
+  'duplicated_lines'
+] as const;
+
+export const ISSUE_TREE_VIEW_ID = 'sonarQubeDashboard.issueTree';
+export const ISSUE_TREE_GROUPS = ['file', 'rule', 'severity'] as const;
+export type IssueTreeGroup = typeof ISSUE_TREE_GROUPS[number];
 
 export const DASHBOARD_WEBVIEW_CONSTANTS = {
   typeIconClasses: {

@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
   "description": "%extension.description%",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -29,7 +29,16 @@
     "onCommand:sonarQubeDashboard.refresh",
     "onCommand:sonarQubeDashboard.clear",
     "onCommand:sonarQubeDashboard.analyze",
-    "onCommand:sonarQubeDashboard.cancelAnalysis"
+    "onCommand:sonarQubeDashboard.cancelAnalysis",
+    "onCommand:sonarQubeDashboard.nextIssue",
+    "onCommand:sonarQubeDashboard.previousIssue",
+    "onCommand:sonarQubeDashboard.nextIssueSameType",
+    "onCommand:sonarQubeDashboard.nextCriticalIssue",
+    "onCommand:sonarQubeDashboard.toggleCurrentFileIssues",
+    "onCommand:sonarQubeDashboard.groupIssues",
+    "onCommand:sonarQubeDashboard.showCoverage",
+    "onCommand:sonarQubeDashboard.previousFlowLocation",
+    "onCommand:sonarQubeDashboard.nextFlowLocation"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -50,6 +59,11 @@
           "name": "%views.panel.name%",
           "visibility": "visible",
           "contextualTitle": "%views.container.title%"
+        },
+        {
+          "id": "sonarQubeDashboard.issueTree",
+          "name": "%views.issues.name%",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     },
@@ -78,6 +92,51 @@
         "command": "sonarQubeDashboard.cancelAnalysis",
         "title": "%command.cancelAnalysis%",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "sonarQubeDashboard.nextIssue",
+        "title": "%command.nextIssue%",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "sonarQubeDashboard.previousIssue",
+        "title": "%command.previousIssue%",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "sonarQubeDashboard.nextIssueSameType",
+        "title": "%command.nextIssueSameType%",
+        "icon": "$(symbol-event)"
+      },
+      {
+        "command": "sonarQubeDashboard.nextCriticalIssue",
+        "title": "%command.nextCriticalIssue%",
+        "icon": "$(error)"
+      },
+      {
+        "command": "sonarQubeDashboard.toggleCurrentFileIssues",
+        "title": "%command.toggleCurrentFileIssues%",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "sonarQubeDashboard.groupIssues",
+        "title": "%command.groupIssues%",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "sonarQubeDashboard.previousFlowLocation",
+        "title": "%command.previousFlowLocation%",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "sonarQubeDashboard.nextFlowLocation",
+        "title": "%command.nextFlowLocation%",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "sonarQubeDashboard.showCoverage",
+        "title": "%command.showCoverage%",
+        "icon": "$(graph)"
       }
     ],
     "configuration": {
@@ -169,8 +228,69 @@
           "default": "",
           "scope": "resource",
           "description": "%configuration.sonar_customScannerCommand.description%"
+        },
+        "sonarQubeDashboard.notifications.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%configuration.notifications.enabled%"
+        },
+        "sonarQubeDashboard.notifications.significantIncreasePercent": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 1000,
+          "scope": "window",
+          "description": "%configuration.notifications.significantIncreasePercent%"
+        },
+        "sonarQubeDashboard.notifications.significantIncreaseMinimum": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "scope": "window",
+          "description": "%configuration.notifications.significantIncreaseMinimum%"
         }
       }
+    },
+    "keybindings": [
+      {
+        "command": "sonarQubeDashboard.nextIssue",
+        "key": "ctrl+alt+down",
+        "mac": "cmd+alt+down",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sonarQubeDashboard.previousIssue",
+        "key": "ctrl+alt+up",
+        "mac": "cmd+alt+up",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sonarQubeDashboard.nextIssueSameType",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "sonarQubeDashboard.nextCriticalIssue",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sonarQubeDashboard.groupIssues",
+          "when": "view == sonarQubeDashboard.issueTree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sonarQubeDashboard.toggleCurrentFileIssues",
+          "when": "view == sonarQubeDashboard.issueTree",
+          "group": "navigation@2"
+        }
+      ]
     }
   },
   "scripts": {

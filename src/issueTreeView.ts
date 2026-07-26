@@ -1,0 +1,97 @@
+import * as vscode from 'vscode';
+import { DASHBOARD_COMMANDS, IssueTreeGroup } from './constants';
+import { getDashboardLanguage } from './i18n';
+import { IssueNavigationManager } from './issueNavigation';
+import { DashboardIssue } from './types';
+
+type TreeNode = GroupNode | IssueNode;
+interface GroupNode { kind: 'group'; label: string; issues: DashboardIssue[]; }
+interface IssueNode { kind: 'issue'; issue: DashboardIssue; }
+
+export class IssueTreeProvider implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
+  private groupBy: IssueTreeGroup = 'file';
+  private readonly emitter = new vscode.EventEmitter<TreeNode | undefined | void>();
+  private readonly subscription: vscode.Disposable;
+  readonly onDidChangeTreeData = this.emitter.event;
+
+  constructor(private readonly navigation: IssueNavigationManager) {
+    this.subscription = navigation.onDidChange(() => this.refresh());
+  }
+
+  setGroupBy(groupBy: IssueTreeGroup): void {
+    this.groupBy = groupBy;
+    this.refresh();
+  }
+
+  getGroupBy(): IssueTreeGroup {
+    return this.groupBy;
+  }
+
+  refresh(): void {
+    this.emitter.fire();
+  }
+
+  getTreeItem(element: TreeNode): vscode.TreeItem {
+    if (element.kind === 'group') {
+      const item = new vscode.TreeItem(
+        element.label,
+        vscode.TreeItemCollapsibleState.Expanded
+      );
+      item.description = String(element.issues.length);
+      item.contextValue = 'sonarIssueGroup';
+      return item;
+    }
+    const issue = element.issue;
+    const item = new vscode.TreeItem(
+      issue.ruleName || issue.message,
+      vscode.TreeItemCollapsibleState.None
+    );
+    item.description = `${issue.severity} · ${issue.relativePath}:${issue.line}`;
+    item.tooltip = new vscode.MarkdownString(
+      `**${issue.ruleName || issue.rule}**\n\n${issue.message}\n\n` +
+      `**${getDashboardLanguage() === 'es' ? 'Archivo' : 'File'}:** ${issue.relativePath}:${issue.line}`
+    );
+    item.command = {
+      command: DASHBOARD_COMMANDS.openIssue,
+      title: getDashboardLanguage() === 'es' ? 'Abrir defecto' : 'Open issue',
+      arguments: [issue.key]
+    };
+    item.iconPath = new vscode.ThemeIcon(
+      ['BLOCKER', 'CRITICAL', 'HIGH'].includes(issue.severity.toUpperCase())
+        ? 'error'
+        : ['MAJOR', 'MEDIUM'].includes(issue.severity.toUpperCase())
+          ? 'warning'
+          : 'info'
+    );
+    item.contextValue = 'sonarIssue';
+    return item;
+  }
+
+  getChildren(element?: TreeNode): TreeNode[] {
+    if (element?.kind === 'group') {
+      return element.issues.map(issue => ({ kind: 'issue', issue }));
+    }
+    if (element) {
+      return [];
+    }
+    const groups = new Map<string, DashboardIssue[]>();
+    for (const issue of this.navigation.getIssues()) {
+      const key = this.groupBy === 'rule'
+        ? issue.ruleName || issue.rule
+        : this.groupBy === 'severity'
+          ? issue.severity
+          : issue.relativePath;
+      const current = groups.get(key) ?? [];
+      current.push(issue);
+      groups.set(key, current);
+    }
+    return [...groups.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([label, issues]) => ({ kind: 'group', label, issues }));
+  }
+
+  dispose(): void {
+    this.subscription.dispose();
+    this.emitter.dispose();
+  }
+}

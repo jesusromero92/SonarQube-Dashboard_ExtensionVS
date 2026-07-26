@@ -94,6 +94,26 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                   </div>
                 </div>
               </details>
+
+              <details>
+                <summary>Notificaciones automáticas</summary>
+                <div class="form-grid advanced-grid notification-settings">
+                  <div class="field full-width-field checkbox-field">
+                    <label>
+                      <input id="notificationsEnabled" type="checkbox" checked>
+                      Avisar de regresiones y análisis completados
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label for="significantIncreasePercent">Porcentaje de aumento significativo</label>
+                    <input id="significantIncreasePercent" type="number" min="1" max="1000" value="20">
+                  </div>
+                  <div class="field">
+                    <label for="significantIncreaseMinimum">Mínimo de nuevos defectos para avisar</label>
+                    <input id="significantIncreaseMinimum" type="number" min="1" value="5">
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div class="form-footer">

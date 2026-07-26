@@ -40,6 +40,29 @@ export function createEmptyRefreshSummary(): RefreshSummary {
       codeSmells: 0,
       vulnerabilities: 0,
       securityHotspots: 0
+    },
+    coverage: {
+      overall: {
+        coverage: null,
+        lineCoverage: null,
+        branchCoverage: null,
+        linesToCover: 0,
+        uncoveredLines: 0,
+        duplicatedLinesDensity: null,
+        duplicatedBlocks: 0,
+        duplicatedLines: 0
+      },
+      newCode: {
+        coverage: null,
+        lineCoverage: null,
+        branchCoverage: null,
+        linesToCover: 0,
+        uncoveredLines: 0,
+        duplicatedLinesDensity: null,
+        duplicatedBlocks: 0,
+        duplicatedLines: 0
+      },
+      files: []
     }
   };
 }

@@ -1,4 +1,5 @@
 import {
+  SONAR_COVERAGE_METRICS,
   SONAR_EVOLUTION_LIMIT,
   SONAR_EVOLUTION_METRICS,
   SONAR_MODE_SETTING_KEY,
@@ -31,7 +32,28 @@ import {
   DashboardHotspotDetail,
   DefectTypeSummary,
   RatingGrade,
-  RatingsSummary
+  RatingsSummary,
+  CoverageTotals,
+  DashboardIssue,
+  DuplicationGroup,
+  DuplicationLocation,
+  FileCoverageDetail,
+  IssueComment,
+  IssueHistoryItem,
+  IssueLifecycleDetail,
+  IssueMutationRequest,
+  IssueTransition,
+  RemoteCoverageData,
+  RemoteCoverageFile,
+  SonarDuplicationFile,
+  SonarDuplicationsResponse,
+  SonarIssueChangelogResponse,
+  SonarIssueTransitionsResponse,
+  SonarMeasureComponent,
+  SonarMeasuresComponentTreeResponse,
+  SonarSourceLinesResponse,
+  SonarUser,
+  SonarUsersResponse
 } from './types';
 
 function normalizeServerUrl(serverUrl: string): string {
@@ -67,6 +89,40 @@ async function requestJson<T>(
   }
 
   return (await response.json()) as T;
+}
+
+async function requestForm<T>(
+  url: URL,
+  token: string,
+  values: Record<string, string>,
+  signal?: AbortSignal
+): Promise<T> {
+  const body = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== '') {
+      body.set(key, value);
+    }
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body,
+    signal
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).trim().slice(0, 500);
+    throw new SonarHttpError(
+      response.status,
+      `SonarQube respondió ${response.status} ${response.statusText}` +
+        (detail ? `: ${detail}` : '')
+    );
+  }
+  const text = await response.text();
+  return (text ? JSON.parse(text) : {}) as T;
 }
 
 class SonarHttpError extends Error {
@@ -310,7 +366,11 @@ function evolutionMetricProperty(metric: string): keyof Omit<EvolutionPoint, 'da
     new_critical_violations: 'newCriticalViolations',
     new_major_violations: 'newMajorViolations',
     new_minor_violations: 'newMinorViolations',
-    new_info_violations: 'newInfoViolations'
+    new_info_violations: 'newInfoViolations',
+    coverage: 'coverage',
+    new_coverage: 'newCoverage',
+    duplicated_lines_density: 'duplicatedLinesDensity',
+    new_duplicated_lines_density: 'newDuplicatedLinesDensity'
   };
   return properties[metric];
 }
@@ -336,7 +396,11 @@ function emptyEvolutionPoint(date: string): EvolutionPoint {
     newCriticalViolations: 0,
     newMajorViolations: 0,
     newMinorViolations: 0,
-    newInfoViolations: 0
+    newInfoViolations: 0,
+    coverage: 0,
+    newCoverage: 0,
+    duplicatedLinesDensity: 0,
+    newDuplicatedLinesDensity: 0
   };
 }
 
@@ -566,6 +630,120 @@ async function fetchSummaryMetrics(
   };
 }
 
+
+function numberMeasure(measures: readonly SonarCurrentMeasure[] | undefined, key: string): number | null {
+  const measure = measures?.find(item => item.metric === key);
+  const raw = measure?.value ?? measure?.period?.value;
+  if (raw === undefined || raw === '') {
+    return null;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function integerMeasure(measures: readonly SonarCurrentMeasure[] | undefined, key: string): number {
+  return Math.max(0, Math.round(numberMeasure(measures, key) ?? 0));
+}
+
+function coverageTotals(measures: readonly SonarCurrentMeasure[] | undefined, newCode: boolean): CoverageTotals {
+  const prefix = newCode ? 'new_' : '';
+  return {
+    coverage: numberMeasure(measures, `${prefix}coverage`),
+    lineCoverage: numberMeasure(measures, `${prefix}line_coverage`),
+    branchCoverage: numberMeasure(measures, `${prefix}branch_coverage`),
+    linesToCover: integerMeasure(measures, `${prefix}lines_to_cover`),
+    uncoveredLines: integerMeasure(measures, `${prefix}uncovered_lines`),
+    duplicatedLinesDensity: numberMeasure(measures, `${prefix}duplicated_lines_density`),
+    duplicatedBlocks: newCode ? 0 : integerMeasure(measures, 'duplicated_blocks'),
+    duplicatedLines: newCode ? 0 : integerMeasure(measures, 'duplicated_lines')
+  };
+}
+
+function remoteCoverageFile(component: SonarMeasureComponent): RemoteCoverageFile | undefined {
+  const path = component.path?.trim();
+  if (!path) {
+    return undefined;
+  }
+  const measures = component.measures ?? [];
+  return {
+    component: component.key,
+    path,
+    name: component.name ?? path.split('/').pop() ?? path,
+    coverage: numberMeasure(measures, 'coverage'),
+    newCoverage: numberMeasure(measures, 'new_coverage'),
+    lineCoverage: numberMeasure(measures, 'line_coverage'),
+    newLineCoverage: numberMeasure(measures, 'new_line_coverage'),
+    branchCoverage: numberMeasure(measures, 'branch_coverage'),
+    newBranchCoverage: numberMeasure(measures, 'new_branch_coverage'),
+    linesToCover: integerMeasure(measures, 'lines_to_cover'),
+    newLinesToCover: integerMeasure(measures, 'new_lines_to_cover'),
+    uncoveredLines: integerMeasure(measures, 'uncovered_lines'),
+    newUncoveredLines: integerMeasure(measures, 'new_uncovered_lines'),
+    duplicatedLinesDensity: numberMeasure(measures, 'duplicated_lines_density'),
+    newDuplicatedLinesDensity: numberMeasure(measures, 'new_duplicated_lines_density'),
+    duplicatedBlocks: integerMeasure(measures, 'duplicated_blocks'),
+    duplicatedLines: integerMeasure(measures, 'duplicated_lines')
+  };
+}
+
+async function fetchCoverageData(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<RemoteCoverageData> {
+  const projectUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component`);
+  projectUrl.searchParams.set('component', config.projectKey);
+  projectUrl.searchParams.set('metricKeys', SONAR_COVERAGE_METRICS.join(','));
+  if (config.branch?.trim()) {
+    projectUrl.searchParams.set('branch', config.branch.trim());
+  }
+
+  const projectPayload = await requestJson<SonarMeasuresComponentResponse>(
+    projectUrl,
+    config.token,
+    signal
+  ).catch(() => ({ component: { measures: [] } }));
+  const projectMeasures = projectPayload.component?.measures ?? [];
+  const files: RemoteCoverageFile[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (files.length < total) {
+    const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component_tree`);
+    url.searchParams.set('component', config.projectKey);
+    url.searchParams.set('metricKeys', SONAR_COVERAGE_METRICS.join(','));
+    url.searchParams.set('qualifiers', 'FIL');
+    url.searchParams.set('strategy', 'leaves');
+    url.searchParams.set('p', String(page));
+    url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
+    if (config.branch?.trim()) {
+      url.searchParams.set('branch', config.branch.trim());
+    }
+    try {
+      const payload = await requestJson<SonarMeasuresComponentTreeResponse>(url, config.token, signal);
+      const pageFiles = (payload.components ?? [])
+        .map(remoteCoverageFile)
+        .filter((item): item is RemoteCoverageFile => Boolean(item));
+      files.push(...pageFiles);
+      total = payload.paging?.total ?? files.length;
+      if ((payload.components ?? []).length === 0) {
+        break;
+      }
+      page += 1;
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+      break;
+    }
+  }
+
+  return {
+    overall: coverageTotals(projectMeasures, false),
+    newCode: coverageTotals(projectMeasures, true),
+    files
+  };
+}
+
 async function fetchIssueSet(
   config: FolderSonarConfig,
   onlyNewCode: boolean,
@@ -580,6 +758,7 @@ async function fetchIssueSet(
     const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
     url.searchParams.set('componentKeys', config.projectKey);
     url.searchParams.set('resolved', 'false');
+    url.searchParams.set('additionalFields', '_all');
     url.searchParams.set('p', String(page));
     url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
     if (onlyNewCode) {
@@ -698,13 +877,15 @@ export async function fetchAllIssues(
     overallResult,
     newCodeResult,
     hotspots,
-    newHotspots
+    newHotspots,
+    coverage
   ] = await Promise.all([
     fetchInstanceMode(config, signal),
     fetchIssueSet(config, false, signal),
     fetchNewIssueSet(config, signal),
     fetchHotspotSet(config, false, signal),
-    fetchHotspotSet(config, true, signal)
+    fetchHotspotSet(config, true, signal),
+    fetchCoverageData(config, signal)
   ]);
   for (const component of [...overallResult.components, ...newCodeResult.components]) {
     if (component.path) {
@@ -735,6 +916,202 @@ export async function fetchAllIssues(
     qualityGate,
     ratings: summaryMetrics.ratings,
     types: summaryMetrics.types,
-    newTypes: summaryMetrics.newTypes
+    newTypes: summaryMetrics.newTypes,
+    coverage
   };
 }
+
+function dashboardIssueFromSearch(issue: SonarIssue, fallback: DashboardIssue): DashboardIssue {
+  return {
+    ...fallback,
+    status: issue.status || fallback.status,
+    resolution: issue.resolution ?? fallback.resolution,
+    assignee: issue.assignee ?? fallback.assignee,
+    author: issue.author ?? fallback.author,
+    creationDate: issue.creationDate ?? fallback.creationDate,
+    updateDate: issue.updateDate ?? fallback.updateDate
+  };
+}
+
+export async function fetchIssueLifecycle(
+  config: FolderSonarConfig,
+  issue: DashboardIssue,
+  signal?: AbortSignal
+): Promise<IssueLifecycleDetail> {
+  const searchUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
+  searchUrl.searchParams.set('issues', issue.key);
+  searchUrl.searchParams.set('additionalFields', '_all');
+  const [search, transitions, changelog, users] = await Promise.all([
+    requestJson<SonarIssuesResponse>(searchUrl, config.token, signal).catch(() => ({ total: 0, issues: [] })),
+    (() => {
+      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/transitions`);
+      url.searchParams.set('issue', issue.key);
+      return requestJson<SonarIssueTransitionsResponse>(url, config.token, signal)
+        .catch(() => ({ transitions: [] }));
+    })(),
+    (() => {
+      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/changelog`);
+      url.searchParams.set('issue', issue.key);
+      return requestJson<SonarIssueChangelogResponse>(url, config.token, signal)
+        .catch(() => ({ changelog: [] }));
+    })(),
+    (() => {
+      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/users/search`);
+      url.searchParams.set('ps', '100');
+      return requestJson<SonarUsersResponse>(url, config.token, signal)
+        .catch(() => ({ users: [] }));
+    })()
+  ]);
+
+  const current = search.issues[0];
+  const comments: IssueComment[] = (current?.comments ?? []).map(comment => ({
+    key: comment.key ?? '',
+    user: comment.login ?? '',
+    text: comment.markdown ?? comment.htmlText ?? '',
+    createdAt: comment.createdAt ?? ''
+  }));
+  const history: IssueHistoryItem[] = (changelog.changelog ?? []).map(entry => ({
+    date: entry.creationDate ?? '',
+    user: entry.userName ?? entry.user ?? '',
+    changes: (entry.diffs ?? []).map(diff => ({
+      field: diff.key ?? '',
+      oldValue: diff.oldValue ?? '',
+      newValue: diff.newValue ?? ''
+    }))
+  }));
+  const transitionItems: IssueTransition[] = (transitions.transitions ?? []).map(item => ({
+    key: item.key,
+    name: item.name ?? item.key
+  }));
+  const availableActions = new Set(
+    (current?.actions ?? []).map(action => action.trim().toLowerCase())
+  );
+  const actionMetadataAvailable = current?.actions !== undefined;
+  const hasBrowsePermission = Boolean(current);
+  const assignableUsers = (users.users ?? []).filter(user => user.active !== false);
+  return {
+    issue: current ? dashboardIssueFromSearch(current, issue) : issue,
+    transitions: transitionItems,
+    comments,
+    history,
+    users: assignableUsers,
+    canComment: actionMetadataAvailable
+      ? availableActions.has('comment')
+      : hasBrowsePermission,
+    canAssign: (actionMetadataAvailable
+      ? availableActions.has('assign')
+      : hasBrowsePermission) && assignableUsers.length > 0
+  };
+}
+
+export async function mutateIssue(
+  config: FolderSonarConfig,
+  request: IssueMutationRequest,
+  signal?: AbortSignal
+): Promise<void> {
+  const base = normalizeServerUrl(config.serverUrl);
+  if (request.kind === 'transition') {
+    if (!request.transition) {
+      throw new Error('No se indicó la transición del defecto.');
+    }
+    await requestForm(
+      new URL(`${base}/api/issues/do_transition`),
+      config.token,
+      { issue: request.issueKey, transition: request.transition },
+      signal
+    );
+    if (request.comment?.trim()) {
+      await requestForm(
+        new URL(`${base}/api/issues/add_comment`),
+        config.token,
+        { issue: request.issueKey, text: request.comment.trim() },
+        signal
+      );
+    }
+    return;
+  }
+  if (request.kind === 'assign') {
+    await requestForm(
+      new URL(`${base}/api/issues/assign`),
+      config.token,
+      { issue: request.issueKey, assignee: request.assignee ?? '' },
+      signal
+    );
+    return;
+  }
+  if (!request.comment?.trim()) {
+    throw new Error('El comentario no puede estar vacío.');
+  }
+  await requestForm(
+    new URL(`${base}/api/issues/add_comment`),
+    config.token,
+    { issue: request.issueKey, text: request.comment.trim() },
+    signal
+  );
+}
+
+function lineStatus(lineHits: number | undefined, conditions: number, coveredConditions: number): 'covered' | 'partial' | 'uncovered' | 'none' {
+  if (lineHits === undefined && conditions === 0) {
+    return 'none';
+  }
+  if ((lineHits ?? 0) <= 0) {
+    return 'uncovered';
+  }
+  if (conditions > 0 && coveredConditions < conditions) {
+    return 'partial';
+  }
+  return 'covered';
+}
+
+export async function fetchFileCoverageDetail(
+  config: FolderSonarConfig,
+  file: import('./types').CoverageFileSummary,
+  signal?: AbortSignal
+): Promise<FileCoverageDetail> {
+  const sourceUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/sources/lines`);
+  sourceUrl.searchParams.set('key', file.component);
+  sourceUrl.searchParams.set('from', '1');
+  sourceUrl.searchParams.set('to', '100000');
+  if (config.branch?.trim()) {
+    sourceUrl.searchParams.set('branch', config.branch.trim());
+  }
+  const source = await requestJson<SonarSourceLinesResponse>(sourceUrl, config.token, signal)
+    .catch(() => ({ sources: [] }));
+
+  const duplicationUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/duplications/show`);
+  duplicationUrl.searchParams.set('key', file.component);
+  if (config.branch?.trim()) {
+    duplicationUrl.searchParams.set('branch', config.branch.trim());
+  }
+  const duplication = await requestJson<SonarDuplicationsResponse>(duplicationUrl, config.token, signal)
+    .catch(() => ({ duplications: [], files: {} }));
+  const fileRefs: Record<string, SonarDuplicationFile> = duplication.files ?? {};
+  const groups: DuplicationGroup[] = (duplication.duplications ?? []).map(group => ({
+    locations: (group.blocks ?? []).map(block => {
+      const referenced = block._ref ? fileRefs[block._ref] : undefined;
+      const component = referenced?.key ?? file.component;
+      const isCurrentFile = !block._ref || component === file.component;
+      return {
+        component,
+        relativePath: isCurrentFile ? file.relativePath : referenced?.name ?? component,
+        fileUri: isCurrentFile ? file.fileUri : '',
+        from: block.from,
+        size: block.size,
+        isCurrentFile
+      } satisfies DuplicationLocation;
+    })
+  }));
+  return {
+    file,
+    lines: (source.sources ?? []).map(line => ({
+      line: line.line,
+      hits: line.lineHits ?? null,
+      conditions: line.conditions ?? 0,
+      coveredConditions: line.coveredConditions ?? 0,
+      duplicated: Boolean(line.duplicated),
+      status: lineStatus(line.lineHits, line.conditions ?? 0, line.coveredConditions ?? 0)
+    })),
+    duplications: groups
+  };
+}
+

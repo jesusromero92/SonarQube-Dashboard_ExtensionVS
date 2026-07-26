@@ -51,6 +51,11 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
       currentDataView = 'hotspots';
       renderDataView();
     });
+    elements.coverageViewTab.addEventListener('click', () => {
+      currentDataView = 'coverage';
+      renderCoverageView();
+      renderDataView();
+    });
     elements.overallScope.addEventListener('click', () => {
       currentScope = 'overall';
       applyScope();
@@ -110,6 +115,75 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
       });
     });
 
+    const closeIssueDialog = () => {
+      if (elements.issueDialog.open) elements.issueDialog.close();
+    };
+    elements.issueDialogClose.addEventListener('click', closeIssueDialog);
+    elements.closeIssueDialog.addEventListener('click', closeIssueDialog);
+    elements.issueDialog.addEventListener('click', event => {
+      if (event.target === elements.issueDialog) closeIssueDialog();
+    });
+    elements.issueAssign.addEventListener('click', () => {
+      if (!selectedManagedIssue) return;
+      vscode.postMessage({
+        type: 'mutateIssue',
+        mutationKind: 'assign',
+        issueKey: selectedManagedIssue.key,
+        folderUri: selectedManagedIssue.folderUri,
+        assignee: elements.issueAssignee.value
+      });
+    });
+    elements.issueAddComment.addEventListener('click', () => {
+      if (!selectedManagedIssue || !elements.issueComment.value.trim()) return;
+      vscode.postMessage({
+        type: 'mutateIssue',
+        mutationKind: 'comment',
+        issueKey: selectedManagedIssue.key,
+        folderUri: selectedManagedIssue.folderUri,
+        comment: elements.issueComment.value.trim()
+      });
+    });
+    elements.issueFlowSelect.addEventListener('change', () => {
+      selectedFlowIndex = Number(elements.issueFlowSelect.value) || 0;
+      selectedFlowLocationIndex = 0;
+      if (selectedManagedIssue) renderIssueFlows(selectedManagedIssue);
+    });
+    const moveFlow = direction => {
+      if (!selectedManagedIssue) return;
+      const flows = selectedManagedIssue.flows?.length
+        ? selectedManagedIssue.flows
+        : [{ index: 0, locations: selectedManagedIssue.secondaryLocations || [] }];
+      const locations = flows[selectedFlowIndex]?.locations || [];
+      if (!locations.length) return;
+      selectedFlowLocationIndex = (selectedFlowLocationIndex + direction + locations.length) % locations.length;
+      renderIssueFlows(selectedManagedIssue);
+      vscode.postMessage({
+        type: 'selectFlowLocation',
+        issueKey: selectedManagedIssue.key,
+        flowIndex: selectedFlowIndex,
+        locationIndex: selectedFlowLocationIndex
+      });
+    };
+    elements.issueFlowPrevious.addEventListener('click', () => moveFlow(-1));
+    elements.issueFlowNext.addEventListener('click', () => moveFlow(1));
+    elements.openManagedIssueFile.addEventListener('click', () => {
+      if (!selectedManagedIssue) return;
+      vscode.postMessage({ type: 'openIssue', fileUri: selectedManagedIssue.fileUri, line: selectedManagedIssue.line });
+    });
+
+    const closeCoverageDialog = () => {
+      if (elements.coverageDialog.open) elements.coverageDialog.close();
+    };
+    elements.coverageDialogClose.addEventListener('click', closeCoverageDialog);
+    elements.closeCoverageDialog.addEventListener('click', closeCoverageDialog);
+    elements.coverageDialog.addEventListener('click', event => {
+      if (event.target === elements.coverageDialog) closeCoverageDialog();
+    });
+    elements.openCoverageFile.addEventListener('click', () => {
+      if (!selectedCoverageFile) return;
+      vscode.postMessage({ type: 'openIssue', fileUri: selectedCoverageFile.fileUri, line: 1 });
+    });
+
     const closeAnalysisDialog = () => {
       if (elements.analysisDialog.open) {
         elements.analysisDialog.close();
@@ -162,7 +236,45 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
           showQualityGateDialog();
           break;
         case 'showIssueDetail':
-          if (message.issue) showRuleDialog(message.issue);
+          if (message.issue) showIssueLifecycleDialog(message.issue);
+          break;
+        case 'showCoverageView':
+          currentDataView = 'coverage';
+          renderCoverageView();
+          renderDataView();
+          if (message.fileUri) {
+            const file = currentSummary.coverage?.files?.find(item => item.fileUri === message.fileUri);
+            if (file) openCoverageDetail(file);
+          }
+          break;
+        case 'issueLifecycleLoading':
+          elements.issueDialogLoading.textContent = 'Cargando gestión del defecto…';
+          elements.issueDialogLoading.hidden = false;
+          elements.issueDialogContent.hidden = true;
+          break;
+        case 'issueLifecycle':
+          renderIssueLifecycle(message.detail || {});
+          break;
+        case 'issueMutationLoading':
+          elements.issueDialogLoading.textContent = 'Actualizando defecto en SonarQube…';
+          elements.issueDialogLoading.hidden = false;
+          elements.issueDialogContent.hidden = true;
+          break;
+        case 'issueLifecycleError':
+          setIssueLifecycleError(message.message);
+          break;
+        case 'coverageDetailLoading':
+          elements.coverageDialogLoading.textContent = 'Cargando cobertura y duplicaciones…';
+          elements.coverageDialogLoading.hidden = false;
+          elements.coverageDialogContent.hidden = true;
+          break;
+        case 'coverageDetail':
+          renderCoverageDetail(message.detail || {});
+          break;
+        case 'coverageDetailError':
+          elements.coverageDialogLoading.textContent = message.message || 'No se pudo cargar la cobertura y duplicaciones.';
+          elements.coverageDialogLoading.hidden = false;
+          elements.coverageDialogContent.hidden = true;
           break;
         case 'showHotspotDetail':
           if (message.hotspot) showHotspotDialog(message.hotspot);

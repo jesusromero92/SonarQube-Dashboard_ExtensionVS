@@ -9,6 +9,8 @@ import {
   DASHBOARD_CONFIGURATION_KEYS,
   DASHBOARD_CONFIGURATION_SECTION,
   DASHBOARD_PANEL_VIEW_TYPE,
+  ISSUE_TREE_GROUPS,
+  ISSUE_TREE_VIEW_ID,
   QUALITY_GATE_STATUS_RANKS,
   RATING_GRADE_RANKS,
   SONAR_CONFIGURATION_SECTION
@@ -22,6 +24,7 @@ import {
 import { DashboardPanel } from './dashboardPanel';
 import {
   issueSeverityRank,
+  mapFolderCoverage,
   mapFolderHotspots,
   mapFolderIssues,
   publishFolderDiagnostics
@@ -30,8 +33,14 @@ import {
   IssueDecorationManager,
   SonarIssueCodeActionProvider
 } from './issueDecorations';
+import { CoverageDecorationManager } from './coverageDecorations';
+import { IssueFlowController } from './issueFlowController';
+import { IssueNavigationManager } from './issueNavigation';
+import { IssueTreeProvider } from './issueTreeView';
+import { NotificationManager } from './notificationManager';
 import { fetchAllIssues } from './sonarClient';
 import {
+  CoverageSummary,
   DashboardHotspot,
   DashboardIssue,
   DefectTypeSummary,
@@ -48,6 +57,11 @@ let configurationRefreshTimer: NodeJS.Timeout | undefined;
 let activeRefresh: AbortController | undefined;
 let dashboardPanel: DashboardPanel | undefined;
 let issueDecorations: IssueDecorationManager;
+let coverageDecorations: CoverageDecorationManager;
+let flowController: IssueFlowController;
+let issueNavigation: IssueNavigationManager;
+let issueTree: IssueTreeProvider;
+let notifications: NotificationManager;
 
 function worstRating(current: RatingGrade, candidate: RatingGrade): RatingGrade {
   return RATING_GRADE_RANKS[candidate] > RATING_GRADE_RANKS[current]
@@ -139,13 +153,57 @@ function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
     current.newMajorViolations += point.newMajorViolations;
     current.newMinorViolations += point.newMinorViolations;
     current.newInfoViolations += point.newInfoViolations;
+    current.coverage = Math.max(current.coverage, point.coverage);
+    current.newCoverage = Math.max(current.newCoverage, point.newCoverage);
+    current.duplicatedLinesDensity = Math.max(current.duplicatedLinesDensity, point.duplicatedLinesDensity);
+    current.newDuplicatedLinesDensity = Math.max(current.newDuplicatedLinesDensity, point.newDuplicatedLinesDensity);
   }
   return [...byLabel.values()]
     .sort((left, right) => left.label.localeCompare(right.label))
     .slice(-15);
 }
 
-async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSummary> {
+
+function recomputeCoverageTotals(summary: CoverageSummary): void {
+  const calculate = (newCode: boolean) => {
+    const files = summary.files;
+    const linesToCover = files.reduce(
+      (total, file) => total + (newCode ? file.newLinesToCover : file.linesToCover),
+      0
+    );
+    const uncoveredLines = files.reduce(
+      (total, file) => total + (newCode ? file.newUncoveredLines : file.uncoveredLines),
+      0
+    );
+    const duplicatedLines = newCode ? 0 : files.reduce((total, file) => total + file.duplicatedLines, 0);
+    const duplicatedBlocks = newCode ? 0 : files.reduce((total, file) => total + file.duplicatedBlocks, 0);
+    const coverage = linesToCover > 0
+      ? Math.max(0, Math.min(100, (linesToCover - uncoveredLines) / linesToCover * 100))
+      : null;
+    const densityValues = files
+      .map(file => newCode ? file.newDuplicatedLinesDensity : file.duplicatedLinesDensity)
+      .filter((value): value is number => value !== null);
+    const duplicatedLinesDensity = densityValues.length > 0
+      ? densityValues.reduce((sum, value) => sum + value, 0) / densityValues.length
+      : null;
+    return {
+      coverage,
+      lineCoverage: coverage,
+      branchCoverage: null,
+      linesToCover,
+      uncoveredLines,
+      duplicatedLinesDensity,
+      duplicatedBlocks,
+      duplicatedLines
+    };
+  };
+  if (summary.files.length > 0) {
+    summary.overall = calculate(false);
+    summary.newCode = calculate(true);
+  }
+}
+
+async function refreshAll(context: vscode.ExtensionContext, source: 'sync' | 'analysis' = 'sync'): Promise<RefreshSummary> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   const summary = createEmptyRefreshSummary();
   dashboardPanel?.setLoading(true);
@@ -153,6 +211,9 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   if (folders.length === 0) {
     diagnostics.clear();
     issueDecorations.clear();
+    coverageDecorations.clear();
+    issueNavigation.clear();
+    flowController.clear();
     dashboardPanel?.setRefreshSummary(summary);
     dashboardPanel?.setLoading(false);
     return summary;
@@ -165,6 +226,9 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
 
   diagnostics.clear();
   issueDecorations.clear();
+  coverageDecorations.clear();
+  issueNavigation.clear();
+  flowController.clear();
 
   for (const folder of folders) {
     if (signal.aborted) {
@@ -190,15 +254,21 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
       summary.published += result.published;
       summary.skipped += result.skipped;
       summary.issues.push(...result.issues);
-      const [newIssues, hotspots, newHotspots] = await Promise.all([
+      const [newIssues, hotspots, newHotspots, coverage] = await Promise.all([
         mapFolderIssues(folder, config.projectKey, config.baseDir, loaded, loaded.newIssues),
         mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.hotspots),
-        mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.newHotspots)
+        mapFolderHotspots(folder, config.projectKey, config.baseDir, loaded, loaded.newHotspots),
+        mapFolderCoverage(folder, config.projectKey, config.baseDir, loaded.coverage)
       ]);
       summary.newIssues.push(...newIssues);
       summary.newPublished += newIssues.length;
       summary.hotspots.push(...hotspots);
       summary.newHotspots.push(...newHotspots);
+      summary.coverage.files.push(...coverage.files);
+      if (summary.configuredFolders === 1) {
+        summary.coverage.overall = coverage.overall;
+        summary.coverage.newCode = coverage.newCode;
+      }
       summary.evolution.push(...loaded.evolution);
       summary.qualityGate.status = worstQualityGateStatus(
         summary.qualityGate.status,
@@ -234,6 +304,7 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   summary.types = aggregateTypes(summary.issues, summary.hotspots);
   summary.newTypes = aggregateTypes(summary.newIssues, summary.newHotspots);
   summary.evolution = aggregateEvolution(summary.evolution);
+  recomputeCoverageTotals(summary.coverage);
   summary.issues.sort((left, right) =>
     right.severityRank - left.severityRank ||
     left.relativePath.localeCompare(right.relativePath, localeTag(getDashboardLanguage()), { sensitivity: 'base' }) ||
@@ -255,11 +326,15 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
   summary.hotspots.sort(sortHotspots);
   summary.newHotspots.sort(sortHotspots);
   issueDecorations.setIssues(summary.issues, summary.hotspots);
+  coverageDecorations.setCoverage(summary.coverage);
+  issueNavigation.setIssues(summary.issues);
+  issueTree.refresh();
 
   dashboardPanel?.setRefreshSummary(
     summary,
     summary.configuredFolders > 0
   );
+  await notifications.evaluate(summary, source);
 
   if (summary.errors.length > 0) {
     void vscode.window.setStatusBarMessage(
@@ -317,15 +392,32 @@ function scheduleWorkspaceStateRefresh(): void {
 export function activate(context: vscode.ExtensionContext): void {
   diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
   issueDecorations = new IssueDecorationManager(context.extensionUri);
-  context.subscriptions.push(diagnostics, issueDecorations);
+  coverageDecorations = new CoverageDecorationManager(context, context.extensionUri);
+  flowController = new IssueFlowController();
+  issueNavigation = new IssueNavigationManager();
+  issueTree = new IssueTreeProvider(issueNavigation);
+  notifications = new NotificationManager(context);
+  context.subscriptions.push(
+    diagnostics,
+    issueDecorations,
+    coverageDecorations,
+    flowController,
+    issueNavigation,
+    issueTree
+  );
 
   dashboardPanel = new DashboardPanel(
     context,
-    () => refreshAll(context),
+    source => refreshAll(context, source),
     () => {
       diagnostics.clear();
       issueDecorations.clear();
-    }
+      coverageDecorations.clear();
+      issueNavigation.clear();
+      flowController.clear();
+    },
+    coverageDecorations,
+    flowController
   );
 
   const launcherProvider = new DashboardLauncherViewProvider(
@@ -334,6 +426,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.window.registerTreeDataProvider(ISSUE_TREE_VIEW_ID, issueTree),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, flowController),
     vscode.window.registerWebviewViewProvider(
       DASHBOARD_VIEW_ID,
       launcherProvider,
@@ -365,6 +459,9 @@ export function activate(context: vscode.ExtensionContext): void {
       () => {
         diagnostics.clear();
         issueDecorations.clear();
+        coverageDecorations.clear();
+        issueNavigation.clear();
+        flowController.clear();
         dashboardPanel?.setRefreshSummary(createEmptyRefreshSummary());
       }
     ),
@@ -406,6 +503,54 @@ export function activate(context: vscode.ExtensionContext): void {
         await dashboardPanel?.showHotspotDetail(hotspot);
       }
     ),
+
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.openIssue, async (issueKey: string) => {
+      const issue = issueNavigation.find(issueKey) ?? issueDecorations.getIssue(issueKey);
+      if (issue) await issueNavigation.open(issue);
+    }),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.nextIssue, () => issueNavigation.next()),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.previousIssue, () => issueNavigation.previous()),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.nextIssueSameType, () => issueNavigation.nextSameType()),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.nextCriticalIssue, () => issueNavigation.nextCritical()),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.toggleCurrentFileIssues, async () => {
+      const enabled = issueNavigation.toggleCurrentFileOnly();
+      const spanish = getDashboardLanguage() === 'es';
+      await vscode.window.showInformationMessage(
+        enabled
+          ? (spanish ? 'Mostrando solo los defectos del archivo abierto.' : 'Showing only issues from the open file.')
+          : (spanish ? 'Mostrando los defectos de todo el workspace.' : 'Showing issues from the whole workspace.')
+      );
+    }),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.groupIssues, async () => {
+      const spanish = getDashboardLanguage() === 'es';
+      const selected = await vscode.window.showQuickPick(
+        ISSUE_TREE_GROUPS.map(value => ({
+          value,
+          label: value === 'file'
+            ? (spanish ? 'Archivo' : 'File')
+            : value === 'rule'
+              ? (spanish ? 'Regla' : 'Rule')
+              : (spanish ? 'Severidad' : 'Severity')
+        })),
+        { placeHolder: spanish ? 'Agrupar defectos por…' : 'Group issues by…' }
+      );
+      if (selected) issueTree.setGroupBy(selected.value);
+    }),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.previousFlowLocation, () => flowController.previous()),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.nextFlowLocation, () => flowController.next()),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.openFlowLocation,
+      async (flowIndex: number, locationIndex: number) => {
+        flowController.select(flowIndex, locationIndex);
+        const issue = flowController.getIssue();
+        const location = issue?.flows[flowIndex]?.locations[locationIndex];
+        if (location) await flowController.openLocation(location);
+      }
+    ),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.showCoverage, () => dashboardPanel?.showCoverage()),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.showDuplications, async (fileUri?: string) => {
+      await dashboardPanel?.showCoverage(fileUri);
+    }),
     vscode.languages.registerCodeActionsProvider(
       { scheme: 'file' },
       new SonarIssueCodeActionProvider(issueDecorations),

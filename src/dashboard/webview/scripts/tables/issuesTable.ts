@@ -189,6 +189,24 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
       return cell;
     }
 
+
+    function createIssueActionsCell(issue) {
+      const cell = document.createElement('td');
+      cell.className = 'issue-actions-cell';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'icon-button manage-issue-button';
+      button.textContent = '⋯';
+      button.title = 'Gestionar defecto';
+      button.setAttribute('aria-label', 'Gestionar defecto');
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        showIssueLifecycleDialog(issue);
+      });
+      cell.appendChild(button);
+      return cell;
+    }
+
     function bindOpen(row, issue) {
       if (!issue) {
         return;
@@ -249,6 +267,7 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
         row.appendChild(createTypeCell(issue.type));
         row.appendChild(fileCellUtils.create(issue.relativePath, issue.line));
         row.appendChild(createRuleCell(issue));
+        row.appendChild(createIssueActionsCell(issue));
         elements.issuesBody.appendChild(row);
       }
     }

@@ -86,7 +86,7 @@ function issueHover(issue: DashboardIssue, type: DecoratedIssueType): vscode.Mar
   const commandArguments = encodeURIComponent(JSON.stringify([issue.key]));
   hover.appendMarkdown(
     `\n\n[${
-      spanish ? 'Ver detalle en SonarQube Dashboard' : 'View details in SonarQube Dashboard'
+      spanish ? 'Gestionar defecto en SonarQube Dashboard' : 'Manage issue in SonarQube Dashboard'
     }](command:${DASHBOARD_COMMANDS.showIssueDetail}?${commandArguments})`
   );
   return hover;
@@ -295,8 +295,8 @@ export class SonarIssueCodeActionProvider implements vscode.CodeActionProvider {
       .map(diagnostic => {
         const action = new vscode.CodeAction(
           spanish
-            ? 'Ver detalle en SonarQube Dashboard'
-            : 'View details in SonarQube Dashboard',
+            ? 'Gestionar defecto en SonarQube Dashboard'
+            : 'Manage issue in SonarQube Dashboard',
           vscode.CodeActionKind.QuickFix
         );
         action.diagnostics = [diagnostic];

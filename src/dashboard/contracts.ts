@@ -1,7 +1,7 @@
 import { DashboardLanguage } from '../i18n';
-import { RefreshSummary, ScannerMode } from '../types';
+import { IssueMutationKind, RefreshSummary, ScannerMode } from '../types';
 
-export type RefreshCallback = () => Promise<RefreshSummary>;
+export type RefreshCallback = (source?: 'sync' | 'analysis') => Promise<RefreshSummary>;
 export type ClearCallback = () => void;
 export type DashboardPage = 'data' | 'configuration';
 
@@ -21,4 +21,14 @@ export interface DashboardWebviewMessage {
   line?: number;
   page?: DashboardPage;
   hotspotKey?: string;
+  issueKey?: string;
+  mutationKind?: IssueMutationKind;
+  transition?: string;
+  assignee?: string;
+  comment?: string;
+  flowIndex?: number;
+  locationIndex?: number;
+  notificationsEnabled?: boolean;
+  significantIncreasePercent?: number;
+  significantIncreaseMinimum?: number;
 }
