@@ -22,7 +22,6 @@ export const ISSUE_DIALOG_MARKUP = `  <dialog id="issueDialog" class="detail-dia
             <div id="issueTransitionActions" class="action-grid"></div>
             <div id="issueAssignment" class="inline-form" hidden>
               <label for="issueAssignee">Responsable</label>
-              <input id="issueAssigneeSearch" type="search" placeholder="Buscar usuario por nombre o login" autocomplete="off">
               <select id="issueAssignee"></select>
               <button id="issueAssign" type="button">Asignar</button>
             </div>

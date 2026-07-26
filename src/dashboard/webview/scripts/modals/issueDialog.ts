@@ -1,5 +1,4 @@
 export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
-    let currentLifecycleDetail = null;
     let selectedFlowIndex = 0;
     let selectedFlowLocationIndex = 0;
 
@@ -55,7 +54,6 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
 
     function showIssueLifecycleDialog(issue) {
       selectedManagedIssue = issue;
-      currentLifecycleDetail = null;
       selectedFlowIndex = 0;
       selectedFlowLocationIndex = 0;
       elements.issueDialogTitle.textContent = issue.ruleName || issue.rule || 'Gestión del defecto';
@@ -137,7 +135,6 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
     }
 
     function renderIssueLifecycle(detail) {
-      currentLifecycleDetail = detail;
       selectedManagedIssue = detail.issue;
       const issue = detail.issue;
       elements.issueDialogLoading.hidden = true;
@@ -195,7 +192,6 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
       }
 
       elements.issueAssignment.hidden = !detail.canAssign;
-      elements.issueAssigneeSearch.value = '';
       renderAssignableUsers(detail.users || [], issue.assignee || '');
       elements.issueCommentForm.hidden = !detail.canComment;
       elements.issueComment.value = '';
@@ -243,20 +239,12 @@ export const ISSUE_DIALOG_SCRIPT = `    let selectedManagedIssue = null;
     }
 
     function renderAssignableUsers(users, selectedLogin) {
-      const query = String(elements.issueAssigneeSearch.value || '')
-        .trim()
-        .toLocaleLowerCase(dashboardLocale);
       elements.issueAssignee.textContent = '';
       const unassigned = document.createElement('option');
       unassigned.value = '';
       unassigned.textContent = 'Sin asignar';
       elements.issueAssignee.appendChild(unassigned);
       for (const user of users) {
-        const searchable = String((user.name || '') + ' ' + user.login)
-          .toLocaleLowerCase(dashboardLocale);
-        if (query && !searchable.includes(query) && user.login !== selectedLogin) {
-          continue;
-        }
         const option = document.createElement('option');
         option.value = user.login;
         option.textContent = (user.name || user.login) + (user.name ? ' · ' + user.login : '');

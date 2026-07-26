@@ -95,10 +95,22 @@ export const FEATURE_STYLES = `
       font-size: 11px;
     }
     .action-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-    .inline-form { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(220px, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
-    .inline-form label { grid-column: 1 / -1; }
-    .comment-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 14px; }
-    .comment-form label { grid-column: 1 / -1; margin-bottom: -4px; }
+    .inline-form,
+    .comment-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 130px;
+      gap: 10px;
+      align-items: end;
+      margin-top: 14px;
+    }
+    .inline-form label,
+    .comment-form label { grid-column: 1 / -1; }
+    .comment-form label { margin-bottom: -4px; }
+    .inline-form button,
+    .comment-form button {
+      width: 100%;
+      min-width: 0;
+    }
     .section-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
     .section-heading-row p { margin: 0 0 10px; }
     .dialog-nav-actions { display: flex; gap: 6px; }
@@ -120,6 +132,8 @@ export const FEATURE_STYLES = `
     .flow-location small { grid-column: 2; color: var(--vscode-descriptionForeground); }
     .activity-accordions { display: grid; gap: 8px; }
     .activity-accordion {
+      margin-top: 0;
+      padding-top: 0;
       border: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editor-background);
     }

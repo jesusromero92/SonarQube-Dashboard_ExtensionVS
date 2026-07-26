@@ -238,10 +238,14 @@ export class CoverageDecorationManager implements vscode.Disposable {
       }
       const duplicated = detail.lines
         .filter(line => line.duplicated)
-        .map(line => {
+        .flatMap(line => {
           const lineIndex = Math.min(Math.max(0, line.line - 1), Math.max(0, editor.document.lineCount - 1));
+          const documentLine = editor.document.lineAt(lineIndex);
+          if (!documentLine.text.trim()) {
+            return [];
+          }
           return {
-            range: editor.document.lineAt(lineIndex).range,
+            range: documentLine.range,
             hoverMessage: getDashboardLanguage() === 'es'
               ? 'Esta línea pertenece a un bloque duplicado.'
               : 'This line belongs to a duplicated block.'

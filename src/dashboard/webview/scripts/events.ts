@@ -182,13 +182,6 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
         assignee: elements.issueAssignee.value
       });
     });
-    elements.issueAssigneeSearch.addEventListener('input', () => {
-      if (!currentLifecycleDetail) return;
-      renderAssignableUsers(
-        currentLifecycleDetail.users || [],
-        elements.issueAssignee.value
-      );
-    });
     elements.issueAddComment.addEventListener('click', () => {
       if (!selectedManagedIssue || !elements.issueComment.value.trim()) return;
       vscode.postMessage({

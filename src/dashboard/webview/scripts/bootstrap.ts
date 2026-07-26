@@ -135,7 +135,6 @@ export function getBootstrapScript(language: DashboardLanguage, locale: string):
       issueActionsSection: document.getElementById('issueActionsSection'),
       issueTransitionActions: document.getElementById('issueTransitionActions'),
       issueAssignment: document.getElementById('issueAssignment'),
-      issueAssigneeSearch: document.getElementById('issueAssigneeSearch'),
       issueAssignee: document.getElementById('issueAssignee'),
       issueAssign: document.getElementById('issueAssign'),
       issueCommentForm: document.getElementById('issueCommentForm'),
