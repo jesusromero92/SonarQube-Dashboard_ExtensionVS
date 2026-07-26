@@ -293,7 +293,7 @@ export function getDashboardLauncherHtml(
       </div>
     </div>
     <div id="content" class="content" hidden>
-      <div class="total">
+      <div id="totalSummary" class="total">
         <strong id="total">0</strong>
         <span class="label">Issues encontrados</span>
       </div>
@@ -348,7 +348,7 @@ export function getDashboardLauncherHtml(
           <span id="newCodeSecurityReview" class="rating">—</span>
         </div>
       </div>
-      <div id="empty" class="empty" hidden>No hay datos sincronizados.</div>
+      <div id="empty" class="empty" hidden>No hay un proyecto vinculado.</div>
     </div>
   </section>
   <script nonce="${nonce}">
@@ -359,6 +359,7 @@ export function getDashboardLauncherHtml(
     const reload = document.getElementById('reload');
     const loading = document.getElementById('loading');
     const content = document.getElementById('content');
+    const totalSummary = document.getElementById('totalSummary');
     const total = document.getElementById('total');
     const severityList = document.getElementById('severityList');
     const defectTypes = document.getElementById('defectTypes');
@@ -424,10 +425,12 @@ export function getDashboardLauncherHtml(
       total.textContent = String(summary.published || 0);
       severityList.textContent = '';
       const hasSummary = Boolean(summary.configuredFolders);
+      totalSummary.hidden = !hasSummary;
+      severityList.hidden = !hasSummary;
       qualitySection.hidden = !hasSummary;
       ratings.hidden = !hasSummary;
       defectTypes.hidden = !hasSummary;
-      empty.hidden = Boolean((summary.published || 0) || severities.length || hasSummary);
+      empty.hidden = hasSummary;
       renderGate(qualityGate, gate.status);
       for (const [type, element] of Object.entries(typeCounts)) {
         element.textContent = String(defectSummary[type] || 0);

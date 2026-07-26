@@ -176,7 +176,7 @@ export class DashboardPanel {
     panel.iconPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       'media',
-      'sonarqube-dashboard.svg'
+      'SonarQube.svg'
     );
     panel.webview.options = {
       enableScripts: true

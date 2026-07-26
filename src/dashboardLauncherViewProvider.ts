@@ -53,11 +53,25 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
   }
 
   private postState(): void {
+    const summary = this.dashboardPanel.getRefreshSummary();
+    const issueCount = summary.configuredFolders > 0
+      ? Math.max(0, Math.trunc(summary.published))
+      : 0;
+
+    if (this.view) {
+      this.view.badge = issueCount > 0
+        ? {
+            value: issueCount,
+            tooltip: `${issueCount} ${issueCount === 1 ? 'issue encontrado' : 'issues encontrados'}`
+          }
+        : undefined;
+    }
+
     void this.view?.webview.postMessage({
       type: 'state',
       loading: this.dashboardPanel.isLoading(),
       page: this.dashboardPanel.getCurrentPage(),
-      summary: this.dashboardPanel.getRefreshSummary()
+      summary
     });
   }
 
