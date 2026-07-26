@@ -12,7 +12,10 @@ export const SONAR_CONFIGURATION_KEYS = {
   serverUrl: 'serverUrl',
   projectKey: 'projectKey',
   branch: 'branch',
-  baseDir: 'baseDir'
+  baseDir: 'baseDir',
+  scannerMode: 'scannerMode',
+  buildCommand: 'buildCommand',
+  customScannerCommand: 'customScannerCommand'
 } as const;
 
 export const DASHBOARD_CONFIGURATION_KEYS = {
@@ -23,8 +26,21 @@ export const DASHBOARD_CONFIGURATION_KEYS = {
 export const DASHBOARD_COMMANDS = {
   open: 'sonarQubeDashboard.open',
   refresh: 'sonarQubeDashboard.refresh',
-  clear: 'sonarQubeDashboard.clear'
+  clear: 'sonarQubeDashboard.clear',
+  analyze: 'sonarQubeDashboard.analyze',
+  cancelAnalysis: 'sonarQubeDashboard.cancelAnalysis'
 } as const;
+
+
+export const SCANNER_MODES = [
+  { value: 'auto', label: 'Automático (recomendado)' },
+  { value: 'maven', label: 'Maven · Java / Kotlin' },
+  { value: 'gradle', label: 'Gradle · Java / Kotlin / Android' },
+  { value: 'dotnet', label: '.NET · C# / VB.NET / F#' },
+  { value: 'npm', label: 'Genérico NPM · JavaScript / TypeScript / React / Python y otros' },
+  { value: 'docker', label: 'Docker · SonarScanner CLI' },
+  { value: 'custom', label: 'Comando personalizado' }
+] as const;
 
 export const DASHBOARD_COLORS = {
   types: {

@@ -1,9 +1,14 @@
 
-export const MODAL_STYLES = `    .rule-dialog {
+export const MODAL_STYLES = `    html:has(.rule-dialog[open]) {
+      overflow: hidden;
+      scrollbar-gutter: stable;
+    }
+    .rule-dialog {
       width: min(620px, calc(100vw - 48px));
       max-height: calc(100vh - 48px);
       padding: 0;
       overflow: hidden;
+      overscroll-behavior: contain;
       border: 1px solid var(--vscode-panel-border);
       color: var(--vscode-foreground);
       background: var(--vscode-editorWidget-background);
@@ -34,6 +39,7 @@ export const MODAL_STYLES = `    .rule-dialog {
     .rule-dialog-body {
       padding: 18px 16px 20px;
       overflow-y: auto;
+      overscroll-behavior: contain;
       line-height: 1.55;
       white-space: pre-wrap;
     }
@@ -42,6 +48,7 @@ export const MODAL_STYLES = `    .rule-dialog {
       flex: 1 1 auto;
       overflow-x: hidden;
       overflow-y: auto;
+      overscroll-behavior: contain;
     }
     .dialog-scroll-body .table-wrap {
       max-height: none;

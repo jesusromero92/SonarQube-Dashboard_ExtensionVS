@@ -1,3 +1,4 @@
+import { ANALYSIS_CONTROL_MARKUP } from '../components/analysisControl';
 import { ISSUES_TABLE_MARKUP } from '../components/issuesTable';
 import { RANKING_TABLES_MARKUP } from '../components/rankingTables';
 import { EVOLUTION_CHARTS_MARKUP } from '../components/evolutionCharts';
@@ -22,12 +23,13 @@ const DATA_PAGE_PREFIX = `      <section id="dataPage" class="page">
             <p id="emptyText">Vincula la carpeta abierta con un proyecto de SonarQube para consultar sus defectos.</p>
             <div class="empty-actions">
               <button id="goConfiguration" type="button">Ir a configuración</button>
+              <button id="analyzeEmpty" type="button" hidden>Analizar repositorio</button>
               <button id="syncEmpty" class="secondary" type="button" hidden>Sincronizar datos</button>
             </div>
           </div>
         </section>
 
-        <section id="results" hidden>
+${ANALYSIS_CONTROL_MARKUP}        <section id="results" hidden>
           <div class="dashboard-controls">
             <nav class="segmented" aria-label="Vista de datos">
               <button id="issuesViewTab" class="active" type="button">Defectos</button>

@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { DASHBOARD_PANEL_VIEW_TYPE } from './constants';
 import {
@@ -14,8 +15,9 @@ import {
 } from './dashboard/contracts';
 import { createEmptyRefreshSummary } from './dashboard/summary';
 import { getDashboardHtml } from './dashboard/webview';
+import { AnalysisService } from './scanner/analysisService';
 import { fetchHotspotDetail, fetchVisibleProjects } from './sonarClient';
-import { RefreshSummary } from './types';
+import { RefreshSummary, ScannerMode } from './types';
 
 export class DashboardPanel {
   private panel: vscode.WebviewPanel | undefined;
@@ -30,6 +32,7 @@ export class DashboardPanel {
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
+  private readonly analysisService: AnalysisService;
 
   readonly onDidChangeSummary = this.summaryEmitter.event;
   readonly onDidChangeLoading = this.loadingEmitter.event;
@@ -39,7 +42,11 @@ export class DashboardPanel {
     private readonly context: vscode.ExtensionContext,
     private readonly refreshCallback: RefreshCallback,
     private readonly clearCallback: ClearCallback
-  ) {}
+  ) {
+    this.analysisService = new AnalysisService(context, state => {
+      this.postMessage({ type: 'analysisState', state });
+    });
+  }
 
   async show(page: DashboardPage = this.currentPage): Promise<void> {
     if (this.panel) {
@@ -122,6 +129,14 @@ export class DashboardPanel {
     await this.refreshFromPanel();
   }
 
+  async analyze(): Promise<void> {
+    await this.analyzeRepository(this.selectedFolderUri);
+  }
+
+  cancelAnalysis(): void {
+    this.analysisService.cancel();
+  }
+
   async showQualityGate(): Promise<void> {
     await this.show('data');
     this.postMessage({ type: 'showQualityGate' });
@@ -135,6 +150,7 @@ export class DashboardPanel {
 
   dispose(): void {
     this.projectLoadController?.abort();
+    this.analysisService.dispose();
     this.disposePanelListeners();
     this.panel?.dispose();
     this.panel = undefined;
@@ -169,6 +185,7 @@ export class DashboardPanel {
         if (event.webviewPanel.visible) {
           void this.sendState();
           this.setRefreshSummary(this.lastSummary);
+          this.postMessage({ type: 'analysisState', state: this.analysisService.getState() });
         }
       })
     );
@@ -186,6 +203,7 @@ export class DashboardPanel {
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
         this.postMessage({ type: 'loading', loading: this.loading });
+        this.postMessage({ type: 'analysisState', state: this.analysisService.getState() });
         this.navigate(this.currentPage);
         break;
       case 'selectFolder':
@@ -208,6 +226,12 @@ export class DashboardPanel {
         break;
       case 'refresh':
         await this.refreshFromPanel();
+        break;
+      case 'analyze':
+        await this.analyzeRepository(message.folderUri);
+        break;
+      case 'cancelAnalysis':
+        this.analysisService.cancel();
         break;
       case 'clear':
         this.clearCallback();
@@ -244,12 +268,16 @@ export class DashboardPanel {
         type: 'state',
         folders: [],
         selectedFolderUri: '',
+        workspaceTrusted: vscode.workspace.isTrusted,
         config: {
           serverUrl: '',
           projectKey: '',
           branch: '',
           baseDir: '',
-          hasToken: false
+          hasToken: false,
+          scannerMode: 'auto',
+          buildCommand: '',
+          customScannerCommand: ''
         }
       });
       return;
@@ -272,6 +300,7 @@ export class DashboardPanel {
         uri: folder.uri.toString()
       })),
       selectedFolderUri: this.selectedFolderUri,
+      workspaceTrusted: vscode.workspace.isTrusted,
       config
     });
   }
@@ -356,12 +385,16 @@ export class DashboardPanel {
 
     this.savingConfig = true;
     try {
+      const scannerMode = this.normalizeScannerMode(message.scannerMode);
       await saveFolderConfig(this.context, folder, {
         serverUrl,
         projectKey,
         branch: message.branch ?? '',
         baseDir: message.baseDir ?? '',
-        token
+        token,
+        scannerMode,
+        buildCommand: message.buildCommand ?? '',
+        customScannerCommand: message.customScannerCommand ?? ''
       });
 
       this.postMessage({
@@ -371,7 +404,10 @@ export class DashboardPanel {
           projectKey,
           branch: message.branch ?? '',
           baseDir: message.baseDir ?? '',
-          hasToken: Boolean(token || existingToken)
+          hasToken: Boolean(token || existingToken),
+          scannerMode,
+          buildCommand: message.buildCommand ?? '',
+          customScannerCommand: message.customScannerCommand ?? ''
         }
       });
       this.postStatus('loading', 'Configuración guardada. Sincronizando issues…');
@@ -392,6 +428,91 @@ export class DashboardPanel {
     } finally {
       this.savingConfig = false;
     }
+  }
+
+  private async analyzeRepository(folderUri?: string): Promise<void> {
+    if (this.analysisService.isRunning()) {
+      this.postMessage({ type: 'showAnalysisDialog' });
+      return;
+    }
+
+    const activeFolder = vscode.window.activeTextEditor
+      ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+      : undefined;
+    const folder = this.getWorkspaceFolder(folderUri || this.selectedFolderUri)
+      ?? activeFolder
+      ?? vscode.workspace.workspaceFolders?.[0];
+    if (!folder) {
+      this.postStatus('error', 'Abre una carpeta antes de iniciar el análisis.');
+      return;
+    }
+
+    if (!vscode.workspace.isTrusted) {
+      const manageTrust = 'Gestionar confianza';
+      const action = await vscode.window.showWarningMessage(
+        'Analizar el repositorio puede ejecutar herramientas y comandos del proyecto. Confía en el workspace antes de continuar.',
+        manageTrust
+      );
+      if (action === manageTrust) {
+        await vscode.commands.executeCommand('workbench.trust.manage');
+      }
+      this.postStatus('error', 'Analizar el repositorio requiere confiar en el workspace.');
+      return;
+    }
+
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      this.postStatus('error', 'Configura primero el servidor, el token y el proyecto.');
+      this.navigate('configuration');
+      return;
+    }
+
+    const rootPath = this.analysisRoot(folder, config.baseDir);
+    if (!rootPath) {
+      this.postStatus('error', 'La subcarpeta configurada no pertenece al workspace.');
+      return;
+    }
+
+    this.navigate('data');
+    this.postMessage({ type: 'showAnalysisDialog' });
+
+    try {
+      await this.analysisService.analyze({ rootPath, config });
+      this.analysisService.setRefreshing();
+      const summary = await this.refreshCallback();
+      this.setRefreshSummary(summary, true);
+      if (summary.errors.length > 0) {
+        const message = summary.errors.join(' | ');
+        this.analysisService.setRefreshError(message);
+        this.postStatus('error', message);
+      } else {
+        const message = `Análisis finalizado. ${summary.published} issues encontrados.`;
+        this.analysisService.setRefreshCompleted(message);
+        this.postStatus('success', message);
+      }
+      this.navigate('data');
+    } catch (error) {
+      if (this.analysisService.getState().phase !== 'cancelled') {
+        this.postStatus('error', this.errorMessage(error));
+      }
+    }
+  }
+
+  private analysisRoot(folder: vscode.WorkspaceFolder, baseDir?: string): string | undefined {
+    const normalized = (baseDir ?? '').trim().replace(/\\/g, '/');
+    const segments = normalized
+      .split('/')
+      .map(segment => segment.trim())
+      .filter(Boolean);
+    if (segments.some(segment => segment === '..')) {
+      return undefined;
+    }
+    const root = path.resolve(folder.uri.fsPath, ...segments);
+    const relative = path.relative(folder.uri.fsPath, root);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return undefined;
+    }
+    return root;
   }
 
   private async refreshFromPanel(): Promise<void> {
@@ -492,8 +613,13 @@ export class DashboardPanel {
     }
   }
 
+  private normalizeScannerMode(value?: ScannerMode): ScannerMode {
+    return ['auto', 'maven', 'gradle', 'dotnet', 'npm', 'docker', 'custom'].includes(value ?? '')
+      ? value as ScannerMode
+      : 'auto';
+  }
+
   private errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
   }
-
 }

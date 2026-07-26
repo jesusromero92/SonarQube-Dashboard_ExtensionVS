@@ -318,6 +318,14 @@ export function activate(context: vscode.ExtensionContext): void {
         dashboardPanel?.setRefreshSummary(createEmptyRefreshSummary());
       }
     ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.analyze,
+      () => dashboardPanel?.analyze()
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.cancelAnalysis,
+      () => dashboardPanel?.cancelAnalysis()
+    ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void dashboardPanel?.refreshWorkspaceState();
       if (
@@ -327,6 +335,9 @@ export function activate(context: vscode.ExtensionContext): void {
       ) {
         void refreshAll(context);
       }
+    }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      void dashboardPanel?.refreshWorkspaceState();
     }),
     vscode.workspace.onDidChangeConfiguration(
       (event: vscode.ConfigurationChangeEvent) => {

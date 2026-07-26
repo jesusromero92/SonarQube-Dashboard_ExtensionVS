@@ -8,6 +8,7 @@ import { RULE_DIALOG_SCRIPT } from './modals/ruleDialog';
 import { HOTSPOTS_TABLE_SCRIPT } from './tables/hotspotsTable';
 import { ISSUES_TABLE_SCRIPT } from './tables/issuesTable';
 import { RANKING_TABLES_SCRIPT } from './tables/rankingTables';
+import { ANALYSIS_SCRIPT } from './analysis';
 
 export function getDashboardScript(): string {
   return [
@@ -19,6 +20,7 @@ export function getDashboardScript(): string {
     QUALITY_GATE_DIALOG_SCRIPT,
     RANKING_TABLES_SCRIPT,
     CHARTS_SCRIPT,
+    ANALYSIS_SCRIPT,
     RENDER_SCRIPT,
     EVENTS_SCRIPT
   ].join('');

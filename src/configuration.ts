@@ -4,8 +4,7 @@ import {
   SONAR_CONFIGURATION_SECTION,
   SONAR_TOKEN_KEY_PREFIX
 } from './constants';
-import { FolderSonarConfig, FolderSonarFormConfig } from './types';
-
+import { FolderSonarConfig, FolderSonarFormConfig, ScannerMode } from './types';
 
 export function tokenKey(folder: vscode.WorkspaceFolder): string {
   return `${SONAR_TOKEN_KEY_PREFIX}${folder.uri.toString()}`;
@@ -25,7 +24,10 @@ export async function getFolderFormConfig(
     projectKey: configuration.get<string>(SONAR_CONFIGURATION_KEYS.projectKey, '').trim(),
     branch: configuration.get<string>(SONAR_CONFIGURATION_KEYS.branch, '').trim(),
     baseDir: configuration.get<string>(SONAR_CONFIGURATION_KEYS.baseDir, '').trim(),
-    hasToken: Boolean(await context.secrets.get(tokenKey(folder)))
+    hasToken: Boolean(await context.secrets.get(tokenKey(folder))),
+    scannerMode: configuration.get<ScannerMode>(SONAR_CONFIGURATION_KEYS.scannerMode, 'auto'),
+    buildCommand: configuration.get<string>(SONAR_CONFIGURATION_KEYS.buildCommand, '').trim(),
+    customScannerCommand: configuration.get<string>(SONAR_CONFIGURATION_KEYS.customScannerCommand, '').trim()
   };
 }
 
@@ -45,7 +47,10 @@ export async function getFolderConfig(
     projectKey: form.projectKey,
     branch: form.branch,
     baseDir: form.baseDir,
-    token
+    token,
+    scannerMode: form.scannerMode,
+    buildCommand: form.buildCommand,
+    customScannerCommand: form.customScannerCommand
   };
 }
 
@@ -58,6 +63,9 @@ export async function saveFolderConfig(
     branch: string;
     baseDir: string;
     token?: string;
+    scannerMode?: ScannerMode;
+    buildCommand?: string;
+    customScannerCommand?: string;
   }
 ): Promise<void> {
   const configuration = vscode.workspace.getConfiguration(
@@ -83,6 +91,21 @@ export async function saveFolderConfig(
   await configuration.update(
     SONAR_CONFIGURATION_KEYS.baseDir,
     values.baseDir.trim(),
+    vscode.ConfigurationTarget.WorkspaceFolder
+  );
+  await configuration.update(
+    SONAR_CONFIGURATION_KEYS.scannerMode,
+    values.scannerMode ?? 'auto',
+    vscode.ConfigurationTarget.WorkspaceFolder
+  );
+  await configuration.update(
+    SONAR_CONFIGURATION_KEYS.buildCommand,
+    values.buildCommand?.trim() ?? '',
+    vscode.ConfigurationTarget.WorkspaceFolder
+  );
+  await configuration.update(
+    SONAR_CONFIGURATION_KEYS.customScannerCommand,
+    values.customScannerCommand?.trim() ?? '',
     vscode.ConfigurationTarget.WorkspaceFolder
   );
 

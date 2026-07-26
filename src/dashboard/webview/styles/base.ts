@@ -153,6 +153,7 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
     .action-field button { width: 100%; white-space: nowrap; }
     .workspace-row { margin-bottom: 14px; }
     .advanced-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+    .full-width-field { grid-column: 1 / -1; }
     details { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--vscode-panel-border); }
     summary { color: var(--vscode-descriptionForeground); cursor: pointer; }
     .form-footer {

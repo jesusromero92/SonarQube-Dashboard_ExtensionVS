@@ -1,3 +1,8 @@
+import { SCANNER_MODES } from '../../../constants';
+
+const scannerOptions = SCANNER_MODES
+  .map(mode => `<option value="${mode.value}">${mode.label}</option>`)
+  .join('');
 
 export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" class="page" hidden>
         <section class="panel">
@@ -49,17 +54,32 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
               </div>
 
               <details>
-                <summary>Configuración avanzada</summary>
+                <summary>Configuración avanzada del proyecto y del scanner</summary>
                 <div class="form-grid advanced-grid">
                   <div class="field">
                     <label for="branch">Rama</label>
                     <input id="branch" type="text" placeholder="main" spellcheck="false">
-                    <div class="hint">Déjala vacía para consultar la rama principal.</div>
+                    <div class="hint">Déjala vacía para consultar y analizar la rama principal.</div>
                   </div>
                   <div class="field">
                     <label for="baseDir">Subcarpeta local</label>
                     <input id="baseDir" type="text" placeholder="packages/backend" spellcheck="false">
-                    <div class="hint">Solo es necesaria cuando la raíz analizada está dentro de una subcarpeta.</div>
+                    <div class="hint">La detección y el análisis se ejecutarán desde esta subcarpeta.</div>
+                  </div>
+                  <div class="field">
+                    <label for="scannerMode">Método de análisis</label>
+                    <select id="scannerMode">${scannerOptions}</select>
+                    <div class="hint">Automático detecta Maven, Gradle y .NET; usa NPM si existe package.json o Docker para proyectos genéricos como Python.</div>
+                  </div>
+                  <div class="field">
+                    <label for="buildCommand">Comando de compilación opcional</label>
+                    <input id="buildCommand" type="text" placeholder="npm run build" spellcheck="false">
+                    <div class="hint">Se ejecuta antes del scanner genérico y sustituye a <code>dotnet build</code> en proyectos .NET.</div>
+                  </div>
+                  <div id="customScannerField" class="field full-width-field" hidden>
+                    <label for="customScannerCommand">Comando personalizado</label>
+                    <input id="customScannerCommand" type="text" placeholder="sonar-scanner -Dsonar.projectKey=\${projectKey}" spellcheck="false">
+                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
                   </div>
                 </div>
               </details>

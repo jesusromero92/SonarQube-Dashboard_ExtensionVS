@@ -1,4 +1,4 @@
-import { RefreshSummary } from '../types';
+import { RefreshSummary, ScannerMode } from '../types';
 
 export type RefreshCallback = () => Promise<RefreshSummary>;
 export type ClearCallback = () => void;
@@ -12,6 +12,9 @@ export interface DashboardWebviewMessage {
   projectKey?: string;
   branch?: string;
   baseDir?: string;
+  scannerMode?: ScannerMode;
+  buildCommand?: string;
+  customScannerCommand?: string;
   fileUri?: string;
   line?: number;
   page?: DashboardPage;

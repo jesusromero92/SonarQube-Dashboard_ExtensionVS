@@ -2,7 +2,7 @@
 
 SonarQube Dashboard conecta cada carpeta del workspace con un proyecto de SonarQube y acerca sus resultados al flujo de trabajo de Visual Studio Code.
 
-La extensión permite consultar el estado del proyecto, comparar **Overall** y **New Code**, revisar defectos y Security Hotspots, analizar la evolución entre análisis y publicar los hallazgos directamente en el panel **Problems**.
+La extensión permite ejecutar un nuevo análisis del repositorio, consultar el estado del proyecto, comparar **Overall** y **New Code**, revisar defectos y Security Hotspots, analizar la evolución entre análisis y publicar los hallazgos directamente en el panel **Problems**.
 
 
 ## Requisito para utilizar la extensión
@@ -19,6 +19,9 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 
 ## Características principales
 
+- Análisis del repositorio desde VS Code con detección automática del scanner.
+- Compatibilidad con Maven/Gradle para Java y Kotlin, SonarScanner for .NET para C#/VB.NET/F#, SonarScanner for NPM para proyectos con `package.json` y SonarScanner CLI en Docker para proyectos genéricos.
+- Selección manual de Maven, Gradle, .NET, NPM, Docker o un comando personalizado.
 - Sincronización automática al abrir un proyecto ya vinculado.
 - Configuración independiente por carpeta del workspace.
 - Token protegido mediante `SecretStorage`.
@@ -44,6 +47,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 7. Vincula la carpeta con el proyecto o aplicación de SonarQube que analiza ese código.
 8. Configura opcionalmente la rama y, si las rutas no parten de la raíz del workspace, la subcarpeta local.
 9. Pulsa **Guardar y sincronizar**.
+10. En la página **Datos**, pulsa **Analizar repositorio** para generar y enviar un nuevo análisis.
 
 Después de la primera vinculación, la extensión sincroniza los datos automáticamente al abrir el workspace. El icono de recarga del panel lateral permite solicitar una actualización manual.
 
@@ -185,6 +189,38 @@ Al pulsar un hotspot se consulta su detalle y se abre un modal con:
 
 La extensión obtiene el detalle bajo demanda para no retrasar la carga inicial del dashboard.
 
+## Análisis del repositorio
+
+![Análisis del repositorio y registro de SonarScanner](docs/images/analisis.png)
+
+El botón **Analizar repositorio** detecta el tipo de proyecto y selecciona la estrategia adecuada:
+
+- **Maven:** ejecuta el wrapper `mvnw` o Maven con SonarScanner for Maven.
+- **Gradle:** utiliza `gradlew` o Gradle. Si el plugin de SonarQube no está configurado, compila el proyecto y utiliza el scanner genérico con los binarios Java encontrados.
+- **.NET:** detecta `.sln`, `.csproj`, `.vbproj` y `.fsproj`; instala SonarScanner for .NET dentro del almacenamiento de la extensión y ejecuta `begin`, compilación y `end`.
+- **NPM:** cuando encuentra `package.json`, ejecuta `npx @sonar/scan`. Es la estrategia destinada a proyectos JavaScript, TypeScript, React y otros proyectos Node.js.
+- **Docker:** cuando no encuentra un descriptor de Maven, Gradle, .NET ni `package.json`, utiliza automáticamente la imagen `sonarsource/sonar-scanner-cli`. Esta es la estrategia genérica para Python y otros lenguajes sin proyecto NPM.
+- **Personalizado:** ejecuta el comando configurado con las variables de entorno `SONAR_HOST_URL` y `SONAR_TOKEN`.
+
+En modo **Automático**, la prioridad de detección es **.NET → Maven → Gradle → NPM → Docker**. La búsqueda examina la carpeta de análisis y sus subcarpetas hasta tres niveles. En repositorios mixtos puede seleccionarse manualmente otro método o configurarse **Subcarpeta local** para limitar la detección al componente correcto.
+
+SonarScanner for NPM lee el `package.json` del proyecto. La extensión no crea uno artificialmente: si el workspace no lo contiene, selecciona directamente Docker y evita iniciar NPX con una configuración incompatible.
+
+La extensión muestra el progreso y el registro completo, permite cancelar el proceso, espera a que SonarQube termine la tarea en segundo plano y después actualiza automáticamente el dashboard y **Problems**. El modal puede cerrarse durante la ejecución sin detener el análisis; **Ver registro** permite abrirlo de nuevo. Únicamente **Cancelar análisis** finaliza el scanner. El token se oculta en el registro.
+
+### Requisitos de las herramientas
+
+La extensión incluye la orquestación y descarga automáticamente SonarScanner for .NET, pero no incluye compiladores ni SDK completos:
+
+- Java/Kotlin necesita un JDK y Maven/Gradle o su wrapper.
+- C#, VB.NET y F# necesitan el SDK de .NET.
+- SonarScanner for NPM necesita Node.js con `npx` y un `package.json`; si NPX no está disponible, el modo automático intenta Docker.
+- El modo Docker necesita Docker Desktop o Docker Engine.
+
+Docker conserva la caché de SonarScanner entre análisis y utiliza el Java incluido en la imagen para reducir el tiempo de las siguientes ejecuciones.
+
+El análisis solo puede ejecutarse en un workspace de confianza. Los lenguajes disponibles finalmente dependen también de la edición, plugins y configuración del servidor SonarQube.
+
 ## Integración con Problems
 
 ![Issues de SonarQube publicados en Problems](docs/images/problems-integration.png)
@@ -212,6 +248,9 @@ La página de configuración permite gestionar:
 - **Proyecto o aplicación:** componentes visibles para el token.
 - **Rama:** rama opcional que debe consultarse.
 - **Subcarpeta local:** correspondencia entre la raíz de SonarQube y una carpeta del workspace.
+- **Método de análisis:** automático, Maven, Gradle, .NET, NPM, Docker o personalizado.
+- **Comando de compilación:** comando opcional previo al scanner genérico o sustituto de `dotnet build`.
+- **Comando personalizado:** permite integrar herramientas o procesos propios sin guardar el token en el comando.
 
 ### Seguridad del token
 
@@ -252,6 +291,9 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
   "sonarQubeDashboard.sonar.projectKey": "",
   "sonarQubeDashboard.sonar.branch": "",
   "sonarQubeDashboard.sonar.baseDir": "",
+  "sonarQubeDashboard.sonar.scannerMode": "auto",
+  "sonarQubeDashboard.sonar.buildCommand": "",
+  "sonarQubeDashboard.sonar.customScannerCommand": "",
   "sonarQubeDashboard.autoRefresh": true,
   "sonarQubeDashboard.refreshIntervalMinutes": 0
 }
@@ -286,6 +328,11 @@ src/
 ├── extension.ts
 ├── sonarClient.ts
 ├── types.ts
+├── scanner/
+│   ├── analysisService.ts
+│   ├── detector.ts
+│   ├── processRunner.ts
+│   └── types.ts
 └── dashboard/
     ├── contracts.ts
     ├── summary.ts
@@ -334,6 +381,6 @@ El VSIX utiliza la versión indicada en `package.json`.
 
 ## Licencia
 
-Consulta [LICENSE.txt](LICENSE.txt) para conocer los términos de uso y distribución.
+Consulta [LICENSE](LICENSE) para conocer los términos de uso y distribución.
 
 Esta licencia no es una licencia Open Source aprobada por la Open Source Initiative, ya que limita la modificación y distribución de trabajos derivados.

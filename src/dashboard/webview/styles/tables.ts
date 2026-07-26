@@ -116,6 +116,13 @@ export function getTableStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIcon
       display: table;
       width: 100%;
       table-layout: fixed;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .body-scroll-table th,
+    .body-scroll-table td {
+      min-width: 0;
+      max-width: none;
+      border-bottom: 0;
     }
     .body-scroll-table tbody:empty { display: none; }
     table { width: 100%; border-collapse: collapse; }

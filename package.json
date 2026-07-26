@@ -1,8 +1,8 @@
 {
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
-  "description": "Dashboard de SonarQube integrado en VS Code con páginas de datos y configuración, Problems, defectos, top de archivos y top de reglas.",
-  "version": "0.12.0",
+  "description": "Dashboard de SonarQube para VS Code con análisis del repositorio, Problems, Quality Gate, defectos, hotspots, rankings y evolución.",
+  "version": "0.13.0",
   "publisher": "local-development",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -26,7 +26,9 @@
     "onWebviewPanel:sonarQubeDashboard.panel",
     "onCommand:sonarQubeDashboard.open",
     "onCommand:sonarQubeDashboard.refresh",
-    "onCommand:sonarQubeDashboard.clear"
+    "onCommand:sonarQubeDashboard.clear",
+    "onCommand:sonarQubeDashboard.analyze",
+    "onCommand:sonarQubeDashboard.cancelAnalysis"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -65,6 +67,16 @@
         "command": "sonarQubeDashboard.clear",
         "title": "SonarQube Dashboard: Limpiar Problems",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "sonarQubeDashboard.analyze",
+        "title": "SonarQube Dashboard: Analizar repositorio",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sonarQubeDashboard.cancelAnalysis",
+        "title": "SonarQube Dashboard: Cancelar análisis",
+        "icon": "$(debug-stop)"
       }
     ],
     "configuration": {
@@ -106,6 +118,42 @@
           "minimum": 0,
           "scope": "window",
           "description": "Intervalo de actualización. 0 desactiva la actualización periódica."
+        },
+        "sonarQubeDashboard.sonar.scannerMode": {
+          "type": "string",
+          "default": "auto",
+          "scope": "resource",
+          "enum": [
+            "auto",
+            "maven",
+            "gradle",
+            "dotnet",
+            "npm",
+            "docker",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "Detecta Maven, Gradle y .NET; usa NPM con package.json o Docker para proyectos genéricos.",
+            "Usa SonarScanner for Maven.",
+            "Usa SonarScanner for Gradle.",
+            "Usa SonarScanner for .NET.",
+            "Usa SonarScanner for NPM como scanner genérico.",
+            "Usa la imagen sonarsource/sonar-scanner-cli.",
+            "Ejecuta el comando personalizado configurado."
+          ],
+          "description": "Método empleado por el botón Analizar repositorio."
+        },
+        "sonarQubeDashboard.sonar.buildCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Comando de compilación opcional ejecutado antes del scanner genérico o en lugar de dotnet build."
+        },
+        "sonarQubeDashboard.sonar.customScannerCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Comando personalizado de análisis. El token se proporciona mediante SONAR_TOKEN."
         }
       }
     }
@@ -121,5 +169,15 @@
     "@types/node": "^20.17.0",
     "@types/vscode": "^1.96.0",
     "typescript": "^5.7.2"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "El dashboard puede consultar SonarQube, pero analizar el repositorio requiere confiar en el workspace.",
+      "restrictedConfigurations": [
+        "sonarQubeDashboard.sonar.buildCommand",
+        "sonarQubeDashboard.sonar.customScannerCommand"
+      ]
+    }
   }
 }

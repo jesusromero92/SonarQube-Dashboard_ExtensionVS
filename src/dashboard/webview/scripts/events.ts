@@ -2,6 +2,7 @@
 export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('click', () => {
       vscode.postMessage({ type: 'navigate', page: 'configuration' });
     });
+    elements.analyzeEmpty.addEventListener('click', requestAnalysis);
     elements.syncEmpty.addEventListener('click', requestRefresh);
 
     elements.folder.addEventListener('change', () => {
@@ -11,6 +12,10 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
       summaryVisible = false;
       renderEmptyState();
       vscode.postMessage({ type: 'selectFolder', folderUri: elements.folder.value });
+    });
+
+    elements.scannerMode.addEventListener('change', () => {
+      elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
     });
 
     elements.projectKey.addEventListener('change', () => {
@@ -30,6 +35,9 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
     });
 
     elements.refresh.addEventListener('click', requestRefresh);
+    elements.analyzeRepository.addEventListener('click', requestAnalysis);
+    elements.showAnalysisLog.addEventListener('click', () => elements.analysisDialog.showModal());
+    elements.cancelAnalysis.addEventListener('click', cancelRepositoryAnalysis);
     elements.clear.addEventListener('click', () => vscode.postMessage({ type: 'clear' }));
     elements.issuesViewTab.addEventListener('click', () => {
       currentDataView = 'issues';
@@ -98,6 +106,20 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
       });
     });
 
+    const closeAnalysisDialog = () => {
+      if (elements.analysisDialog.open) {
+        elements.analysisDialog.close();
+      }
+    };
+    elements.analysisDialogClose.addEventListener('click', closeAnalysisDialog);
+    elements.analysisDialogFooterClose.addEventListener('click', closeAnalysisDialog);
+    elements.analysisDialogCancel.addEventListener('click', cancelRepositoryAnalysis);
+    elements.analysisDialog.addEventListener('click', event => {
+      if (event.target === elements.analysisDialog) {
+        closeAnalysisDialog();
+      }
+    });
+
     window.addEventListener('message', event => {
       const message = event.data;
       switch (message.type) {
@@ -134,6 +156,12 @@ export const EVENTS_SCRIPT = `    elements.goConfiguration.addEventListener('cli
           break;
         case 'showQualityGate':
           showQualityGateDialog();
+          break;
+        case 'analysisState':
+          renderAnalysisState(message.state || {});
+          break;
+        case 'showAnalysisDialog':
+          if (!elements.analysisDialog.open) elements.analysisDialog.showModal();
           break;
         case 'hotspotDetailLoading':
           elements.hotspotDialogLoading.textContent = 'Cargando detalle…';

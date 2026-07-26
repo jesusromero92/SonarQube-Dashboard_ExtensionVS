@@ -18,7 +18,15 @@ export function getBootstrapScript(): string {
       emptyTitle: document.getElementById('emptyTitle'),
       emptyText: document.getElementById('emptyText'),
       goConfiguration: document.getElementById('goConfiguration'),
+      analyzeEmpty: document.getElementById('analyzeEmpty'),
       syncEmpty: document.getElementById('syncEmpty'),
+      analysisPanel: document.getElementById('analysisPanel'),
+      analysisTitle: document.getElementById('analysisTitle'),
+      analysisMessage: document.getElementById('analysisMessage'),
+      analysisScanner: document.getElementById('analysisScanner'),
+      analyzeRepository: document.getElementById('analyzeRepository'),
+      showAnalysisLog: document.getElementById('showAnalysisLog'),
+      cancelAnalysis: document.getElementById('cancelAnalysis'),
       emptyWorkspace: document.getElementById('emptyWorkspace'),
       configurationContent: document.getElementById('configurationContent'),
       folderField: document.getElementById('folderField'),
@@ -29,6 +37,10 @@ export function getBootstrapScript(): string {
       projectKey: document.getElementById('projectKey'),
       branch: document.getElementById('branch'),
       baseDir: document.getElementById('baseDir'),
+      scannerMode: document.getElementById('scannerMode'),
+      buildCommand: document.getElementById('buildCommand'),
+      customScannerField: document.getElementById('customScannerField'),
+      customScannerCommand: document.getElementById('customScannerCommand'),
       loadProjects: document.getElementById('loadProjects'),
       save: document.getElementById('save'),
       refresh: document.getElementById('refresh'),
@@ -87,7 +99,16 @@ export function getBootstrapScript(): string {
       hotspotRisk: document.getElementById('hotspotRisk'),
       hotspotVulnerability: document.getElementById('hotspotVulnerability'),
       hotspotRecommendations: document.getElementById('hotspotRecommendations'),
-      openHotspotFile: document.getElementById('openHotspotFile')
+      openHotspotFile: document.getElementById('openHotspotFile'),
+      analysisDialog: document.getElementById('analysisDialog'),
+      analysisDialogScanner: document.getElementById('analysisDialogScanner'),
+      analysisDialogClose: document.getElementById('analysisDialogClose'),
+      analysisDialogFooterClose: document.getElementById('analysisDialogFooterClose'),
+      analysisDialogCancel: document.getElementById('analysisDialogCancel'),
+      analysisDialogIndicator: document.getElementById('analysisDialogIndicator'),
+      analysisDialogMessage: document.getElementById('analysisDialogMessage'),
+      analysisDialogTime: document.getElementById('analysisDialogTime'),
+      analysisLog: document.getElementById('analysisLog')
     };
 
     let currentPage = 'data';
@@ -108,6 +129,8 @@ export function getBootstrapScript(): string {
     let currentFolderUri = '';
     let hasWorkspace = false;
     let dashboardLoading = true;
+    let workspaceTrusted = true;
+    let currentAnalysisState = { running: false, phase: 'idle', message: 'Listo para analizar el repositorio.', scanner: '', canCancel: false, log: [] };
     const hiddenChartSeries = {
       types: new Set(),
       severity: new Set()
@@ -134,7 +157,10 @@ export function getBootstrapScript(): string {
         token: elements.token.value,
         projectKey: elements.projectKey.value,
         branch: elements.branch.value.trim(),
-        baseDir: elements.baseDir.value.trim()
+        baseDir: elements.baseDir.value.trim(),
+        scannerMode: elements.scannerMode.value,
+        buildCommand: elements.buildCommand.value.trim(),
+        customScannerCommand: elements.customScannerCommand.value.trim()
       };
     }
 
@@ -188,12 +214,14 @@ export function getBootstrapScript(): string {
       if (dashboardLoading) {
         elements.results.hidden = true;
         elements.dataEmpty.hidden = true;
+        elements.analysisPanel.hidden = true;
         return;
       }
       const configured = isConfigured();
       const showResults = hasWorkspace && configured && summaryVisible;
       elements.results.hidden = !showResults;
       elements.dataEmpty.hidden = showResults;
+      elements.analysisPanel.hidden = !showResults;
 
       if (showResults) {
         return;
@@ -201,12 +229,14 @@ export function getBootstrapScript(): string {
 
       elements.emptyProject.hidden = !configured;
       elements.emptyProject.textContent = configured ? currentConfig.projectKey : '';
+      elements.analyzeEmpty.hidden = !configured;
       elements.syncEmpty.hidden = !configured;
 
       if (!hasWorkspace) {
         elements.emptyTitle.textContent = 'No hay ninguna carpeta abierta';
         elements.emptyText.textContent = 'Abre el proyecto local que quieres vincular con SonarQube y vuelve a SonarQube Dashboard.';
         elements.goConfiguration.textContent = 'Ver configuración';
+        elements.analyzeEmpty.hidden = true;
         elements.syncEmpty.hidden = true;
       } else if (!configured) {
         elements.emptyTitle.textContent = 'No hay un proyecto vinculado';
@@ -214,7 +244,7 @@ export function getBootstrapScript(): string {
         elements.goConfiguration.textContent = 'Configurar proyecto';
       } else {
         elements.emptyTitle.textContent = 'El proyecto está vinculado';
-        elements.emptyText.textContent = 'Sincroniza para cargar los defectos, el top de archivos y el top de reglas.';
+        elements.emptyText.textContent = 'Analiza el repositorio para enviar un nuevo análisis a SonarQube o sincroniza los datos existentes.';
         elements.goConfiguration.textContent = 'Revisar configuración';
       }
     }
@@ -232,12 +262,13 @@ export function getBootstrapScript(): string {
       elements.configurationContent.hidden = !hasWorkspace;
 
       if (!hasWorkspace) {
-        currentConfig = { serverUrl: '', projectKey: '', branch: '', baseDir: '', hasToken: false };
+        currentConfig = { serverUrl: '', projectKey: '', branch: '', baseDir: '', hasToken: false, scannerMode: 'auto', buildCommand: '', customScannerCommand: '' };
         elements.configState.textContent = 'Sin carpeta abierta';
         renderEmptyState();
         return;
       }
 
+      workspaceTrusted = message.workspaceTrusted !== false;
       const folderChanged = currentFolderUri && currentFolderUri !== message.selectedFolderUri;
       currentFolderUri = message.selectedFolderUri;
 
@@ -262,6 +293,10 @@ export function getBootstrapScript(): string {
         : 'El token se guardará en SecretStorage, no en settings.json.';
       elements.branch.value = currentConfig.branch || '';
       elements.baseDir.value = currentConfig.baseDir || '';
+      elements.scannerMode.value = currentConfig.scannerMode || 'auto';
+      elements.buildCommand.value = currentConfig.buildCommand || '';
+      elements.customScannerCommand.value = currentConfig.customScannerCommand || '';
+      elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       elements.configState.textContent = currentConfig.projectKey
         ? 'Configurado: ' + currentConfig.projectKey
         : 'Sin configurar';
@@ -293,6 +328,7 @@ export function getBootstrapScript(): string {
         elements.projectKey.disabled = true;
       }
 
+      renderAnalysisState(currentAnalysisState);
       renderEmptyState();
     }
 
@@ -306,6 +342,10 @@ export function getBootstrapScript(): string {
       elements.token.value = '';
       elements.token.placeholder = 'Token guardado · escribe otro para sustituirlo';
       elements.tokenHint.textContent = 'Hay un token guardado de forma segura para esta carpeta.';
+      elements.scannerMode.value = config.scannerMode || 'auto';
+      elements.buildCommand.value = config.buildCommand || '';
+      elements.customScannerCommand.value = config.customScannerCommand || '';
+      elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       renderEmptyState();
     }
 
