@@ -192,6 +192,8 @@ The dialog is divided into **header**, **body**, and **footer**. Only the body s
 
 ## Issue lifecycle management
 
+![Issue lifecycle, actions, comments, history, and execution flow](docs/images/view-info-issue.png)
+
 Select **Manage issue** from the Issues table, an editor hover, or the issue explorer to open the lifecycle dialog. Depending on the operations returned by SonarQube for the current token, the dialog can:
 
 - accept an issue;
@@ -202,6 +204,9 @@ Select **Manage issue** from the Issues table, an editor hover, or the issue exp
 - inspect comments, change history, author, dates, status, resolution, and assignee.
 
 Every write operation displays a native confirmation dialog before SonarQube is modified. Status buttons are created only from the transitions included by `/api/issues/search`; assignment controls follow the actions returned for the issue, and the available-user list is paginated. Server-side authorization remains the final source of truth and API errors are displayed without discarding the current dashboard state.
+
+![Native confirmation before changing an issue in SonarQube](docs/images/view-info-issue2.png)
+
 The current status is displayed in the Issues table and in the dialog; its matching action is disabled. Comments and history use mutually exclusive collapsible sections.
 
 ## Security flows and secondary locations
@@ -219,6 +224,8 @@ Locations that are part of the SonarQube flow but do not exist in the open works
 
 ## Coverage and duplications
 
+![Coverage, duplication, file rankings, and historical evolution](docs/images/coverage-duplication.png)
+
 The **Coverage and duplication** data tab provides separate Overall and New Code views for:
 
 - coverage, line coverage, and condition coverage;
@@ -229,12 +236,23 @@ The **Coverage and duplication** data tab provides separate Overall and New Code
 - historical coverage and duplication charts.
 
 Selecting a file loads line-level data on demand. Covered, partially covered, and uncovered lines are marked in the gutter and overview ruler. Duplicated lines receive a dedicated decoration, and the detail dialog lists each duplicated block together with every matching local file and range.
+
+![Line summary and duplicated blocks for a selected file](docs/images/modal-coverage-duplication.png)
+
+Non-empty duplicated lines display the word `duplicated` in purple at the end of the code. Empty or whitespace-only lines do not receive this visual label.
+
+![Duplicated-line indicator inside the editor](docs/images/duplicated-overview.png)
+
 Each duplication group can be opened in a dedicated Git-style comparison tab. It displays every local occurrence side by side with its original line numbers and provides direct navigation to the selected range.
+
+![Git-style side-by-side duplicated-code comparison](docs/images/duplicated-overview2.png)
 
 Coverage requires the corresponding test reports to have been imported by the scanner during analysis. When SonarQube has no coverage data for a file, the extension leaves it undecorated.
 Missing historical metrics are also displayed as unavailable rather than as an artificial 0%.
 
 ## Quick issue navigation
+
+![Issue explorer grouped by local file](docs/images/issue-explorer.png)
 
 The extension contributes an **Issue explorer** below the side-panel summary. It can group local issues by file, rule, or severity and can be restricted to the active file.
 

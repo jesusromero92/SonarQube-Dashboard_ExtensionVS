@@ -193,6 +193,8 @@ El modal está dividido en **header**, **body** y **footer**. Solo el body tiene
 
 ## Gestión del ciclo de vida del defecto
 
+![Ciclo de vida, acciones, comentarios, historial y flujo del defecto](docs/images/view-info-issue.png)
+
 Selecciona **Gestionar defecto** desde la tabla de Defectos, el tooltip del editor o el explorador para abrir el modal de gestión. Según las operaciones que SonarQube devuelva para el token actual, permite:
 
 - aceptar un defecto;
@@ -203,6 +205,9 @@ Selecciona **Gestionar defecto** desde la tabla de Defectos, el tooltip del edit
 - consultar comentarios, historial de cambios, autor, fechas, estado, resolución y responsable.
 
 Antes de cualquier operación de escritura se muestra una confirmación nativa. Los botones de estado se crean únicamente a partir de las transiciones incluidas por `/api/issues/search`; los controles de asignación siguen las acciones devueltas para el defecto y la lista de usuarios se pagina. La autorización del servidor sigue siendo la fuente final de verdad y los errores de la API se muestran sin descartar el estado actual del dashboard.
+
+![Confirmación nativa antes de modificar un defecto en SonarQube](docs/images/view-info-issue2.png)
+
 El estado actual aparece tanto en la tabla de Defectos como en el modal, y su acción correspondiente queda deshabilitada. Los comentarios y el historial utilizan secciones plegables mutuamente excluyentes.
 
 ## Flujos de seguridad y ubicaciones secundarias
@@ -220,6 +225,8 @@ Las ubicaciones que forman parte del flujo de SonarQube pero no existen en el wo
 
 ## Cobertura y duplicaciones
 
+![Cobertura, duplicación, rankings de archivos y evolución histórica](docs/images/coverage-duplication.png)
+
 La pestaña **Cobertura y duplicación** incluye vistas independientes para Overall y New Code de:
 
 - cobertura, cobertura de líneas y cobertura de condiciones;
@@ -230,12 +237,23 @@ La pestaña **Cobertura y duplicación** incluye vistas independientes para Over
 - evolución histórica de cobertura y duplicación.
 
 Al seleccionar un archivo se cargan los datos por línea bajo demanda. Las líneas cubiertas, parcialmente cubiertas y no cubiertas se marcan en el gutter y el overview ruler. Las líneas duplicadas utilizan una decoración propia, y el modal de detalle enumera cada bloque duplicado junto con todos los archivos y rangos locales coincidentes.
+
+![Resumen de líneas y bloques duplicados del archivo seleccionado](docs/images/modal-coverage-duplication.png)
+
+Las líneas duplicadas que contienen código muestran la palabra `duplicated` en morado al final. Las líneas vacías o formadas únicamente por espacios no reciben esta etiqueta visual.
+
+![Indicador de línea duplicada dentro del editor](docs/images/duplicated-overview.png)
+
 Cada grupo de duplicación puede abrirse en una pestaña de comparación con un diseño similar al diff de Git. Muestra en paralelo todas las apariciones locales, conserva sus números de línea originales y permite navegar directamente al rango seleccionado.
+
+![Comparación en paralelo del código duplicado con diseño similar a Git](docs/images/duplicated-overview2.png)
 
 La cobertura depende de que los informes de pruebas correspondientes se hayan importado durante el análisis. Cuando SonarQube no contiene cobertura para un archivo, la extensión no añade decoraciones.
 Las métricas históricas ausentes también se muestran como no disponibles, en lugar de inventar un 0 %.
 
 ## Navegación rápida entre defectos
+
+![Explorador de defectos agrupado por archivo local](docs/images/issue-explorer.png)
 
 La extensión añade un **Explorador de defectos** bajo el resumen lateral. Puede agrupar los defectos locales por archivo, regla o severidad y limitarse al archivo activo.
 

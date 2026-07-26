@@ -96,6 +96,7 @@ export const SOURCE_MESSAGES = {
   "scannerPrefix": "Scanner: ",
   "readyAnalyze": "Listo para analizar.",
   "noAnalysisYet": "Todavía no se ha ejecutado ningún análisis.",
+  "waitingNewAnalysisOutput": "Esperando la salida del nuevo análisis…",
   "startPrefix": "Inicio: ",
   "endPrefix": " · Fin: ",
   "close": "Cerrar",

@@ -2,7 +2,6 @@ import { QualityGateStatus, RatingGrade } from './types';
 
 export const DASHBOARD_PANEL_VIEW_TYPE = 'sonarQubeDashboard.panel';
 export const DASHBOARD_LAUNCHER_VIEW_ID = 'sonarQubeDashboard.launcher';
-export const DASHBOARD_CONFIGURATION_VIEW_ID = 'sonarQubeDashboard.configuration';
 
 export const SONAR_CONFIGURATION_SECTION = 'sonarQubeDashboard.sonar';
 export const DASHBOARD_CONFIGURATION_SECTION = 'sonarQubeDashboard';

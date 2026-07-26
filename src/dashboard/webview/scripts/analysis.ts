@@ -8,6 +8,15 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         setStatus('error', 'El token no tiene permiso para ejecutar análisis en este proyecto.');
         return;
       }
+      renderAnalysisState({
+        running: true,
+        phase: 'detecting',
+        message: 'Detectando el tipo de proyecto…',
+        scanner: '',
+        startedAt: new Date().toISOString(),
+        canCancel: false,
+        log: []
+      });
       if (!elements.analysisDialog.open) elements.analysisDialog.showModal();
       vscode.postMessage({ type: 'analyze', folderUri: currentFolderUri });
     }
@@ -45,7 +54,11 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
       elements.analysisDialogMessage.textContent = message;
       elements.analysisDialogScanner.textContent = scanner ? 'Scanner: ' + scanner : 'Detección automática';
       elements.analysisDialogIndicator.className = 'analysis-status-indicator ' + phase;
-      elements.analysisLog.textContent = logs.length ? logs.join('\\n') : 'Todavía no se ha ejecutado ningún análisis.';
+      elements.analysisLog.textContent = logs.length
+        ? logs.join('\\n')
+        : running
+          ? 'Esperando la salida del nuevo análisis…'
+          : 'Todavía no se ha ejecutado ningún análisis.';
       elements.analysisLog.scrollTop = elements.analysisLog.scrollHeight;
 
       const started = currentAnalysisState.startedAt ? new Date(currentAnalysisState.startedAt) : null;

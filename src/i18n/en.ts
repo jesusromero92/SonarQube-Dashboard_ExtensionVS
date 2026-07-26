@@ -98,6 +98,7 @@ export const EN_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   "scannerPrefix": "Scanner: ",
   "readyAnalyze": "Ready to analyze.",
   "noAnalysisYet": "No analysis has been run yet.",
+  "waitingNewAnalysisOutput": "Waiting for output from the new analysis…",
   "startPrefix": "Start: ",
   "endPrefix": " · End: ",
   "close": "Close",
