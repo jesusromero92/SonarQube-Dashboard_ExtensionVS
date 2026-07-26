@@ -276,7 +276,7 @@ export const SOURCE_MESSAGES = {
   "failedUpper": "FALLIDO",
   "unavailableShort": "NO DISP.",
   "buildCommandDotnetHint": "Se ejecuta antes del scanner genérico y sustituye a <code>dotnet build</code> en proyectos .NET.",
-  "availableVariablesFull": "Variables disponibles: <code>${workspaceFolder}</code>, <code>${projectKey}</code>, <code>${serverUrl}</code> y <code>${branch}</code>.",
+  "availableVariablesFull": "Variables disponibles: <code>${workspaceFolder}</code>, <code>${projectKey}</code>, <code>${projectName}</code>, <code>${serverUrl}</code> y <code>${branch}</code>.",
   "conditions": "Condiciones",
   "conditionCountSuffix": " condiciones",
   "currentValue": "Valor actual",

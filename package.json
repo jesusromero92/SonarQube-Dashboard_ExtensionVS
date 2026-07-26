@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
   "description": "%extension.description%",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -36,6 +36,7 @@
     "onCommand:sonarQubeDashboard.nextCriticalIssue",
     "onCommand:sonarQubeDashboard.toggleCurrentFileIssues",
     "onCommand:sonarQubeDashboard.groupIssues",
+    "onCommand:sonarQubeDashboard.copyFileIssues",
     "onCommand:sonarQubeDashboard.showCoverage",
     "onCommand:sonarQubeDashboard.previousFlowLocation",
     "onCommand:sonarQubeDashboard.nextFlowLocation"
@@ -124,6 +125,11 @@
         "icon": "$(group-by-ref-type)"
       },
       {
+        "command": "sonarQubeDashboard.copyFileIssues",
+        "title": "%command.copyFileIssues%",
+        "icon": "$(copy)"
+      },
+      {
         "command": "sonarQubeDashboard.previousFlowLocation",
         "title": "%command.previousFlowLocation%",
         "icon": "$(arrow-left)"
@@ -167,6 +173,12 @@
           "default": "",
           "scope": "resource",
           "description": "%configuration.sonar_projectKey.description%"
+        },
+        "sonarQubeDashboard.sonar.projectName": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "%configuration.sonar_projectName.description%"
         },
         "sonarQubeDashboard.sonar.branch": {
           "type": "string",
@@ -289,6 +301,13 @@
           "command": "sonarQubeDashboard.toggleCurrentFileIssues",
           "when": "view == sonarQubeDashboard.issueTree",
           "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sonarQubeDashboard.copyFileIssues",
+          "when": "view == sonarQubeDashboard.issueTree && viewItem == sonarIssueFileGroup",
+          "group": "1_copy@1"
         }
       ]
     }

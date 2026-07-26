@@ -268,6 +268,7 @@ Atajos predeterminados:
 
 La barra de estado muestra la posición actual, por ejemplo `3/12`, y abre el siguiente defecto al seleccionarla.
 El explorador y los comandos de navegación siguen el ámbito Overall/New Code activo.
+Haz clic derecho sobre un grupo de archivo y selecciona **Copiar todos los defectos del archivo** para copiar su ruta y todos los defectos visibles, incluyendo línea, severidad, tipo, estado, resolución, regla, descripción, clave de regla y clave del defecto.
 
 ## Notificaciones automáticas
 

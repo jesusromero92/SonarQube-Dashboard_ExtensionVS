@@ -259,6 +259,7 @@ export class AnalysisService implements vscode.Disposable {
     const beginArgs = [
       'begin',
       `/k:${request.config.projectKey}`,
+      `/n:${request.config.projectName || request.config.projectKey}`,
       `/d:sonar.host.url=${request.config.serverUrl}`,
       tokenProperty
     ];
@@ -407,6 +408,7 @@ export class AnalysisService implements vscode.Disposable {
     const command = template
       .replace(/\$\{workspaceFolder\}/g, scanner.rootPath)
       .replace(/\$\{projectKey\}/g, request.config.projectKey)
+      .replace(/\$\{projectName\}/g, request.config.projectName || request.config.projectKey)
       .replace(/\$\{serverUrl\}/g, request.config.serverUrl)
       .replace(/\$\{branch\}/g, request.config.branch ?? '');
 
@@ -498,6 +500,7 @@ export class AnalysisService implements vscode.Disposable {
   private sonarProperties(request: AnalysisRequest, prefix: '-D' | '/d:'): string[] {
     const values = [
       `${prefix}sonar.projectKey=${request.config.projectKey}`,
+      `${prefix}sonar.projectName=${request.config.projectName || request.config.projectKey}`,
       `${prefix}sonar.host.url=${request.config.serverUrl}`
     ];
     if (request.config.branch?.trim()) {

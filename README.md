@@ -267,6 +267,7 @@ Default shortcuts:
 
 The status bar shows the current position, for example `3/12`, and opens the next issue when selected.
 The explorer and navigation commands follow the active Overall/New Code scope.
+Right-click a file group and select **Copy all file issues** to copy its path and every visible issue, including line, severity, type, status, resolution, rule, description, rule key, and issue key.
 
 ## Automatic notifications
 

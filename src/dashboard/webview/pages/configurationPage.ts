@@ -90,7 +90,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                   <div id="customScannerField" class="field full-width-field" hidden>
                     <label for="customScannerCommand">Comando personalizado</label>
                     <input id="customScannerCommand" type="text" placeholder="sonar-scanner -Dsonar.projectKey=\${projectKey}" spellcheck="false">
-                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
+                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
                   </div>
                 </div>
               </details>

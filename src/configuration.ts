@@ -22,6 +22,7 @@ export async function getFolderFormConfig(
   return {
     serverUrl: configuration.get<string>(SONAR_CONFIGURATION_KEYS.serverUrl, '').trim(),
     projectKey: configuration.get<string>(SONAR_CONFIGURATION_KEYS.projectKey, '').trim(),
+    projectName: configuration.get<string>(SONAR_CONFIGURATION_KEYS.projectName, '').trim(),
     branch: configuration.get<string>(SONAR_CONFIGURATION_KEYS.branch, '').trim(),
     baseDir: configuration.get<string>(SONAR_CONFIGURATION_KEYS.baseDir, '').trim(),
     hasToken: Boolean(await context.secrets.get(tokenKey(folder))),
@@ -45,6 +46,7 @@ export async function getFolderConfig(
   return {
     serverUrl: form.serverUrl,
     projectKey: form.projectKey,
+    projectName: form.projectName || form.projectKey,
     branch: form.branch,
     baseDir: form.baseDir,
     token,
@@ -60,6 +62,7 @@ export async function saveFolderConfig(
   values: {
     serverUrl: string;
     projectKey: string;
+    projectName: string;
     branch: string;
     baseDir: string;
     token?: string;
@@ -81,6 +84,11 @@ export async function saveFolderConfig(
   await configuration.update(
     SONAR_CONFIGURATION_KEYS.projectKey,
     values.projectKey.trim(),
+    vscode.ConfigurationTarget.WorkspaceFolder
+  );
+  await configuration.update(
+    SONAR_CONFIGURATION_KEYS.projectName,
+    values.projectName.trim(),
     vscode.ConfigurationTarget.WorkspaceFolder
   );
   await configuration.update(

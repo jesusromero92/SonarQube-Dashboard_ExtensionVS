@@ -5,6 +5,10 @@ export const CONFIGURATION_CORE_SCRIPT = `
         serverUrl: elements.serverUrl.value.trim(),
         token: elements.token.value,
         projectKey: elements.projectKey.value,
+        projectName:
+          elements.projectKey.selectedOptions[0]?.dataset.projectName ||
+          currentConfig.projectName ||
+          elements.projectKey.value,
         branch: elements.branch.value.trim(),
         baseDir: elements.baseDir.value.trim(),
         scannerMode: elements.scannerMode.value,
@@ -55,6 +59,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       for (const project of projects) {
         const option = document.createElement('option');
         option.value = project.key;
+        option.dataset.projectName = project.name || project.key;
         const type = project.qualifier === 'APP' ? 'Aplicación' : 'Proyecto';
         option.textContent = project.name + ' — ' + project.key + ' · ' + type;
         elements.projectKey.appendChild(option);
@@ -77,6 +82,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
         currentConfig = {
           serverUrl: '',
           projectKey: '',
+          projectName: '',
           branch: '',
           baseDir: '',
           hasToken: false,
@@ -148,7 +154,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
           [
             {
               key: currentConfig.projectKey,
-              name: currentConfig.projectKey,
+              name: currentConfig.projectName || currentConfig.projectKey,
               qualifier: 'TRK'
             }
           ],

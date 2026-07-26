@@ -10,6 +10,7 @@ export const SONAR_TOKEN_KEY_PREFIX = 'sonarQubeDashboard.sonar.token:';
 export const SONAR_CONFIGURATION_KEYS = {
   serverUrl: 'serverUrl',
   projectKey: 'projectKey',
+  projectName: 'projectName',
   branch: 'branch',
   baseDir: 'baseDir',
   scannerMode: 'scannerMode',
@@ -40,6 +41,7 @@ export const DASHBOARD_COMMANDS = {
   nextCriticalIssue: 'sonarQubeDashboard.nextCriticalIssue',
   toggleCurrentFileIssues: 'sonarQubeDashboard.toggleCurrentFileIssues',
   groupIssues: 'sonarQubeDashboard.groupIssues',
+  copyFileIssues: 'sonarQubeDashboard.copyFileIssues',
   openIssue: 'sonarQubeDashboard.openIssue',
   previousFlowLocation: 'sonarQubeDashboard.previousFlowLocation',
   nextFlowLocation: 'sonarQubeDashboard.nextFlowLocation',

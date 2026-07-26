@@ -1,6 +1,6 @@
 export const DASHBOARD_STATE_SCRIPT = `
     let currentPage = 'data';
-    let currentConfig = { serverUrl: '', projectKey: '', hasToken: false };
+    let currentConfig = { serverUrl: '', projectKey: '', projectName: '', hasToken: false };
     let currentSummary = { published: 0, issues: [], severity: [], evolution: [] };
     let summaryVisible = false;
     let currentIssues = [];

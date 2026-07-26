@@ -313,6 +313,7 @@ export type AnalysisPermissionStatus = 'allowed' | 'denied' | 'unknown';
 export interface FolderSonarConfig {
   serverUrl: string;
   projectKey: string;
+  projectName: string;
   branch?: string;
   baseDir?: string;
   token: string;
@@ -324,6 +325,7 @@ export interface FolderSonarConfig {
 export interface FolderSonarFormConfig {
   serverUrl: string;
   projectKey: string;
+  projectName: string;
   branch: string;
   baseDir: string;
   hasToken: boolean;

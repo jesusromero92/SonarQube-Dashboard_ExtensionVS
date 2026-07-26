@@ -11,6 +11,7 @@ export interface DashboardWebviewMessage {
   serverUrl?: string;
   token?: string;
   projectKey?: string;
+  projectName?: string;
   branch?: string;
   baseDir?: string;
   scannerMode?: ScannerMode;

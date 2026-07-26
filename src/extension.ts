@@ -595,6 +595,10 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (selected) issueTree.setGroupBy(selected.value);
     }),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.copyFileIssues,
+      (element: unknown) => issueTree.copyFileIssues(element)
+    ),
     vscode.commands.registerCommand(DASHBOARD_COMMANDS.previousFlowLocation, () => flowController.previous()),
     vscode.commands.registerCommand(DASHBOARD_COMMANDS.nextFlowLocation, () => flowController.next()),
     vscode.commands.registerCommand(

@@ -379,6 +379,7 @@ export class DashboardPanel {
         config: {
           serverUrl: '',
           projectKey: '',
+          projectName: '',
           branch: '',
           baseDir: '',
           hasToken: false,
@@ -483,6 +484,7 @@ export class DashboardPanel {
 
     const serverUrl = (message.serverUrl ?? '').trim().replace(/\/+$/, '');
     const projectKey = (message.projectKey ?? '').trim();
+    const projectName = (message.projectName ?? '').trim() || projectKey;
     const token = (message.token ?? '').trim();
     const existingToken = await this.context.secrets.get(tokenKey(folder));
 
@@ -513,6 +515,7 @@ export class DashboardPanel {
       await saveFolderConfig(this.context, folder, {
         serverUrl,
         projectKey,
+        projectName,
         branch: message.branch ?? '',
         baseDir: message.baseDir ?? '',
         token,
@@ -532,6 +535,7 @@ export class DashboardPanel {
         config: {
           serverUrl,
           projectKey,
+          projectName,
           branch: message.branch ?? '',
           baseDir: message.baseDir ?? '',
           hasToken: Boolean(token || existingToken),

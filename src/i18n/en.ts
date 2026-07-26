@@ -278,7 +278,7 @@ export const EN_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   "failedUpper": "FAILED",
   "unavailableShort": "N/A",
   "buildCommandDotnetHint": "Runs before the generic scanner and replaces <code>dotnet build</code> for .NET projects.",
-  "availableVariablesFull": "Available variables: <code>${workspaceFolder}</code>, <code>${projectKey}</code>, <code>${serverUrl}</code>, and <code>${branch}</code>.",
+  "availableVariablesFull": "Available variables: <code>${workspaceFolder}</code>, <code>${projectKey}</code>, <code>${projectName}</code>, <code>${serverUrl}</code>, and <code>${branch}</code>.",
   "conditions": "Conditions",
   "conditionCountSuffix": " conditions",
   "currentValue": "Current value",
