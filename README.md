@@ -59,9 +59,9 @@ El panel lateral ofrece una lectura rápida sin abandonar el explorador de VS Co
 
 - **Datos / Configuración:** cambia entre el resumen y la conexión del proyecto.
 - **Recargar:** vuelve a consultar SonarQube y actualiza el dashboard y Problems.
-- **Issues encontrados:** total de issues recuperados para el proyecto.
-- **Severidades:** distribución de Blocker, Critical, Major, Minor e Info.
-- **Tipos:** Bugs, Code Smells, Vulnerabilidades y Security Hotspots.
+- **Issues encontrados:** total de issues que coinciden con archivos existentes en la carpeta vinculada.
+- **Severidades:** distribución de Blocker, Critical, Major, Minor e Info entre esos issues locales.
+- **Tipos:** Bugs, Code Smells, Vulnerabilidades y Security Hotspots cuya ruta coincide con un archivo local.
 - **Quality Gate:** estado del último análisis. Al pulsarlo se abre su detalle.
 - **Ratings:** comparación directa entre Overall y New Code mediante badges A–E.
 
@@ -92,6 +92,8 @@ Cada columna muestra:
 - color oficial utilizado en el resto del dashboard.
 
 Los indicadores `▲` y `▼` permiten detectar rápidamente regresiones y mejoras. Cuando no existe variación se muestra **Sin cambios**.
+
+La comparación histórica solo se muestra cuando el total del último análisis de SonarQube coincide con los issues asociados a archivos locales. Si hay rutas omitidas, la extensión evita comparar el subconjunto local con el total global del proyecto.
 
 ### Tabla de defectos
 

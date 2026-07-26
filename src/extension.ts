@@ -23,7 +23,9 @@ import {
 } from './diagnostics';
 import { fetchAllIssues } from './sonarClient';
 import {
+  DashboardHotspot,
   DashboardIssue,
+  DefectTypeSummary,
   EvolutionPoint,
   QualityGateStatus,
   RatingGrade,
@@ -70,6 +72,34 @@ function aggregateSeverity(issues: DashboardIssue[]): SeverityCount[] {
       right.rank - left.rank ||
       left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
     );
+}
+
+function aggregateTypes(
+  issues: DashboardIssue[],
+  hotspots: DashboardHotspot[]
+): DefectTypeSummary {
+  const types: DefectTypeSummary = {
+    bugs: 0,
+    codeSmells: 0,
+    vulnerabilities: 0,
+    securityHotspots: hotspots.length
+  };
+
+  for (const issue of issues) {
+    switch (issue.type.trim().toUpperCase()) {
+      case 'BUG':
+        types.bugs += 1;
+        break;
+      case 'CODE_SMELL':
+        types.codeSmells += 1;
+        break;
+      case 'VULNERABILITY':
+        types.vulnerabilities += 1;
+        break;
+    }
+  }
+
+  return types;
 }
 
 function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
@@ -158,14 +188,6 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
       summary.hotspots.push(...hotspots);
       summary.newHotspots.push(...newHotspots);
       summary.evolution.push(...loaded.evolution);
-      summary.types.bugs += loaded.types.bugs;
-      summary.types.codeSmells += loaded.types.codeSmells;
-      summary.types.vulnerabilities += loaded.types.vulnerabilities;
-      summary.types.securityHotspots += loaded.types.securityHotspots;
-      summary.newTypes.bugs += loaded.newTypes.bugs;
-      summary.newTypes.codeSmells += loaded.newTypes.codeSmells;
-      summary.newTypes.vulnerabilities += loaded.newTypes.vulnerabilities;
-      summary.newTypes.securityHotspots += loaded.newTypes.securityHotspots;
       summary.qualityGate.status = worstQualityGateStatus(
         summary.qualityGate.status,
         loaded.qualityGate.status
@@ -195,6 +217,8 @@ async function refreshAll(context: vscode.ExtensionContext): Promise<RefreshSumm
 
   summary.severity = aggregateSeverity(summary.issues);
   summary.newSeverity = aggregateSeverity(summary.newIssues);
+  summary.types = aggregateTypes(summary.issues, summary.hotspots);
+  summary.newTypes = aggregateTypes(summary.newIssues, summary.newHotspots);
   summary.evolution = aggregateEvolution(summary.evolution);
   summary.issues.sort((left, right) =>
     right.severityRank - left.severityRank ||
