@@ -76,6 +76,14 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       return Math.max(minimum, Math.min(maximum, value));
     }
 
+    function chartViewport(container, fallbackWidth, height) {
+      const measuredWidth = Math.round(container.getBoundingClientRect().width);
+      return {
+        width: Math.max(320, measuredWidth || fallbackWidth),
+        height
+      };
+    }
+
     function positionChartTooltip(tooltip, mouseX, mouseY) {
       const gap = 12;
       const padding = 8;
@@ -154,8 +162,9 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
         return;
       }
 
-      const width = 640;
-      const height = 280;
+      const viewport = chartViewport(container, 640, 280);
+      const width = viewport.width;
+      const height = viewport.height;
       const margin = { top: 18, right: 18, bottom: 42, left: 48 };
       const plotWidth = width - margin.left - margin.right;
       const plotHeight = height - margin.top - margin.bottom;
@@ -164,7 +173,7 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       const svg = createSvgElement('svg', {
         class: 'chart-svg',
         viewBox: '0 0 ' + width + ' ' + height,
-        preserveAspectRatio: 'none',
+        preserveAspectRatio: 'xMidYMid meet',
         'aria-label': chartKey === 'types'
           ? 'Evolución de issues por tipo'
           : 'Evolución de issues por criticidad'
@@ -277,5 +286,42 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       renderLineChart('types', elements.typeChart, elements.typeLegend, data);
       renderLineChart('severity', elements.severityChart, elements.severityLegend, data);
     }
+
+    const observedChartWidths = new WeakMap();
+    let chartResizeFrame = 0;
+
+    function rerenderResponsiveCharts() {
+      renderEvolutionCharts();
+      if (!elements.coverageView.hidden && typeof renderCoverageEvolution === 'function') {
+        renderCoverageEvolution();
+      }
+    }
+
+    const chartResizeObserver = new ResizeObserver(entries => {
+      const widthChanged = entries.some(entry => {
+        const width = Math.round(entry.contentRect.width);
+        const previousWidth = observedChartWidths.get(entry.target);
+        observedChartWidths.set(entry.target, width);
+        return previousWidth !== undefined && Math.abs(previousWidth - width) > 1;
+      });
+      if (!widthChanged) {
+        return;
+      }
+      cancelAnimationFrame(chartResizeFrame);
+      chartResizeFrame = requestAnimationFrame(rerenderResponsiveCharts);
+    });
+
+    [
+      elements.typeChart,
+      elements.severityChart,
+      elements.coverageChart,
+      elements.duplicationChart
+    ].forEach(container => {
+      observedChartWidths.set(
+        container,
+        Math.round(container.getBoundingClientRect().width)
+      );
+      chartResizeObserver.observe(container);
+    });
 
 `;

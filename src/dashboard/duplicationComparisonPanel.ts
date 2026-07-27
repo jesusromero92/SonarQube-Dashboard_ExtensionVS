@@ -12,7 +12,7 @@ interface DuplicationSnippet {
 export class DuplicationComparisonPanel implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private locations: DuplicationLocation[] = [];
-  private panelDisposables: vscode.Disposable[] = [];
+  private readonly panelDisposables: vscode.Disposable[] = [];
 
   constructor(private readonly coverage: CoverageDecorationManager) {}
 
@@ -185,7 +185,7 @@ export class DuplicationComparisonPanel implements vscode.Disposable {
 <body>
   <header class="page-header">
     <h1>${spanish ? 'Código duplicado' : 'Duplicated code'}</h1>
-    <span>${escapeHtml(detail.file.relativePath)} · ${groups.length} ${groups.length === 1 ? (spanish ? 'grupo' : 'group') : (spanish ? 'grupos' : 'groups')}</span>
+    <span>${escapeHtml(detail.file.relativePath)} · ${groups.length} ${localizedGroupLabel(groups.length, spanish)}</span>
   </header>
   <main>${groupMarkup}</main>
   <script nonce="${nonce}">
@@ -220,4 +220,11 @@ function escapeHtml(value: string): string {
 
 function escapeAttribute(value: string): string {
   return escapeHtml(value).replace(/\r?\n/g, ' ');
+}
+
+function localizedGroupLabel(count: number, spanish: boolean): string {
+  if (spanish) {
+    return count === 1 ? 'grupo' : 'grupos';
+  }
+  return count === 1 ? 'group' : 'groups';
 }

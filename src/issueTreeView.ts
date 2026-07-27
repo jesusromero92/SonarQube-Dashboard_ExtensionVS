@@ -58,13 +58,7 @@ export class IssueTreeProvider implements vscode.TreeDataProvider<TreeNode>, vsc
       title: getDashboardLanguage() === 'es' ? 'Abrir defecto' : 'Open issue',
       arguments: [issue.key]
     };
-    item.iconPath = new vscode.ThemeIcon(
-      ['BLOCKER', 'CRITICAL', 'HIGH'].includes(issue.severity.toUpperCase())
-        ? 'error'
-        : ['MAJOR', 'MEDIUM'].includes(issue.severity.toUpperCase())
-          ? 'warning'
-          : 'info'
-    );
+    item.iconPath = new vscode.ThemeIcon(issueIconName(issue.severity));
     item.contextValue = 'sonarIssue';
     return item;
   }
@@ -78,11 +72,7 @@ export class IssueTreeProvider implements vscode.TreeDataProvider<TreeNode>, vsc
     }
     const groups = new Map<string, DashboardIssue[]>();
     for (const issue of this.navigation.getIssues()) {
-      const key = this.groupBy === 'rule'
-        ? issue.ruleName || issue.rule
-        : this.groupBy === 'severity'
-          ? issue.severity
-          : issue.relativePath;
+      const key = issueGroupKey(issue, this.groupBy);
       const current = groups.get(key) ?? [];
       current.push(issue);
       groups.set(key, current);
@@ -122,7 +112,7 @@ export class IssueTreeProvider implements vscode.TreeDataProvider<TreeNode>, vsc
     });
 
     await vscode.env.clipboard.writeText(lines.join('\n').trimEnd());
-    void vscode.window.setStatusBarMessage(
+    vscode.window.setStatusBarMessage(
       spanish
         ? `${issues.length} defecto(s) de ${element.label} copiados.`
         : `${issues.length} issue(s) from ${element.label} copied.`,
@@ -142,4 +132,25 @@ function isGroupNode(value: unknown): value is GroupNode {
   return candidate.kind === 'group' &&
     typeof candidate.label === 'string' &&
     Array.isArray(candidate.issues);
+}
+
+function issueIconName(severity: string): string {
+  const normalizedSeverity = severity.toUpperCase();
+  if (['BLOCKER', 'CRITICAL', 'HIGH'].includes(normalizedSeverity)) {
+    return 'error';
+  }
+  if (['MAJOR', 'MEDIUM'].includes(normalizedSeverity)) {
+    return 'warning';
+  }
+  return 'info';
+}
+
+function issueGroupKey(issue: DashboardIssue, groupBy: IssueTreeGroup): string {
+  if (groupBy === 'rule') {
+    return issue.ruleName || issue.rule;
+  }
+  if (groupBy === 'severity') {
+    return issue.severity;
+  }
+  return issue.relativePath;
 }

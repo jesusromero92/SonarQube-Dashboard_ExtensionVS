@@ -1,4 +1,5 @@
 import { ANALYSIS_CONTROL_MARKUP } from '../components/analysisControl';
+import { ISSUES_EMPTY_STATE_MARKUP } from '../components/issuesEmptyState';
 import { ISSUES_TABLE_MARKUP } from '../components/issuesTable';
 import { RANKING_TABLES_MARKUP } from '../components/rankingTables';
 import { EVOLUTION_CHARTS_MARKUP } from '../components/evolutionCharts';
@@ -49,6 +50,7 @@ ${ANALYSIS_CONTROL_MARKUP}        <section id="results" hidden>
           </div>
 
           <div id="issuesView">
+${ISSUES_EMPTY_STATE_MARKUP}          <div id="issuesContent">
           <div id="metricsSummary" class="metrics-summary" aria-label="Resumen de defectos"></div>
 
 `;

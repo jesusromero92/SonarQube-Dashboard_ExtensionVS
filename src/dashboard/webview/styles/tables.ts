@@ -2,7 +2,40 @@ import { DashboardWebviewAssets } from '../assets';
 
 
 export function getTableStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconUri }: DashboardWebviewAssets): string {
-  return `    .metrics-summary {
+  return `    .issues-scope-empty {
+      display: grid;
+      min-height: 260px;
+      place-items: center;
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .issues-scope-empty-content {
+      display: grid;
+      max-width: 520px;
+      justify-items: center;
+      gap: 14px;
+    }
+    .issues-scope-empty-icon {
+      display: grid;
+      width: 52px;
+      height: 52px;
+      place-items: center;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 50%;
+      color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+      background: var(--vscode-editor-background);
+    }
+    .issues-scope-empty-icon svg {
+      width: 28px;
+      height: 28px;
+    }
+    .issues-scope-empty p {
+      margin: 0;
+      color: var(--vscode-descriptionForeground);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .metrics-summary {
       display: flex;
       overflow-x: auto;
       margin-bottom: 16px;

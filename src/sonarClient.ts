@@ -747,6 +747,51 @@ async function fetchCoverageData(
   };
 }
 
+function createIssueSearchUrl(
+  config: FolderSonarConfig,
+  onlyNewCode: boolean,
+  page: number,
+  supportsIssueStatuses: boolean
+): URL {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
+  url.searchParams.set('componentKeys', config.projectKey);
+  if (supportsIssueStatuses) {
+    url.searchParams.set('issueStatuses', 'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE');
+  } else {
+    url.searchParams.set('resolved', 'false');
+  }
+  url.searchParams.set('additionalFields', '_all');
+  url.searchParams.set('p', String(page));
+  url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
+  if (onlyNewCode) {
+    url.searchParams.set('inNewCodePeriod', 'true');
+  }
+  if (config.branch?.trim()) {
+    url.searchParams.set('branch', config.branch.trim());
+  }
+  return url;
+}
+
+function shouldRetryIssueSearchWithoutStatuses(
+  error: unknown,
+  page: number,
+  supportsIssueStatuses: boolean
+): boolean {
+  return supportsIssueStatuses &&
+    page === 1 &&
+    error instanceof SonarHttpError &&
+    error.status === 400;
+}
+
+function collectIssueComponents(
+  target: Map<string, SonarComponent>,
+  source: readonly SonarComponent[] | undefined
+): void {
+  for (const component of source ?? []) {
+    target.set(component.key, component);
+  }
+}
+
 async function fetchIssueSet(
   config: FolderSonarConfig,
   onlyNewCode: boolean,
@@ -759,46 +804,21 @@ async function fetchIssueSet(
   let supportsIssueStatuses = true;
 
   while (issues.length < total) {
-    const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
-    url.searchParams.set('componentKeys', config.projectKey);
-    if (supportsIssueStatuses) {
-      url.searchParams.set(
-        'issueStatuses',
-        'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE'
-      );
-    } else {
-      url.searchParams.set('resolved', 'false');
-    }
-    url.searchParams.set('additionalFields', '_all');
-    url.searchParams.set('p', String(page));
-    url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
-    if (onlyNewCode) {
-      url.searchParams.set('inNewCodePeriod', 'true');
-    }
-    if (config.branch?.trim()) {
-      url.searchParams.set('branch', config.branch.trim());
-    }
-
+    const url = createIssueSearchUrl(config, onlyNewCode, page, supportsIssueStatuses);
     let payload: SonarIssuesResponse;
     try {
       payload = await requestJson<SonarIssuesResponse>(url, config.token, signal);
     } catch (error) {
-      if (
-        supportsIssueStatuses &&
-        page === 1 &&
-        error instanceof SonarHttpError &&
-        error.status === 400
-      ) {
+      if (shouldRetryIssueSearchWithoutStatuses(error, page, supportsIssueStatuses)) {
         supportsIssueStatuses = false;
         continue;
       }
       throw error;
     }
+
     total = getTotal(payload);
     issues.push(...payload.issues);
-    for (const component of payload.components ?? []) {
-      components.set(component.key, component);
-    }
+    collectIssueComponents(components, payload.components);
     if (payload.issues.length === 0) {
       break;
     }
@@ -949,7 +969,7 @@ export async function fetchAllIssues(
 function dashboardIssueFromSearch(issue: SonarIssue, fallback: DashboardIssue): DashboardIssue {
   return {
     ...fallback,
-    status: issue.issueStatus || issue.status || fallback.status,
+    status: issue.issueStatus ?? issue.status ?? fallback.status,
     resolution: issue.resolution ?? fallback.resolution,
     assignee: issue.assignee ?? fallback.assignee,
     author: issue.author ?? fallback.author,
@@ -979,7 +999,7 @@ async function fetchActiveUsers(
     page += 1;
   }
   return users.sort((left, right) =>
-    (left.name || left.login).localeCompare(right.name || right.login)
+    (left.name ?? left.login).localeCompare(right.name ?? right.login)
   );
 }
 

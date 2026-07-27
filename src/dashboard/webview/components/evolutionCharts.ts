@@ -1,5 +1,7 @@
 
-export const EVOLUTION_CHARTS_MARKUP = `          <section class="evolution-section">
+export const EVOLUTION_CHARTS_MARKUP = `          </div>
+
+          <section class="evolution-section">
             <div class="evolution-heading">
               <h2>Evolución respecto a análisis anteriores</h2>
               <span id="evolutionCount" class="muted">0 análisis</span>

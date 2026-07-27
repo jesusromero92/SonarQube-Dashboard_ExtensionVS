@@ -49,6 +49,8 @@ const DASHBOARD_ELEMENT_IDS = [
   'newCodeScope',
   'qualityGateButton',
   'issuesView',
+  'issuesScopeEmpty',
+  'issuesContent',
   'hotspotsView',
   'coverageView',
   'coverageSummary',

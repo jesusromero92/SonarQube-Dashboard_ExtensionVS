@@ -1,7 +1,6 @@
 import { Dirent, promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import { ScannerMode } from './types';
-import { DetectedScanner } from './types';
+import { DetectedScanner, ScannerMode } from './types';
 
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.idea', '.scannerwork', '.sonarqube', '.vscode',

@@ -40,8 +40,15 @@ export const CHART_STYLES = `    .rank-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
     }
-    .evolution-grid > .panel { margin-top: 0; }
-    .chart-card { padding: 16px; }
+    .evolution-grid > .panel {
+      min-width: 0;
+      margin-top: 0;
+    }
+    .chart-card {
+      min-width: 0;
+      padding: 16px;
+      overflow: hidden;
+    }
     .chart-card-header h3 { margin: 0; font-size: 13px; }
     .chart-card-header p {
       min-height: 34px;
@@ -52,6 +59,8 @@ export const CHART_STYLES = `    .rank-grid {
     }
     .chart-stage {
       position: relative;
+      width: 100%;
+      min-width: 0;
       height: 280px;
       border: 1px dashed var(--vscode-panel-border);
       background: var(--vscode-editor-background);

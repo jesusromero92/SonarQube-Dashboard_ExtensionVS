@@ -194,7 +194,7 @@ export class IssueNavigationManager implements vscode.Disposable {
     const current = this.currentIssue();
     const index = current ? issues.findIndex(issue => issue.key === current.key) : -1;
     const targetIndex = index < 0
-      ? (direction > 0 ? 0 : issues.length - 1)
+      ? initialIssueIndex(direction, issues.length)
       : (index + direction + issues.length) % issues.length;
     await this.open(issues[targetIndex]);
   }
@@ -209,9 +209,22 @@ export class IssueNavigationManager implements vscode.Disposable {
     const current = this.currentIssue();
     const index = current ? Math.max(0, issues.findIndex(issue => issue.key === current.key)) : 0;
     this.statusBar.text = `$(issues) ${index + 1}/${issues.length}`;
-    this.statusBar.tooltip = this.currentFileOnly
-      ? (spanish ? 'Defectos del archivo actual · clic para ir al siguiente' : 'Current-file issues · click to go to the next issue')
-      : (spanish ? 'Defectos de SonarQube · clic para ir al siguiente' : 'SonarQube issues · click to go to the next issue');
+    this.statusBar.tooltip = issueNavigationTooltip(spanish, this.currentFileOnly);
     this.statusBar.show();
   }
+}
+
+function initialIssueIndex(direction: 1 | -1, issueCount: number): number {
+  return direction > 0 ? 0 : issueCount - 1;
+}
+
+function issueNavigationTooltip(spanish: boolean, currentFileOnly: boolean): string {
+  if (spanish) {
+    return currentFileOnly
+      ? 'Defectos del archivo actual · clic para ir al siguiente'
+      : 'Defectos de SonarQube · clic para ir al siguiente';
+  }
+  return currentFileOnly
+    ? 'Current-file issues · click to go to the next issue'
+    : 'SonarQube issues · click to go to the next issue';
 }

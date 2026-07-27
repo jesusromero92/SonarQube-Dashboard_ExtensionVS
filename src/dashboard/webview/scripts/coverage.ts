@@ -130,12 +130,13 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
         container.appendChild(empty);
         return;
       }
-      const width = 760;
-      const height = 260;
+      const viewport = chartViewport(container, 760, 260);
+      const width = viewport.width;
+      const height = viewport.height;
       const margin = { top: 18, right: 18, bottom: 38, left: 45 };
       const plotWidth = width - margin.left - margin.right;
       const plotHeight = height - margin.top - margin.bottom;
-      const svg = createSvgElement('svg', { class: 'chart-svg', viewBox: '0 0 ' + width + ' ' + height, preserveAspectRatio: 'none' });
+      const svg = createSvgElement('svg', { class: 'chart-svg', viewBox: '0 0 ' + width + ' ' + height, preserveAspectRatio: 'xMidYMid meet' });
       for (let index = 0; index <= 4; index += 1) {
         const y = margin.top + plotHeight * index / 4;
         const labelValue = 100 - index * 25;

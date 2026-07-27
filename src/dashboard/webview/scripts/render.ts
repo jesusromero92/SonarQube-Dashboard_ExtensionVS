@@ -18,12 +18,19 @@ export const RENDER_SCRIPT = `    function renderDataView() {
       elements.overallScope.classList.toggle('active', currentScope === 'overall');
       elements.newCodeScope.classList.toggle('active', currentScope === 'newCode');
       elements.hotspotsTabCount.textContent = String(currentHotspots.length);
-      renderMetricsSummary(currentSummary);
-      renderIssues();
-      renderTopFiles();
-      renderTopRules();
-      renderHotspots();
+      const hasIssues = currentIssues.length > 0;
+      elements.issuesScopeEmpty.hidden = hasIssues;
+      elements.issuesContent.hidden = !hasIssues;
+
+      if (hasIssues) {
+        renderMetricsSummary(currentSummary);
+        renderIssues();
+        renderTopFiles();
+        renderTopRules();
+      }
+
       renderEvolutionCharts();
+      renderHotspots();
       renderQualityGateButton();
       renderCoverageView();
       renderDataView();
