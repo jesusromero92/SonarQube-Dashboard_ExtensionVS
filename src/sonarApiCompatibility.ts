@@ -1,3 +1,18 @@
+import type {
+  CanonicalParameters,
+  LogicalParameter
+} from './sonarApi/contracts';
+import {
+  translateHotspotSearchParameters as translateHotspotParameters,
+  translateIssueSearchParameters as translateIssueParameters
+} from './sonarApi/searchParameterTranslation';
+
+export {
+  translateComponentShowParameters,
+  translateProjectAnalysesParameters,
+  translateProjectBranchesParameters
+} from './sonarApi/searchParameterTranslation';
+
 export const SONAR_API_ENDPOINTS = {
   systemStatus: '/api/system/status',
   webServicesList: '/api/webservices/list',
@@ -14,27 +29,6 @@ type VersionedEndpoint =
   | 'components.show'
   | 'projectAnalyses.search'
   | 'projectBranches.list';
-
-type LogicalParameter =
-  | 'issues.projectKeys'
-  | 'issues.page'
-  | 'issues.pageSize'
-  | 'issues.types'
-  | 'issues.severities'
-  | 'issues.statuses'
-  | 'issues.resolved'
-  | 'issues.newCode'
-  | 'issues.facets'
-  | 'issues.searchText'
-  | 'hotspots.projectKey'
-  | 'hotspots.page'
-  | 'hotspots.pageSize'
-  | 'hotspots.newCode'
-  | 'projectAnalyses.project'
-  | 'projectAnalyses.page'
-  | 'projectAnalyses.pageSize'
-  | 'projectBranches.project'
-  | 'componentsShow.component';
 
 export interface SonarApiProfile {
   readonly id: string;
@@ -117,8 +111,6 @@ export interface SonarCompatibilityInfo {
   readonly cleanCodeParameters: boolean;
   readonly capabilitiesAvailable: boolean;
 }
-
-type CanonicalParameters = Readonly<Record<string, string | undefined>>;
 
 const VERSION_PATTERN = /(\d+)(?:\.(\d+))?/;
 const COMPATIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -220,15 +212,6 @@ export const SONAR_API_PROFILES: readonly SonarApiProfile[] = [
     responseNormalization: RESPONSE_NORMALIZATION
   }
 ];
-
-const PARAMETER_ALTERNATIVES: Readonly<Partial<Record<LogicalParameter, readonly string[]>>> = {
-  'issues.projectKeys': ['components', 'componentKeys'],
-  'issues.types': ['impactSoftwareQualities', 'types'],
-  'issues.severities': ['impactSeverities', 'severities'],
-  'issues.statuses': ['issueStatuses', 'statuses'],
-  'issues.resolved': ['resolved'],
-  'hotspots.projectKey': ['project', 'projectKey']
-};
 
 class DiscoveredCapabilities implements SonarApiCapabilities {
   constructor(
@@ -410,214 +393,12 @@ export function sonarCompatibilityInfo(
   };
 }
 
-function mapCsv(csv: string, mapper: (value: string) => string): string {
-  return [...new Set(
-    csv
-      .split(',')
-      .map(value => mapper(value.trim()))
-      .filter(Boolean)
-  )].join(',');
-}
-
-function mergeCsv(left: string | null | undefined, right: string): string {
-  return [...new Set(
-    [left ?? '', right]
-      .flatMap(csv => csv.split(','))
-      .map(value => value.trim())
-      .filter(Boolean)
-  )].join(',');
-}
-
-function toSoftwareQualities(csv: string): string {
-  return mapCsv(csv, value => {
-    const normalized = value.toUpperCase().replace(/[- ]/g, '_');
-    if (normalized === 'CODE_SMELL' || normalized === 'SMELL') return 'MAINTAINABILITY';
-    if (normalized === 'BUG') return 'RELIABILITY';
-    if (normalized === 'VULNERABILITY') return 'SECURITY';
-    return normalized;
-  });
-}
-
-function toImpactSeverities(csv: string): string {
-  return mapCsv(csv, value => {
-    const normalized = value.toUpperCase();
-    if (normalized === 'CRITICAL') return 'HIGH';
-    if (normalized === 'MAJOR') return 'MEDIUM';
-    if (normalized === 'MINOR' || normalized === 'TRIVIAL') return 'LOW';
-    return normalized;
-  });
-}
-
-function toIssueStatuses(csv: string): string {
-  const result = new Set<string>();
-  for (const value of csv.split(',')) {
-    const normalized = value.trim().toUpperCase().replace(/-/g, '_');
-    if (normalized === 'REOPENED') {
-      result.add('OPEN');
-    } else if (normalized === 'RESOLVED') {
-      result.add('ACCEPTED');
-      result.add('FALSE_POSITIVE');
-      result.add('FIXED');
-    } else if (normalized === 'WONTFIX') {
-      result.add('ACCEPTED');
-    } else if (normalized === 'CLOSED' || normalized === 'REMOVED') {
-      result.add('FIXED');
-    } else if (normalized) {
-      result.add(normalized);
-    }
-  }
-  return [...result].join(',');
-}
-
-function toModernFacets(csv: string): string {
-  return mapCsv(csv, value => {
-    if (value === 'types') return 'impactSoftwareQualities';
-    if (value === 'severities') return 'impactSeverities';
-    if (value === 'statuses') return 'issueStatuses';
-    return value;
-  });
-}
-
-function setParameter(target: URLSearchParams, key: string, value: string): void {
-  if (key && value) {
-    target.set(key, value);
-  }
-}
-
-function effectiveParameter(
-  capabilities: SonarApiCapabilities,
-  endpoint: string,
-  profile: SonarApiProfile,
-  logicalName: LogicalParameter
-): string {
-  return capabilities.chooseParameter(
-    endpoint,
-    profile.parameters[logicalName],
-    PARAMETER_ALTERNATIVES[logicalName] ?? []
-  );
-}
-
 export function translateIssueSearchParameters(
   profile: SonarApiProfile,
   canonical: CanonicalParameters,
   capabilities: SonarApiCapabilities = UNAVAILABLE_SONAR_CAPABILITIES
 ): URLSearchParams {
-  const result = new URLSearchParams();
-  const endpoint = profile.endpoints['issues.search'];
-
-  for (const [key, rawValue] of Object.entries(canonical)) {
-    const value = rawValue?.trim() ?? '';
-    if (!key || !value) {
-      continue;
-    }
-    if (key === 'componentKeys') {
-      setParameter(
-        result,
-        effectiveParameter(capabilities, endpoint, profile, 'issues.projectKeys'),
-        value
-      );
-    } else if (key === 'p') {
-      result.set(profile.parameters['issues.page'], value);
-    } else if (key === 'ps') {
-      result.set(profile.parameters['issues.pageSize'], value);
-    } else if (key === 'types') {
-      setParameter(
-        result,
-        effectiveParameter(capabilities, endpoint, profile, 'issues.types'),
-        profile.cleanCodeParameters ? toSoftwareQualities(value) : value
-      );
-    } else if (key === 'severities') {
-      setParameter(
-        result,
-        effectiveParameter(capabilities, endpoint, profile, 'issues.severities'),
-        profile.cleanCodeParameters ? toImpactSeverities(value) : value
-      );
-    } else if (key === 'statuses') {
-      const parameter = effectiveParameter(
-        capabilities,
-        endpoint,
-        profile,
-        'issues.statuses'
-      );
-      setParameter(
-        result,
-        parameter,
-        capabilities.filterValues(
-          endpoint,
-          parameter,
-          profile.cleanCodeParameters ? toIssueStatuses(value) : value
-        )
-      );
-    } else if (key === 'resolved') {
-      const resolvedParameter = effectiveParameter(
-        capabilities,
-        endpoint,
-        profile,
-        'issues.resolved'
-      );
-      if (!profile.cleanCodeParameters && resolvedParameter) {
-        result.set(resolvedParameter, value);
-      } else if (
-        !profile.cleanCodeParameters ||
-        value.toLowerCase() === 'false' ||
-        value.toLowerCase() === 'true'
-      ) {
-        const statusParameter = effectiveParameter(
-          capabilities,
-          endpoint,
-          profile,
-          'issues.statuses'
-        );
-        const statuses = value.toLowerCase() === 'false'
-          ? profile.values['issues.openStatuses']
-          : profile.values['issues.closedStatuses'];
-        const filteredStatuses = capabilities.filterValues(
-          endpoint,
-          statusParameter,
-          statuses.join(',')
-        );
-        if (filteredStatuses) {
-          setParameter(result, statusParameter, filteredStatuses);
-        } else {
-          setParameter(result, resolvedParameter, value);
-        }
-      }
-    } else if (key === 'inNewCodePeriod') {
-      result.set(profile.parameters['issues.newCode'], value);
-    } else if (key === 'facets') {
-      result.set(
-        profile.parameters['issues.facets'],
-        profile.cleanCodeParameters ? toModernFacets(value) : value
-      );
-    } else if (key === 'searchText') {
-      result.set(profile.parameters['issues.searchText'], value);
-    } else if (key === 'resolutions') {
-      continue;
-    } else {
-      result.set(key, value);
-    }
-  }
-
-  const resolutions = canonical.resolutions?.trim() ?? '';
-  if (resolutions) {
-    if (profile.cleanCodeParameters) {
-      const statusParameter = effectiveParameter(
-        capabilities,
-        endpoint,
-        profile,
-        'issues.statuses'
-      );
-      const statuses = capabilities.filterValues(
-        endpoint,
-        statusParameter,
-        mergeCsv(result.get(statusParameter), toIssueStatuses(resolutions))
-      );
-      setParameter(result, statusParameter, statuses);
-    } else {
-      result.set('resolutions', resolutions);
-    }
-  }
-  return result;
+  return translateIssueParameters(profile, canonical, capabilities);
 }
 
 export function translateHotspotSearchParameters(
@@ -625,71 +406,5 @@ export function translateHotspotSearchParameters(
   canonical: CanonicalParameters,
   capabilities: SonarApiCapabilities = UNAVAILABLE_SONAR_CAPABILITIES
 ): URLSearchParams {
-  const result = new URLSearchParams();
-  const endpoint = profile.endpoints['hotspots.search'];
-  for (const [key, rawValue] of Object.entries(canonical)) {
-    const value = rawValue?.trim() ?? '';
-    if (!key || !value) {
-      continue;
-    }
-    if (key === 'projectKey') {
-      setParameter(
-        result,
-        effectiveParameter(capabilities, endpoint, profile, 'hotspots.projectKey'),
-        value
-      );
-    } else if (key === 'p') {
-      result.set(profile.parameters['hotspots.page'], value);
-    } else if (key === 'ps') {
-      result.set(profile.parameters['hotspots.pageSize'], value);
-    } else if (key === 'inNewCodePeriod') {
-      result.set(profile.parameters['hotspots.newCode'], value);
-    } else {
-      result.set(key, value);
-    }
-  }
-  return result;
-}
-
-function translateSimpleParameters(
-  canonical: CanonicalParameters,
-  aliases: Readonly<Record<string, string>>
-): URLSearchParams {
-  const result = new URLSearchParams();
-  for (const [key, rawValue] of Object.entries(canonical)) {
-    const value = rawValue?.trim() ?? '';
-    if (key && value) {
-      result.set(aliases[key] ?? key, value);
-    }
-  }
-  return result;
-}
-
-export function translateComponentShowParameters(
-  profile: SonarApiProfile,
-  canonical: CanonicalParameters
-): URLSearchParams {
-  return translateSimpleParameters(canonical, {
-    component: profile.parameters['componentsShow.component']
-  });
-}
-
-export function translateProjectAnalysesParameters(
-  profile: SonarApiProfile,
-  canonical: CanonicalParameters
-): URLSearchParams {
-  return translateSimpleParameters(canonical, {
-    project: profile.parameters['projectAnalyses.project'],
-    p: profile.parameters['projectAnalyses.page'],
-    ps: profile.parameters['projectAnalyses.pageSize']
-  });
-}
-
-export function translateProjectBranchesParameters(
-  profile: SonarApiProfile,
-  canonical: CanonicalParameters
-): URLSearchParams {
-  return translateSimpleParameters(canonical, {
-    project: profile.parameters['projectBranches.project']
-  });
+  return translateHotspotParameters(profile, canonical, capabilities);
 }
