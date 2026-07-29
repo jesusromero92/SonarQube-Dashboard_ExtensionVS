@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  connectionErrorMessage,
   connectionFingerprint,
   connectionNeedsValidation
 } from '../src/dashboard/connectionValidation';
@@ -37,5 +38,27 @@ test('la validación pertenece exactamente al servidor y token consultados', () 
   assert.notEqual(
     connectionFingerprint('https://sonarqube.example', 'token-correcto'),
     connectionFingerprint('https://otro.example', 'token-correcto')
+  );
+});
+
+test('convierte los fallos de red en un mensaje de conexión útil', () => {
+  assert.equal(
+    connectionErrorMessage(new TypeError('fetch failed')),
+    'No se pudo conectar con el servidor SonarQube. Comprueba la URL y que el servidor esté accesible.'
+  );
+});
+
+test('distingue credenciales rechazadas y servidores no compatibles', () => {
+  assert.equal(
+    connectionErrorMessage(Object.assign(new Error('Unauthorized'), { status: 401 })),
+    'El token de SonarQube no es válido.'
+  );
+  assert.equal(
+    connectionErrorMessage(Object.assign(new Error('Not Found'), { status: 404 })),
+    'La URL no corresponde a un servidor SonarQube compatible.'
+  );
+  assert.equal(
+    connectionErrorMessage(new SyntaxError('Unexpected token <')),
+    'La URL no corresponde a un servidor SonarQube compatible.'
   );
 });

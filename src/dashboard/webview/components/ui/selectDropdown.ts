@@ -1,4 +1,5 @@
 export interface SelectDropdownOption {
+  disabled?: boolean;
   label: string;
   value: string;
 }
@@ -6,6 +7,7 @@ export interface SelectDropdownOption {
 export interface SelectDropdownMarkupOptions {
   ariaLabel: string;
   className?: string;
+  disabled?: boolean;
   id: string;
   options: readonly SelectDropdownOption[];
   selectedValue?: string;
@@ -29,6 +31,7 @@ function escapeText(value: string): string {
 export function getSelectDropdownMarkup({
   ariaLabel,
   className = '',
+  disabled = false,
   id,
   options,
   selectedValue
@@ -39,25 +42,13 @@ export function getSelectDropdownMarkup({
   const accessibleLabel = `${ariaLabel}: ${selectedOption?.label ?? ''}`;
   const listboxId = `${id}Listbox`;
   const buttonId = `${id}Trigger`;
+  const disabledAttribute = disabled ? ' disabled' : '';
 
   const nativeOptions = options
     .map(option => {
       const selected = option.value === selectedOption?.value ? ' selected' : '';
-      return `                  <option value="${escapeAttribute(option.value)}"${selected}>${escapeText(option.label)}</option>`;
-    })
-    .join('\n');
-
-  const customOptions = options
-    .map(option => {
-      const selected = option.value === selectedOption?.value;
-      return `                <button
-                  class="select-dropdown__option"
-                  type="button"
-                  role="option"
-                  data-dropdown-option="${escapeAttribute(option.value)}"
-                  aria-selected="${selected ? 'true' : 'false'}"
-                  tabindex="${selected ? '0' : '-1'}"
-                >${escapeText(option.label)}</button>`;
+      const optionDisabled = option.disabled ? ' disabled' : '';
+      return `                  <option value="${escapeAttribute(option.value)}"${selected}${optionDisabled}>${escapeText(option.label)}</option>`;
     })
     .join('\n');
 
@@ -70,7 +61,7 @@ export function getSelectDropdownMarkup({
                   id="${escapeAttribute(id)}"
                   class="select-dropdown__native"
                   aria-label="${escapeAttribute(ariaLabel)}"
-                  tabindex="-1"
+                  tabindex="-1"${disabledAttribute}
                 >
 ${nativeOptions}
                 </select>
@@ -81,7 +72,7 @@ ${nativeOptions}
                   aria-haspopup="listbox"
                   aria-expanded="false"
                   aria-controls="${escapeAttribute(listboxId)}"
-                  aria-label="${escapeAttribute(accessibleLabel)}"
+                  aria-label="${escapeAttribute(accessibleLabel)}"${disabledAttribute}
                 >
                   <span class="select-dropdown__value">${escapeText(selectedOption?.label ?? '')}</span>
                   <span class="select-dropdown__chevron" aria-hidden="true"></span>
@@ -92,8 +83,6 @@ ${nativeOptions}
                   role="listbox"
                   aria-labelledby="${escapeAttribute(buttonId)}"
                   hidden
-                >
-${customOptions}
-                </div>
+                ></div>
               </div>`;
 }

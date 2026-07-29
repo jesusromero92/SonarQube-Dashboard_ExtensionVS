@@ -22,6 +22,7 @@ export const DASHBOARD_STATE_SCRIPT = `
     let selectedProjectKey = '';
     let currentFolderUri = '';
     let connectionDraftDirty = false;
+    let connectionDraftFolderUri = '';
     let connectionValidated = false;
     let connectionAttemptPending = false;
     let configurationBusy = false;

@@ -16,10 +16,8 @@ export const MESSAGE_EVENTS_SCRIPT = `
           break;
 
         case 'projectsLoading':
-          setStatus(
-            'loading',
-            'Consultando proyectos y aplicaciones visibles…'
-          );
+          elements.sonarCompatibility.hidden = true;
+          setConnectionBusy(true);
           break;
 
         case 'projectsLoaded':
@@ -32,7 +30,9 @@ export const MESSAGE_EVENTS_SCRIPT = `
                 elements.serverUrl.value.trim().replace(/\\/+$/, ''))
           ) {
             connectionDraftDirty = true;
+            connectionDraftFolderUri = currentFolderUri;
             connectionValidated = true;
+            currentConfig.serverUrl = elements.serverUrl.value.trim();
             currentConfig.hasToken = true;
             currentConfig.projectKey = '';
             currentConfig.projectName = '';
@@ -55,19 +55,19 @@ export const MESSAGE_EVENTS_SCRIPT = `
             }
             renderEmptyState();
           }
-          setBusy(false);
+          setConnectionBusy(false);
           break;
 
         case 'connectionValidationFailed':
           if (!message.folderUri || message.folderUri === currentFolderUri) {
-            connectionAttemptPending = false;
             connectionDraftDirty = true;
+            connectionDraftFolderUri = currentFolderUri;
             connectionValidated = false;
             currentConfig.hasToken = false;
             currentConfig.sonarCompatibility = undefined;
             elements.configState.textContent = 'Sin configurar';
             resetProjectOptionsForDisconnectedConnection();
-            renderSonarCompatibility(undefined, false);
+            elements.sonarCompatibility.hidden = true;
             renderEmptyState();
           }
           break;
@@ -95,7 +95,8 @@ export const MESSAGE_EVENTS_SCRIPT = `
           if (message.kind === 'error' && connectionAttemptPending) {
             connectionAttemptPending = false;
             connectionValidated = false;
-            resetProjectOptionsForDisconnectedConnection();
+            setConnectionBusy(false);
+            elements.sonarCompatibility.hidden = true;
           }
           if (message.kind !== 'loading') {
             setBusy(false);

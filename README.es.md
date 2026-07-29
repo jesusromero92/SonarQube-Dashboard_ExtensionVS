@@ -35,12 +35,12 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Tabla de defectos con filtro y navegación al código.
 - Gestión del ciclo de vida del defecto sin salir de VS Code: aceptar, falso positivo, reapertura, asignación, comentarios, historial y responsable actual.
 - Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias, CodeLens y decoraciones en el editor.
-- Vista de cobertura y duplicación con métricas globales/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico agrupable por día, semana o mes.
+- Vista de cobertura y duplicación con métricas actuales de Overall/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico de Overall agrupable por día, semana o mes.
 - Navegación mediante atajos, contador en la barra de estado y explorador agrupado por archivo, regla o severidad.
 - Notificaciones automáticas de regresiones, fallos del Quality Gate, nuevos hotspots y análisis completados.
 - Tabla específica de Security Hotspots.
 - Rankings de archivos y reglas con ordenación por columnas.
-- Evolución histórica por tipo de issue y criticidad, con agrupación independiente por día, semana o mes en cada gráfica.
+- Evolución histórica de Overall por tipo de issue y criticidad, con agrupación independiente por día, semana o mes en cada gráfica. New Code conserva sus métricas actuales, pero oculta las gráficas históricas no comparables.
 - Publicación de diagnósticos en **Problems**.
 - Compatibilidad con ramas y subcarpetas locales.
 
@@ -52,10 +52,10 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 4. Abre la pestaña **Configuración**.
 5. Selecciona **Español** o **English** en el desplegable de idioma. El dashboard, el panel lateral, las notificaciones, los modales y los mensajes del scanner cambian inmediatamente.
 6. Introduce la URL del servidor y un token de acceso.
-7. Pulsa **Conectar y cargar proyectos**.
-8. Vincula la carpeta con el proyecto o aplicación de SonarQube que analiza ese código.
+7. Pulsa **Conectar** para validar el servidor y el token y cargar los proyectos visibles.
+8. Selecciona expresamente el proyecto o aplicación de SonarQube que analiza la carpeta abierta. Conectar nunca vincula un proyecto automáticamente.
 9. Configura opcionalmente la rama y, si las rutas no parten de la raíz del workspace, la subcarpeta local.
-10. Pulsa **Guardar y sincronizar**.
+10. Pulsa **Sincronizar** para guardar la vinculación y cargar sus datos.
 11. En la página **Datos**, pulsa **Analizar repositorio** para generar y enviar un nuevo análisis.
 
 Después de la primera vinculación, la extensión sincroniza los datos automáticamente al abrir el workspace. El icono de recarga del panel lateral permite solicitar una actualización manual.
@@ -86,10 +86,11 @@ El selector global **Overall / New Code** actualiza de forma coordinada:
 - la tabla de defectos;
 - los Security Hotspots;
 - Top Archivos;
-- Top Reglas;
-- las gráficas de evolución.
+- Top Reglas.
 
-**Overall** representa el estado completo del proyecto. **New Code** limita la vista al periodo de código nuevo configurado en SonarQube.
+**Overall** representa el estado completo del proyecto. **New Code** limita los resúmenes actuales, issues, hotspots, cobertura y duplicación al periodo de código nuevo configurado en SonarQube.
+
+La evolución histórica se muestra únicamente en **Overall**. La definición de New Code puede cambiar entre análisis, por lo que sus valores no siempre son comparables como serie temporal. En New Code, la extensión oculta las gráficas de evolución de issues, criticidad, cobertura y duplicación y muestra un aviso explicativo en lugar de valores cero artificiales.
 
 ### Resumen superior
 
@@ -231,16 +232,15 @@ Las ubicaciones que forman parte del flujo de SonarQube pero no existen en el wo
 
 ![Cobertura, duplicación, rankings de archivos y evolución histórica](docs/images/coverage-duplication.png)
 
-La pestaña **Cobertura y duplicación** incluye vistas independientes para Overall y New Code de:
+La pestaña **Cobertura y duplicación** incluye vistas actuales independientes para Overall y New Code de:
 
 - cobertura, cobertura de líneas y cobertura de condiciones;
 - líneas a cubrir y líneas sin cubrir;
 - densidad de líneas duplicadas, bloques duplicados y líneas duplicadas;
 - archivos con menor cobertura;
-- archivos con mayor duplicación;
-- evolución histórica de cobertura y duplicación.
+- archivos con mayor duplicación.
 
-Las gráficas de cobertura y duplicación también incluyen selectores **Día / Semana / Mes** independientes y conservan el último análisis de cada intervalo.
+Las gráficas históricas de cobertura y duplicación están disponibles únicamente en **Overall**. Incluyen selectores **Día / Semana / Mes** independientes y conservan el último análisis de cada intervalo. En **New Code** se mantienen las métricas actuales y los rankings de archivos, mientras que las gráficas se sustituyen por un aviso que explica por qué no existe una serie comparable.
 
 Al seleccionar un archivo se cargan los datos por línea bajo demanda. Las líneas cubiertas, parcialmente cubiertas y no cubiertas se marcan en el gutter y el overview ruler. Las líneas duplicadas utilizan una decoración propia, y el modal de detalle enumera cada bloque duplicado junto con todos los archivos y rangos locales coincidentes.
 
@@ -366,6 +366,8 @@ El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados
 ## Configuración
 
 ![Configuración de la conexión con SonarQube](docs/images/configuration.png)
+
+El flujo de conexión es explícito: **Conectar** valida la URL y el token y carga los componentes visibles sin seleccionar ninguno. Si la validación falla, el desplegable de proyectos permanece vacío y deshabilitado. El proyecto solo queda vinculado cuando el usuario lo selecciona y pulsa **Sincronizar**. Los borradores no guardados del servidor y del token se conservan al cambiar entre Datos y Configuración.
 
 La página de configuración permite gestionar:
 

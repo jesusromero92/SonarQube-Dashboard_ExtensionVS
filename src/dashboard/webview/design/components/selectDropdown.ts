@@ -4,6 +4,9 @@ export const SELECT_DROPDOWN_STYLES = `
       width: 128px;
       min-width: 0;
     }
+    .select-dropdown--fluid {
+      width: 100%;
+    }
     .select-dropdown__native {
       position: absolute;
       width: 1px;
@@ -30,8 +33,12 @@ export const SELECT_DROPDOWN_STYLES = `
       text-align: left;
       white-space: nowrap;
     }
-    .select-dropdown__trigger:hover {
+    .select-dropdown__trigger:hover:not(:disabled) {
       background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    }
+    .select-dropdown__trigger:disabled {
+      cursor: default;
+      opacity: .55;
     }
     .select-dropdown__value {
       min-width: 0;
@@ -57,13 +64,15 @@ export const SELECT_DROPDOWN_STYLES = `
     }
     .select-dropdown__menu {
       position: absolute;
-      top: calc(100% + 6px);
+      top: calc(100% + 7px);
       right: 0;
       left: 0;
+      box-sizing: border-box;
       width: 100%;
       min-width: 100%;
       max-height: 220px;
       padding: 3px;
+      overflow-x: hidden;
       overflow-y: auto;
       border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
       color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
@@ -80,10 +89,12 @@ export const SELECT_DROPDOWN_STYLES = `
       color: inherit;
       background: transparent;
       text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .select-dropdown__option:hover,
-    .select-dropdown__option:focus-visible {
+    .select-dropdown__option:hover:not(:disabled),
+    .select-dropdown__option:focus-visible:not(:disabled) {
       color: var(--vscode-list-hoverForeground, var(--vscode-foreground));
       background: var(--vscode-list-hoverBackground);
       outline: none;
@@ -91,5 +102,9 @@ export const SELECT_DROPDOWN_STYLES = `
     .select-dropdown__option[aria-selected="true"] {
       color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
       background: var(--vscode-list-activeSelectionBackground);
+    }
+    .select-dropdown__option:disabled {
+      cursor: default;
+      opacity: .55;
     }
 `;

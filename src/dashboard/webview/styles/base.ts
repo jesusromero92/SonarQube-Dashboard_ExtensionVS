@@ -149,6 +149,28 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
     .required { color: var(--vscode-errorForeground); }
     .form-grid { display: grid; gap: 14px; }
     .connection-row { grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) auto; align-items: start; }
+    .connection-status {
+      margin-top: 14px;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-textBlockQuote-background);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .connection-status--error {
+      border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+      color: var(--vscode-errorForeground);
+      background: var(--vscode-inputValidation-errorBackground, var(--vscode-textBlockQuote-background));
+    }
+    .connection-status--success {
+      border-color: var(--vscode-testing-iconPassed);
+      color: var(--vscode-testing-iconPassed);
+    }
+    .connection-status--loading {
+      color: var(--vscode-descriptionForeground);
+    }
     .compatibility-summary {
       display: flex;
       align-items: center;

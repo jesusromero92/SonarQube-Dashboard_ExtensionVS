@@ -208,6 +208,8 @@ export const EN_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   "validUrl": "Enter a valid SonarQube URL.",
   "tokenForProjects": "Enter a token to query visible projects.",
   "invalidSonarToken": "The SonarQube token is invalid.",
+  "sonarServerUnreachable": "Could not connect to the SonarQube server. Check the URL and make sure the server is reachable.",
+  "incompatibleSonarUrl": "The URL does not point to a compatible SonarQube server.",
   "openFolderSave": "Open a folder before saving the configuration.",
   "loadSelectProject": "Load the list and select a project or application.",
   "enterSonarToken": "Enter a SonarQube token.",

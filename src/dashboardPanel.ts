@@ -27,6 +27,7 @@ import {
 } from './dashboard/contracts';
 import { createEmptyRefreshSummary } from './dashboard/summary';
 import {
+  connectionErrorMessage,
   connectionFingerprint,
   connectionNeedsValidation,
   normalizeConnectionServerUrl
@@ -510,7 +511,10 @@ export class DashboardPanel {
         serverUrl,
         sonarCompatibility: undefined
       });
-      this.postStatus('error', this.errorMessage(error));
+      this.postStatus(
+        'error',
+        localizeRuntimeText(connectionErrorMessage(error), this.language)
+      );
       return;
     }
 
@@ -558,7 +562,10 @@ export class DashboardPanel {
         serverUrl,
         sonarCompatibility: undefined
       });
-      this.postStatus('error', this.errorMessage(error));
+      this.postStatus(
+        'error',
+        localizeRuntimeText(connectionErrorMessage(error), this.language)
+      );
     }
   }
 

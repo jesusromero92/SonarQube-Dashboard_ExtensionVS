@@ -5,6 +5,7 @@ import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core
 import { ELEMENT_REGISTRY_SCRIPT } from '../src/dashboard/webview/scripts/core/elements';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
 import { MESSAGE_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/messages';
+import { SELECT_DROPDOWN_SCRIPT } from '../src/dashboard/webview/scripts/ui/selectDropdown';
 import { EN_MESSAGES } from '../src/i18n/en';
 import { ES_MESSAGES } from '../src/i18n/es';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
@@ -26,7 +27,11 @@ test('la configuración contiene todos los elementos de versión y perfil', () =
 test('el webview actualiza compatibilidad al conectar, guardar y recibir estado', () => {
   assert.match(CONFIGURATION_CORE_SCRIPT, /function renderSonarCompatibility/);
   assert.match(CONFIGURATION_CORE_SCRIPT, /config\.sonarCompatibility/);
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /renderSonarCompatibility\(undefined, true\)/);
+  assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /renderSonarCompatibility\(undefined, true\)/);
+  assert.match(
+    CONFIGURATION_EVENTS_SCRIPT,
+    /elements\.sonarCompatibility\.hidden = true/
+  );
   assert.match(MESSAGE_EVENTS_SCRIPT, /case 'sonarCompatibility'/);
   assert.match(MESSAGE_EVENTS_SCRIPT, /message\.sonarCompatibility/);
   assert.match(MESSAGE_EVENTS_SCRIPT, /message\.tokenStored/);
@@ -50,7 +55,7 @@ test('conectar obliga a seleccionar de nuevo el proyecto antes de sincronizar', 
   assert.match(CONFIGURATION_EVENTS_SCRIPT, /selectedProjectKey = ''/);
   assert.match(
     CONFIGURATION_EVENTS_SCRIPT,
-    /elements\.projectKey\.disabled = true/
+    /resetProjectOptionsForDisconnectedConnection\(\)/
   );
   assert.match(
     MESSAGE_EVENTS_SCRIPT,
@@ -130,4 +135,70 @@ test('una conexión inválida vacía y deshabilita el selector de proyectos', ()
     CONFIGURATION_EVENTS_SCRIPT,
     /connectionAttemptPending = true/
   );
+});
+
+
+test('los errores de conexión se muestran bajo las credenciales y ocultan la compatibilidad', () => {
+  assert.match(
+    CONFIGURATION_PAGE_MARKUP,
+    /id="connectionStatus"[\s\S]*id="sonarCompatibility"/
+  );
+  assert.match(ELEMENT_REGISTRY_SCRIPT, /"connectionStatus"/);
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /function setStatus\(kind, message = ''\)[\s\S]*elements\.connectionStatus\.textContent = message/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /kind === 'error' \? 'alert' : 'status'/
+  );
+  assert.match(
+    MESSAGE_EVENTS_SCRIPT,
+    /message\.kind === 'error' && connectionAttemptPending[\s\S]*elements\.sonarCompatibility\.hidden = true/
+  );
+});
+
+test('los reintentos de conexión no reconstruyen controles ni bloquean acciones ajenas', () => {
+  const connectionBusy = CONFIGURATION_CORE_SCRIPT.match(
+    /function setConnectionBusy\(busy\) \{[\s\S]*?\n    \}/
+  )?.[0] ?? '';
+  assert.match(connectionBusy, /elements\.loadProjects\.disabled/);
+  assert.doesNotMatch(connectionBusy, /elements\.refresh/);
+  assert.doesNotMatch(connectionBusy, /elements\.syncEmpty/);
+
+  assert.match(
+    CONFIGURATION_EVENTS_SCRIPT,
+    /resetProjectOptionsForDisconnectedConnection\(\);[\s\S]*setConnectionBusy\(true\)/
+  );
+  assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /loadingOption/);
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /elements\.projectKey\.disabled &&[\s\S]*elements\.projectKey\.options\.length === 1[\s\S]*return/
+  );
+  assert.doesNotMatch(
+    MESSAGE_EVENTS_SCRIPT,
+    /message\.kind === 'error' && connectionAttemptPending[\s\S]{0,180}resetProjectOptionsForDisconnectedConnection/
+  );
+});
+
+test('la configuración reutiliza el componente de desplegable del dashboard', () => {
+  for (const id of ['language', 'folder', 'projectKey', 'scannerMode']) {
+    assert.match(CONFIGURATION_PAGE_MARKUP, new RegExp(`id="${id}"`));
+  }
+  assert.equal(
+    CONFIGURATION_PAGE_MARKUP.match(/data-select-dropdown/g)?.length,
+    4
+  );
+  assert.match(CONFIGURATION_PAGE_MARKUP, /select-dropdown--fluid/);
+  assert.match(SELECT_DROPDOWN_SCRIPT, /MutationObserver/);
+  assert.match(SELECT_DROPDOWN_SCRIPT, /trigger\.disabled = select\.disabled/);
+});
+
+test('conserva el borrador de servidor y token al navegar entre páginas', () => {
+  assert.match(CONFIGURATION_CORE_SCRIPT, /preserveConnectionDraft/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /draftServerUrl/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /draftToken/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /draftConnectionValidated/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /connectionDraftFolderUri = currentFolderUri/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /currentConfig\.serverUrl = elements\.serverUrl\.value\.trim\(\)/);
 });

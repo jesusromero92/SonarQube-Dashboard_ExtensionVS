@@ -63,8 +63,10 @@ test('cada gráfica ofrece su propio selector de día, semana y mes', () => {
     4
   );
   assert.match(SELECT_DROPDOWN_SCRIPT, /dispatchEvent\(new Event\('change'/);
-  assert.match(SELECT_DROPDOWN_STYLES, /top: calc\(100% \+ 6px\)/);
+  assert.match(SELECT_DROPDOWN_STYLES, /top: calc\(100% \+ 7px\)/);
   assert.match(SELECT_DROPDOWN_STYLES, /width: 100%/);
+  assert.match(SELECT_DROPDOWN_SCRIPT, /MutationObserver/);
+  assert.match(SELECT_DROPDOWN_SCRIPT, /function refreshSelectDropdown/);
   assert.match(CHARTS_SCRIPT, /byBucket\.set\(bucket, \{ \.\.\.point, label: bucket \}\)/);
   assert.match(CHARTS_SCRIPT, /slice\(-dashboardConstants\.evolutionLimit\)/);
   assert.match(DASHBOARD_EVENTS_SCRIPT, /bindEvolutionGranularity/);

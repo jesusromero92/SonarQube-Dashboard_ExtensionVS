@@ -17,6 +17,8 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
 
     elements.folder.addEventListener('change', () => {
       currentFolderUri = elements.folder.value;
+      connectionDraftDirty = false;
+      connectionDraftFolderUri = '';
       connectionValidated = false;
       updateSaveAvailability();
       loadedProjects = [];
@@ -41,9 +43,11 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
 
     function markConnectionDraftDirty() {
       connectionDraftDirty = true;
+      connectionDraftFolderUri = currentFolderUri;
       connectionValidated = false;
       currentConfig.sonarCompatibility = undefined;
       elements.sonarCompatibility.hidden = true;
+      clearStatus();
       updateSaveAvailability();
     }
 
@@ -58,6 +62,7 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
     elements.loadProjects.addEventListener('click', () => {
       connectionAttemptPending = true;
       connectionDraftDirty = true;
+      connectionDraftFolderUri = currentFolderUri;
       connectionValidated = false;
       selectedProjectKey = '';
       currentConfig.projectKey = '';
@@ -66,18 +71,9 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       elements.configState.textContent = 'Sin configurar';
       updateSaveAvailability();
       renderEmptyState();
-      elements.projectKey.textContent = '';
-      const loadingOption = document.createElement('option');
-      loadingOption.value = '';
-      loadingOption.textContent =
-        'Consultando proyectos y aplicaciones visibles…';
-      elements.projectKey.appendChild(loadingOption);
-      elements.projectKey.disabled = true;
-      setStatus(
-        'loading',
-        'Consultando proyectos y aplicaciones visibles…'
-      );
-      renderSonarCompatibility(undefined, true);
+      resetProjectOptionsForDisconnectedConnection();
+      setConnectionBusy(true);
+      elements.sonarCompatibility.hidden = true;
       vscode.postMessage({
         type: 'loadProjects',
         ...values()

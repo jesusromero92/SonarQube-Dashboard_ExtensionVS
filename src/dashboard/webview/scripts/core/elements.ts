@@ -25,6 +25,7 @@ const DASHBOARD_ELEMENT_IDS = [
   'serverUrl',
   'token',
   'tokenHint',
+  'connectionStatus',
   'sonarCompatibility',
   'sonarVersion',
   'sonarProfile',

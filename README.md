@@ -34,12 +34,12 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Filterable issue table with direct navigation to source code.
 - Issue lifecycle management without leaving VS Code: accept, false positive, reopen, assignment, comments, history, and current assignee.
 - Security execution-flow navigation with source, intermediate steps, sink, secondary locations, CodeLens, and editor decorations.
-- Coverage and duplication view with global/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and historical trends grouped by day, week, or month.
+- Coverage and duplication view with current Overall/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and Overall historical trends grouped by day, week, or month.
 - Keyboard navigation, status-bar counter, and an issue explorer grouped by file, rule, or severity.
 - Automatic regression notifications for critical issues, Quality Gate failures, issue increases, new hotspots, and completed analyses.
 - Dedicated Security Hotspots table.
 - File and rule rankings with sortable columns.
-- Historical evolution by issue type and severity, with independent day, week, or month grouping for every chart.
+- Overall historical evolution by issue type and severity, with independent day, week, or month grouping for every chart. New Code keeps its current metrics but intentionally hides non-comparable historical charts.
 - Native diagnostics published in **Problems**.
 - Support for branches and local subfolders.
 
@@ -51,10 +51,10 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 4. Open the **Configuration** tab.
 5. Select **English** or **Español** from the language dropdown. The dashboard, side panel, notifications, dialogs, and scanner messages update immediately.
 6. Enter the server URL and an access token.
-7. Select **Connect and load projects**.
-8. Link the folder to the SonarQube project or application that analyzes that code.
+7. Select **Connect** to validate the server and token and load the visible projects.
+8. Explicitly select the SonarQube project or application that analyzes the open folder. Connecting never links a project automatically.
 9. Optionally configure the branch and, when paths do not start at the workspace root, the local subfolder.
-10. Select **Save and synchronize**.
+10. Select **Synchronize** to save the link and load its data.
 11. On the **Data** page, select **Analyze repository** to create and submit a new analysis.
 
 After the first link is created, the extension synchronizes data automatically whenever the workspace is opened. The refresh icon in the side panel can be used to request a manual update.
@@ -85,10 +85,11 @@ The global **Overall / New Code** selector updates all of the following together
 - the issues table;
 - Security Hotspots;
 - Top Files;
-- Top Rules;
-- historical charts.
+- Top Rules.
 
-**Overall** represents the complete project state. **New Code** limits the view to the new-code period configured in SonarQube.
+**Overall** represents the complete project state. **New Code** limits the current summaries, issues, hotspots, coverage, and duplication metrics to the new-code period configured in SonarQube.
+
+Historical evolution is displayed only in **Overall**. The New Code definition can change between analyses, so its values are not always directly comparable as a time series. In New Code, the extension hides the issue, severity, coverage, and duplication evolution charts and displays an explanatory notice instead of artificial zero values.
 
 ### Top summary
 
@@ -230,16 +231,15 @@ Locations that are part of the SonarQube flow but do not exist in the open works
 
 ![Coverage, duplication, file rankings, and historical evolution](docs/images/coverage-duplication.png)
 
-The **Coverage and duplication** data tab provides separate Overall and New Code views for:
+The **Coverage and duplication** data tab provides separate current Overall and New Code views for:
 
 - coverage, line coverage, and condition coverage;
 - lines to cover and uncovered lines;
 - duplicated-line density, duplicated blocks, and duplicated lines;
 - files with the lowest coverage;
-- files with the highest duplication;
-- historical coverage and duplication charts.
+- files with the highest duplication.
 
-The coverage and duplication charts also provide independent **Day / Week / Month** selectors and retain the latest analysis from each interval.
+Historical coverage and duplication charts are available in **Overall** only. They provide independent **Day / Week / Month** selectors and retain the latest analysis from each interval. In **New Code**, the current metrics and file rankings remain available, while the historical charts are replaced with a notice explaining why the series is unavailable.
 
 Selecting a file loads line-level data on demand. Covered, partially covered, and uncovered lines are marked in the gutter and overview ruler. Duplicated lines receive a dedicated decoration, and the detail dialog lists each duplicated block together with every matching local file and range.
 
@@ -365,6 +365,8 @@ The **Clear Problems** command removes only diagnostics published by this extens
 ## Configuration
 
 ![SonarQube connection configuration](docs/images/configuration.png)
+
+The connection workflow is explicit: **Connect** validates the URL and token and loads the visible components without selecting one. The project dropdown remains empty and disabled when validation fails. A project is linked only after the user selects it and presses **Synchronize**. Unsaved server and token drafts are preserved when moving between Data and Configuration.
 
 The configuration page manages:
 

@@ -42,8 +42,44 @@ export const CONFIGURATION_CORE_SCRIPT = `
       updateSaveAvailability();
     }
 
-    function setStatus(kind) {
+    function setConnectionBusy(busy) {
+      elements.loadProjects.disabled = Boolean(busy);
+    }
+
+    function clearStatus() {
+      elements.connectionStatus.hidden = true;
+      elements.connectionStatus.textContent = '';
+      elements.connectionStatus.className = 'connection-status';
+      elements.connectionStatus.setAttribute('role', 'status');
+      elements.connectionStatus.setAttribute('aria-live', 'polite');
+    }
+
+    function setStatus(kind, message = '') {
       setBusy(kind === 'loading');
+      if (!message) {
+        clearStatus();
+        return;
+      }
+
+      elements.connectionStatus.hidden = false;
+      elements.connectionStatus.textContent = message;
+      elements.connectionStatus.className =
+        'connection-status connection-status--' + kind;
+      elements.connectionStatus.setAttribute(
+        'role',
+        kind === 'error' ? 'alert' : 'status'
+      );
+      elements.connectionStatus.setAttribute(
+        'aria-live',
+        kind === 'error' ? 'assertive' : 'polite'
+      );
+    }
+
+    function refreshConfigurationDropdowns(rebuild = false) {
+      refreshSelectDropdown(elements.language, rebuild);
+      refreshSelectDropdown(elements.folder, rebuild);
+      refreshSelectDropdown(elements.projectKey, rebuild);
+      refreshSelectDropdown(elements.scannerMode, rebuild);
     }
 
     function renderSonarCompatibility(compatibility, loading) {
@@ -123,6 +159,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
         elements.projectKey.appendChild(option);
         elements.projectKey.disabled = true;
         selectedProjectKey = '';
+        refreshSelectDropdown(elements.projectKey, true);
         updateSaveAvailability();
         return;
       }
@@ -145,6 +182,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       const exists = projects.some(project => project.key === desiredKey);
       elements.projectKey.value = exists ? desiredKey : '';
       selectedProjectKey = elements.projectKey.value;
+      refreshSelectDropdown(elements.projectKey, true);
       updateSaveAvailability();
     }
 
@@ -153,6 +191,16 @@ export const CONFIGURATION_CORE_SCRIPT = `
       selectedProjectKey = '';
       currentConfig.projectKey = '';
       currentConfig.projectName = '';
+
+      if (
+        elements.projectKey.disabled &&
+        elements.projectKey.options.length === 1 &&
+        !elements.projectKey.value
+      ) {
+        updateSaveAvailability();
+        return;
+      }
+
       elements.projectKey.textContent = '';
 
       const option = document.createElement('option');
@@ -160,6 +208,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       option.textContent = 'Introduce servidor y token para cargar la lista';
       elements.projectKey.appendChild(option);
       elements.projectKey.disabled = true;
+      refreshSelectDropdown(elements.projectKey, true);
       updateSaveAvailability();
     }
 
@@ -192,12 +241,39 @@ export const CONFIGURATION_CORE_SCRIPT = `
       option.textContent = 'Introduce servidor y token para cargar la lista';
       elements.projectKey.appendChild(option);
       elements.projectKey.disabled = true;
+      refreshSelectDropdown(elements.projectKey, true);
       updateSaveAvailability();
     }
 
     function renderState(message) {
-      connectionDraftDirty = Boolean(message.connectionDraftDirty);
       const folders = message.folders || [];
+      const incomingFolderUri = message.selectedFolderUri || '';
+      const folderChanged = Boolean(
+        currentFolderUri && currentFolderUri !== incomingFolderUri
+      );
+      const preserveConnectionDraft = Boolean(
+        !folderChanged &&
+        connectionDraftDirty &&
+        connectionDraftFolderUri === incomingFolderUri
+      );
+      const draftServerUrl = preserveConnectionDraft
+        ? elements.serverUrl.value
+        : '';
+      const draftToken = preserveConnectionDraft
+        ? elements.token.value
+        : '';
+      const draftConnectionValidated = preserveConnectionDraft &&
+        connectionValidated;
+      const draftCompatibility = preserveConnectionDraft
+        ? currentConfig.sonarCompatibility
+        : undefined;
+
+      connectionDraftDirty = Boolean(message.connectionDraftDirty) ||
+        preserveConnectionDraft;
+      connectionDraftFolderUri = connectionDraftDirty
+        ? incomingFolderUri
+        : '';
+
       elements.language.value = message.language || dashboardLanguage;
       hasWorkspace = folders.length > 0;
       elements.emptyWorkspace.hidden = hasWorkspace;
@@ -215,18 +291,19 @@ export const CONFIGURATION_CORE_SCRIPT = `
           buildCommand: '',
           customScannerCommand: ''
         };
+        connectionDraftDirty = false;
+        connectionDraftFolderUri = '';
         connectionValidated = false;
+        elements.folder.disabled = true;
         elements.configState.textContent = 'Sin carpeta abierta';
+        refreshConfigurationDropdowns(true);
         updateSaveAvailability();
         renderEmptyState();
         return;
       }
 
       workspaceTrusted = message.workspaceTrusted !== false;
-      const folderChanged =
-        currentFolderUri &&
-        currentFolderUri !== message.selectedFolderUri;
-      currentFolderUri = message.selectedFolderUri;
+      currentFolderUri = incomingFolderUri;
 
       elements.folder.textContent = '';
       for (const folder of folders) {
@@ -235,17 +312,29 @@ export const CONFIGURATION_CORE_SCRIPT = `
         option.textContent = folder.name;
         elements.folder.appendChild(option);
       }
-      elements.folder.value = message.selectedFolderUri;
+      elements.folder.disabled = false;
+      elements.folder.value = incomingFolderUri;
       elements.folderField.hidden = folders.length === 1;
 
       currentConfig = message.config || {};
+      if (preserveConnectionDraft) {
+        currentConfig = {
+          ...currentConfig,
+          serverUrl: draftServerUrl,
+          hasToken: currentConfig.hasToken || Boolean(draftToken) || draftConnectionValidated,
+          sonarCompatibility: draftCompatibility
+        };
+      }
       connectionValidated = Boolean(
-        !connectionDraftDirty &&
-        currentConfig.serverUrl &&
-        currentConfig.hasToken
+        draftConnectionValidated ||
+        (!connectionDraftDirty &&
+          currentConfig.serverUrl &&
+          currentConfig.hasToken)
       );
-      elements.serverUrl.value = currentConfig.serverUrl || '';
-      elements.token.value = '';
+      elements.serverUrl.value = preserveConnectionDraft
+        ? draftServerUrl
+        : currentConfig.serverUrl || '';
+      elements.token.value = preserveConnectionDraft ? draftToken : '';
       elements.token.placeholder = currentConfig.hasToken
         ? 'Token guardado · escribe otro para sustituirlo'
         : 'Introduce el token';
@@ -270,6 +359,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       renderSonarCompatibility(
         currentConfig.sonarCompatibility,
         Boolean(
+          !connectionDraftDirty &&
           currentConfig.serverUrl &&
           currentConfig.hasToken &&
           !currentConfig.sonarCompatibility
@@ -283,12 +373,15 @@ export const CONFIGURATION_CORE_SCRIPT = `
         loadedProjects = [];
         selectedProjectKey = '';
         summaryVisible = false;
+        connectionDraftDirty = false;
+        connectionDraftFolderUri = '';
       }
 
       selectedProjectKey = connectionDraftDirty
         ? ''
         : currentConfig.projectKey || selectedProjectKey;
       restoreProjectOptions();
+      refreshConfigurationDropdowns(true);
 
       renderAnalysisState(currentAnalysisState);
       renderEmptyState();
@@ -296,6 +389,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
 
     function renderConfigurationSaved(config) {
       connectionDraftDirty = false;
+      connectionDraftFolderUri = '';
       connectionValidated = Boolean(config.serverUrl && config.hasToken);
       currentConfig = config;
       selectedProjectKey = config.projectKey || selectedProjectKey;
@@ -315,6 +409,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.buildCommand.value = config.buildCommand || '';
       elements.customScannerCommand.value = config.customScannerCommand || '';
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
+      refreshConfigurationDropdowns(true);
       renderSonarCompatibility(config.sonarCompatibility, false);
       updateSaveAvailability();
       renderEmptyState();

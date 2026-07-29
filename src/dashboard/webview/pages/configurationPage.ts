@@ -1,8 +1,35 @@
 import { SCANNER_MODES } from '../../../constants';
+import { getSelectDropdownMarkup } from '../components/ui/selectDropdown';
 
-const scannerOptions = SCANNER_MODES
-  .map(mode => `<option value="${mode.value}">${mode.label}</option>`)
-  .join('');
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' }
+] as const;
+
+const EMPTY_FOLDER_OPTIONS = [
+  { value: '', label: 'No hay carpetas disponibles' }
+] as const;
+
+const DISCONNECTED_PROJECT_OPTIONS = [
+  { value: '', label: 'Introduce servidor y token para cargar la lista' }
+] as const;
+
+function configurationDropdown(
+  id: string,
+  ariaLabel: string,
+  options: readonly { label: string; value: string }[],
+  selectedValue?: string,
+  disabled = false
+): string {
+  return getSelectDropdownMarkup({
+    ariaLabel,
+    className: 'select-dropdown--fluid configuration-select',
+    disabled,
+    id,
+    options,
+    selectedValue
+  });
+}
 
 export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" class="page" hidden>
         <section class="panel">
@@ -21,17 +48,14 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
               <div class="form-grid language-row">
                 <div class="field">
                   <label for="language">Idioma</label>
-                  <select id="language">
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                  </select>
+${configurationDropdown('language', 'Idioma', LANGUAGE_OPTIONS, 'en')}
                   <div class="hint">Cambia inmediatamente el idioma del dashboard y los mensajes de la extensión.</div>
                 </div>
               </div>
 
               <div id="folderField" class="workspace-row" hidden>
                 <label for="folder">Carpeta del workspace</label>
-                <select id="folder"></select>
+${configurationDropdown('folder', 'Carpeta del workspace', EMPTY_FOLDER_OPTIONS, '', true)}
               </div>
 
               <div class="form-grid connection-row">
@@ -49,6 +73,8 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                   <button id="loadProjects" type="button">Conectar</button>
                 </div>
               </div>
+
+              <div id="connectionStatus" class="connection-status" role="status" aria-live="polite" hidden></div>
 
               <div id="sonarCompatibility" class="compatibility-summary" hidden>
                 <span class="compatibility-title">Compatibilidad de la API</span>
@@ -68,9 +94,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
               <div class="form-grid project-row">
                 <div class="field">
                   <label for="projectKey"><span class="required">*</span> Proyecto o aplicación visible</label>
-                  <select id="projectKey" disabled>
-                    <option value="">Introduce servidor y token para cargar la lista</option>
-                  </select>
+${configurationDropdown('projectKey', 'Proyecto o aplicación visible', DISCONNECTED_PROJECT_OPTIONS, '', true)}
                   <div class="hint">El desplegable incluye únicamente los componentes visibles para el token.</div>
                 </div>
                 <div class="field action-field">
@@ -94,7 +118,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                   </div>
                   <div class="field">
                     <label for="scannerMode">Método de análisis</label>
-                    <select id="scannerMode">${scannerOptions}</select>
+${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'auto')}
                     <div class="hint">Automático detecta Maven, Gradle y .NET; usa NPM si existe package.json o Docker para proyectos genéricos como Python.</div>
                   </div>
                   <div class="field">
