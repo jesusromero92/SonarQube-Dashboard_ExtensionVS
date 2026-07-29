@@ -293,5 +293,35 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
       color: var(--vscode-badge-foreground);
       background: var(--vscode-badge-background);
     }
+    .sync-unavailable-icon {
+      color: var(--vscode-errorForeground);
+      background: var(--vscode-inputValidation-errorBackground, var(--vscode-badge-background));
+    }
+    .sync-error-detail {
+      max-width: 760px;
+      margin: -8px auto 18px;
+      color: var(--vscode-errorForeground);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .sync-stale-warning {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground));
+      border-radius: 3px;
+      background: var(--vscode-inputValidation-warningBackground, var(--vscode-textBlockQuote-background));
+      color: var(--vscode-foreground);
+    }
+    .sync-stale-warning strong,
+    .sync-stale-warning span { margin-right: 5px; }
+    .sync-stale-warning .sync-error-detail {
+      margin: 5px 0 0;
+      color: var(--vscode-descriptionForeground);
+    }
 `;
 }

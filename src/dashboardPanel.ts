@@ -894,16 +894,28 @@ export class DashboardPanel {
       return;
     }
 
-    const sonarCompatibility = await fetchSonarCompatibilityInfo(
-      config.serverUrl,
-      config.token
-    );
-    this.postMessage({
-      type: 'sonarCompatibility',
-      folderUri,
-      serverUrl: config.serverUrl,
-      sonarCompatibility
-    });
+    try {
+      const sonarCompatibility = await fetchSonarCompatibilityInfo(
+        config.serverUrl,
+        config.token
+      );
+      this.postMessage({
+        type: 'sonarCompatibility',
+        folderUri,
+        serverUrl: config.serverUrl,
+        sonarCompatibility
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'sonarCompatibilityError',
+        folderUri,
+        serverUrl: config.serverUrl,
+        message: localizeRuntimeText(
+          connectionErrorMessage(error),
+          this.language
+        )
+      });
+    }
   }
 
   private async refreshConfiguredFolderCount(

@@ -33,8 +33,22 @@ test('el webview actualiza compatibilidad al conectar, guardar y recibir estado'
     /elements\.sonarCompatibility\.hidden = true/
   );
   assert.match(MESSAGE_EVENTS_SCRIPT, /case 'sonarCompatibility'/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /case 'sonarCompatibilityError'/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /renderSonarUnavailable\(message\.message\)/);
   assert.match(MESSAGE_EVENTS_SCRIPT, /message\.sonarCompatibility/);
   assert.match(MESSAGE_EVENTS_SCRIPT, /message\.tokenStored/);
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /function renderSonarUnavailable[\s\S]*elements\.sonarCompatibility\.hidden = true/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /function renderSonarUnavailable[\s\S]*elements\.sonarProfile\.textContent = '—'/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /function renderSonarUnavailable[\s\S]*elements\.sonarProfileProvisional\.hidden = true/
+  );
 });
 
 test('editar las credenciales conserva el proyecto vinculado hasta validar la conexión', () => {

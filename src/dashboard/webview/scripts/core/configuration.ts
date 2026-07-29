@@ -141,6 +141,23 @@ export const CONFIGURATION_CORE_SCRIPT = `
       }
     }
 
+    function renderSonarUnavailable(message) {
+      currentConfig.sonarCompatibility = undefined;
+      connectionValidated = false;
+      elements.sonarCompatibility.hidden = true;
+      elements.sonarVersion.textContent = 'No disponible';
+      elements.sonarProfile.textContent = '—';
+      elements.sonarProfileProvisional.hidden = true;
+      elements.sonarProfileFallback.hidden = true;
+      elements.sonarCompatibilityHint.textContent = '';
+      setStatus(
+        'error',
+        message ||
+          'SonarQube no está disponible. Comprueba que el servidor esté iniciado y que la URL sea accesible.'
+      );
+      updateSaveAvailability();
+    }
+
     function setProjectOptions(projects, preferredKey, preserveSelection = true) {
       loadedProjects = projects;
       const desiredKey = preserveSelection

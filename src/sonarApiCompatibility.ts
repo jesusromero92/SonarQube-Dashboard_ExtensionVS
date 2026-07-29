@@ -257,6 +257,29 @@ interface CachedCompatibility {
 
 const compatibilityCache = new Map<string, CachedCompatibility>();
 
+function isConnectionFailure(error: unknown): boolean {
+  const message = error instanceof Error
+    ? `${error.message} ${String(error.cause ?? '')}`
+    : String(error);
+
+  return error instanceof TypeError ||
+    /fetch failed|network|enotfound|econnrefused|econnreset|etimedout|certificate|ssl|tls/i.test(
+      message
+    );
+}
+
+function firstConnectionFailure(
+  results: readonly PromiseSettledResult<unknown>[]
+): unknown | undefined {
+  return results
+    .filter(
+      (result): result is PromiseRejectedResult =>
+        result.status === 'rejected'
+    )
+    .map(result => result.reason)
+    .find(isConnectionFailure);
+}
+
 export function parseSonarVersion(rawVersion: string | null | undefined): SonarVersion {
   const raw = rawVersion?.trim() ?? '';
   const match = VERSION_PATTERN.exec(raw);
@@ -359,7 +382,15 @@ export async function resolveSonarCompatibility(
   const value = Promise.allSettled([
     request<SonarSystemStatusResponse>(SONAR_API_ENDPOINTS.systemStatus),
     request<SonarWebServicesResponse>(SONAR_API_ENDPOINTS.webServicesList)
-  ]).then(([statusResult, capabilitiesResult]) => {
+  ]).then(results => {
+    const [statusResult, capabilitiesResult] = results;
+    const successfulProbe = results.some(result => result.status === 'fulfilled');
+    const connectionFailure = firstConnectionFailure(results);
+
+    if (!successfulProbe && connectionFailure) {
+      throw connectionFailure;
+    }
+
     const rawVersion = statusResult.status === 'fulfilled'
       ? statusResult.value.version ?? ''
       : '';
@@ -371,7 +402,13 @@ export async function resolveSonarCompatibility(
         : UNAVAILABLE_SONAR_CAPABILITIES
     };
   });
+
   compatibilityCache.set(cacheKey, { loadedAt: now, value });
+  value.catch(() => {
+    if (compatibilityCache.get(cacheKey)?.value === value) {
+      compatibilityCache.delete(cacheKey);
+    }
+  });
   return value;
 }
 

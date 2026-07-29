@@ -59,7 +59,7 @@ export function connectionErrorMessage(error: unknown): string {
       `${value} ${cause}`
     )
   ) {
-    return 'No se pudo conectar con el servidor SonarQube. Comprueba la URL y que el servidor esté accesible.';
+    return 'SonarQube no está disponible. Comprueba que el servidor esté iniciado y que la URL sea accesible.';
   }
   if (error instanceof SyntaxError) {
     return 'La URL no corresponde a un servidor SonarQube compatible.';

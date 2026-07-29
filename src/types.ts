@@ -620,7 +620,12 @@ export interface PublishResult {
   issues: DashboardIssue[];
 }
 
+export type RefreshSyncStatus = 'idle' | 'success' | 'error';
+
 export interface RefreshSummary {
+  syncStatus: RefreshSyncStatus;
+  hasSuccessfulSync: boolean;
+  lastSuccessfulAt: string | null;
   configuredFolders: number;
   published: number;
   newPublished: number;

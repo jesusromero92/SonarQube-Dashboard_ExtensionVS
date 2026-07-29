@@ -1,5 +1,10 @@
 export const DASHBOARD_EVENTS_SCRIPT = `
     elements.refresh.addEventListener('click', requestRefresh);
+    elements.retryUnavailable.addEventListener('click', requestRefresh);
+    elements.retryStaleSync.addEventListener('click', requestRefresh);
+    elements.reviewUnavailableConfiguration.addEventListener('click', () => {
+      navigate('configuration');
+    });
     elements.analyzeRepository.addEventListener(
       'click',
       requestAnalysis

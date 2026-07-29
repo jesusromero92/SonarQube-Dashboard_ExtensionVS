@@ -271,6 +271,15 @@ export function getDashboardLauncherHtml(
     .rating.d { color: var(--rating-d); background: var(--rating-d-bg); border-color: transparent; }
     .rating.e { color: var(--rating-e); background: var(--rating-e-bg); border-color: transparent; }
     .empty { padding: 24px 12px; color: var(--vscode-descriptionForeground); text-align: center; }
+    .sync-notice {
+      margin-bottom: 12px;
+      padding: 9px 10px;
+      border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground));
+      border-radius: 3px;
+      background: var(--vscode-inputValidation-warningBackground, var(--vscode-textBlockQuote-background));
+      font-size: 11px;
+      line-height: 1.45;
+    }
   </style>
 </head>
 <body>
@@ -296,6 +305,7 @@ export function getDashboardLauncherHtml(
       </div>
     </div>
     <div id="content" class="content" hidden>
+      <div id="syncNotice" class="sync-notice" hidden></div>
       <div id="totalSummary" class="total">
         <strong id="total">0</strong>
         <span class="label">Issues encontrados</span>
@@ -365,6 +375,7 @@ export function getDashboardLauncherHtml(
     const reload = document.getElementById('reload');
     const loading = document.getElementById('loading');
     const content = document.getElementById('content');
+    const syncNotice = document.getElementById('syncNotice');
     const totalSummary = document.getElementById('totalSummary');
     const total = document.getElementById('total');
     const severitySection = document.getElementById('severitySection');
@@ -429,15 +440,29 @@ export function getDashboardLauncherHtml(
       const gate = summary.qualityGate || {};
       const ratingSummary = summary.ratings || {};
       const defectSummary = summary.types || {};
+      const errors = Array.isArray(summary.errors) ? summary.errors.filter(Boolean) : [];
+      const syncFailed = summary.syncStatus === 'error' && errors.length > 0;
+      const hasSuccessfulSync = summary.hasSuccessfulSync === true;
+      const unavailable = Boolean(summary.configuredFolders) && syncFailed && !hasSuccessfulSync;
+      const stale = Boolean(summary.configuredFolders) && syncFailed && hasSuccessfulSync;
       total.textContent = String(summary.published || 0);
       severityList.textContent = '';
-      const hasSummary = Boolean(summary.configuredFolders);
+      const hasSummary = Boolean(summary.configuredFolders) && !unavailable;
       totalSummary.hidden = !hasSummary;
       severitySection.hidden = !hasSummary;
       qualitySection.hidden = !hasSummary;
       ratings.hidden = !hasSummary;
       defectTypes.hidden = !hasSummary;
-      empty.hidden = hasSummary;
+      empty.hidden = hasSummary || stale;
+      syncNotice.hidden = !stale;
+      syncNotice.className = 'sync-notice';
+      syncNotice.textContent = '';
+      if (unavailable) {
+        empty.textContent = 'No se pudieron cargar los datos del proyecto. Comprueba que el servidor esté disponible y vuelve a intentarlo.';
+        empty.hidden = false;
+      } else if (stale) {
+        syncNotice.textContent = 'No se pudo actualizar SonarQube. Se muestran los últimos datos sincronizados. ' + errors.join(' | ');
+      }
       renderGate(qualityGate, gate.status);
       for (const [type, element] of Object.entries(typeCounts)) {
         element.textContent = String(defectSummary[type] || 0);

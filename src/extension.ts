@@ -19,6 +19,7 @@ import {
   createEmptyRefreshSummary,
   preserveRefreshSummaryAfterErrors
 } from './dashboard/summary';
+import { connectionErrorMessage } from './dashboard/connectionValidation';
 import {
   getDashboardLanguage,
   localeTag,
@@ -418,7 +419,7 @@ async function refreshWorkspaceFolder(
       return;
     }
 
-    const message = error instanceof Error ? error.message : String(error);
+    const message = connectionErrorMessage(error);
     summary.errors.push(
       `${folder.name}: ${localizeRuntimeText(message, getDashboardLanguage())}`
     );
@@ -524,6 +525,9 @@ function compareHotspots(
 }
 
 function prepareRefreshSummary(summary: RefreshSummary): void {
+  summary.syncStatus = 'success';
+  summary.hasSuccessfulSync = true;
+  summary.lastSuccessfulAt = new Date().toISOString();
   summary.severity = aggregateSeverity(summary.issues);
   summary.newSeverity = aggregateSeverity(summary.newIssues);
   summary.types = aggregateTypes(summary.issues, summary.hotspots);
@@ -597,35 +601,41 @@ async function refreshAll(
   }
 
   const operation = startRefreshOperation();
-  await refreshWorkspaceFolders(
-    context,
-    folders,
-    summary,
-    notificationScopes,
-    operation
-  );
-
-  if (isObsoleteRefresh(operation)) {
-    return finishObsoleteRefresh(operation, previousSummary);
-  }
-
-  if (summary.errors.length > 0) {
-    return preserveSummaryAfterErrors(
+  try {
+    await refreshWorkspaceFolders(
+      context,
+      folders,
       summary,
-      previousSummary,
-      operation.pendingDiagnostics
+      notificationScopes,
+      operation
     );
+
+    if (isObsoleteRefresh(operation)) {
+      return finishObsoleteRefresh(operation, previousSummary);
+    }
+
+    if (summary.errors.length > 0) {
+      return preserveSummaryAfterErrors(
+        summary,
+        previousSummary,
+        operation.pendingDiagnostics
+      );
+    }
+
+    prepareRefreshSummary(summary);
+    applyRefreshSummary(summary, operation);
+    runAsync(
+      notifications.evaluate(notificationScopes, source),
+      'notification evaluation'
+    );
+    showSuccessfulRefreshStatus(summary);
+
+    return summary;
+  } finally {
+    if (activeRefresh === operation.controller) {
+      dashboardPanel?.setLoading(false);
+    }
   }
-
-  prepareRefreshSummary(summary);
-  applyRefreshSummary(summary, operation);
-  runAsync(
-    notifications.evaluate(notificationScopes, source),
-    'notification evaluation'
-  );
-  showSuccessfulRefreshStatus(summary);
-
-  return summary;
 }
 
 function configureRefreshTimer(context: vscode.ExtensionContext): void {

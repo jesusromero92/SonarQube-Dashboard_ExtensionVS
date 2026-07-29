@@ -72,6 +72,19 @@ export const MESSAGE_EVENTS_SCRIPT = `
           }
           break;
 
+        case 'sonarCompatibilityError':
+          if (
+            !connectionDraftDirty &&
+            (!message.folderUri ||
+              message.folderUri === currentFolderUri) &&
+            (!message.serverUrl ||
+              message.serverUrl.replace(/\\/+$/, '') ===
+                elements.serverUrl.value.trim().replace(/\\/+$/, ''))
+          ) {
+            renderSonarUnavailable(message.message);
+          }
+          break;
+
         case 'sonarCompatibility':
           if (
             !connectionDraftDirty &&
@@ -97,22 +110,34 @@ export const MESSAGE_EVENTS_SCRIPT = `
             connectionValidated = false;
             setConnectionBusy(false);
             elements.sonarCompatibility.hidden = true;
+            elements.sonarProfileProvisional.hidden = true;
+            elements.sonarProfileFallback.hidden = true;
+            elements.sonarProfile.textContent = '—';
           }
           if (message.kind !== 'loading') {
             setBusy(false);
           }
           break;
 
-        case 'summary':
-          renderSummary(
-            message.summary || {},
-            Boolean(message.visible)
-          );
+        case 'summary': {
+          const summary = message.summary || {};
+          const initialSyncFailed =
+            summary.syncStatus === 'error' &&
+            summary.hasSuccessfulSync !== true;
+          if (initialSyncFailed) {
+            setDashboardLoading(false);
+          }
+          renderSummary(summary, Boolean(message.visible));
           break;
+        }
 
-        case 'loading':
-          setDashboardLoading(message.loading);
+        case 'loading': {
+          const initialSyncFailed =
+            currentSummary.syncStatus === 'error' &&
+            currentSummary.hasSuccessfulSync !== true;
+          setDashboardLoading(initialSyncFailed ? false : message.loading);
           break;
+        }
 
         case 'showQualityGate':
           showQualityGateDialog();

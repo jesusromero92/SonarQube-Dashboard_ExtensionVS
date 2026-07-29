@@ -44,7 +44,7 @@ test('la validación pertenece exactamente al servidor y token consultados', () 
 test('convierte los fallos de red en un mensaje de conexión útil', () => {
   assert.equal(
     connectionErrorMessage(new TypeError('fetch failed')),
-    'No se pudo conectar con el servidor SonarQube. Comprueba la URL y que el servidor esté accesible.'
+    'SonarQube no está disponible. Comprueba que el servidor esté iniciado y que la URL sea accesible.'
   );
 });
 

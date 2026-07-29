@@ -174,6 +174,38 @@ test('mantiene los traductores y la metadata declarativa del catálogo original'
   );
 });
 
+test('no aplica ni cachea un perfil provisional cuando SonarQube no está disponible', async () => {
+  let unavailableAttempts = 0;
+  const unavailableRequest = async <T>(): Promise<T> => {
+    unavailableAttempts += 1;
+    throw new TypeError('fetch failed');
+  };
+
+  await assert.rejects(
+    resolveSonarCompatibility(
+      'test-unavailable-server',
+      unavailableRequest
+    ),
+    /fetch failed/
+  );
+
+  const recoveredRequest = async <T>(endpoint: string): Promise<T> => {
+    if (endpoint === '/api/system/status') {
+      return { version: '25.7.0' } as T;
+    }
+    return { webServices: [] } as T;
+  };
+
+  const recovered = await resolveSonarCompatibility(
+    'test-unavailable-server',
+    recoveredRequest
+  );
+
+  assert.equal(unavailableAttempts, 2);
+  assert.equal(recovered.selection.profile.id, '25x');
+  assert.equal(recovered.selection.provisional, false);
+});
+
 test('detecta versión y capacidades una sola vez durante la vigencia de la caché', async () => {
   const requestedEndpoints: string[] = [];
   const request = async <T>(endpoint: string): Promise<T> => {

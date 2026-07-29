@@ -1,20 +1,61 @@
 export const EMPTY_STATE_SCRIPT = `
+    function formatSuccessfulSyncTime(value) {
+      if (!value) {
+        return '';
+      }
+      const parsed = new Date(value);
+      if (!Number.isFinite(parsed.getTime())) {
+        return '';
+      }
+      return 'Última sincronización correcta: ' + parsed.toLocaleString(dashboardLocale);
+    }
+
+    function renderSyncFailureState(configured, showResults) {
+      const errors = Array.isArray(currentSummary.errors)
+        ? currentSummary.errors.filter(Boolean)
+        : [];
+      const syncFailed = currentSummary.syncStatus === 'error' && errors.length > 0;
+      const hasSuccessfulSync = currentSummary.hasSuccessfulSync === true;
+      const unavailable = hasWorkspace && configured && summaryVisible && syncFailed && !hasSuccessfulSync;
+      const stale = showResults && syncFailed && hasSuccessfulSync;
+
+      elements.dataUnavailable.hidden = !unavailable;
+      elements.dataStaleWarning.hidden = !stale;
+      elements.unavailableProject.hidden = !currentConfig.projectKey;
+      elements.unavailableProject.textContent = currentConfig.projectName || currentConfig.projectKey || '';
+      elements.unavailableError.textContent = errors.join(' | ');
+      elements.staleSyncError.textContent = errors.join(' | ');
+      elements.staleSyncTime.textContent = stale
+        ? formatSuccessfulSyncTime(currentSummary.lastSuccessfulAt)
+        : '';
+
+      return unavailable;
+    }
+
     function renderEmptyState() {
       elements.dataLoading.hidden = !dashboardLoading;
       if (dashboardLoading) {
         elements.results.hidden = true;
         elements.dataEmpty.hidden = true;
+        elements.dataUnavailable.hidden = true;
+        elements.dataStaleWarning.hidden = true;
         elements.analysisPanel.hidden = true;
         return;
       }
 
       const configured = isConfigured();
-      const showResults = hasWorkspace && configured && summaryVisible;
+      const syncFailedWithoutData =
+        currentSummary.syncStatus === 'error' &&
+        currentSummary.hasSuccessfulSync !== true;
+      const showResults =
+        hasWorkspace && configured && summaryVisible && !syncFailedWithoutData;
+      const unavailable = renderSyncFailureState(configured, showResults);
+
       elements.results.hidden = !showResults;
-      elements.dataEmpty.hidden = showResults;
+      elements.dataEmpty.hidden = showResults || unavailable;
       elements.analysisPanel.hidden = !showResults || !canAnalyze();
 
-      if (showResults) {
+      if (showResults || unavailable) {
         return;
       }
 

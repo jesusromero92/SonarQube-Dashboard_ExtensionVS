@@ -2,6 +2,9 @@ import { RefreshSummary } from '../types';
 
 export function createEmptyRefreshSummary(): RefreshSummary {
   return {
+    syncStatus: 'idle',
+    hasSuccessfulSync: false,
+    lastSuccessfulAt: null,
     configuredFolders: 0,
     published: 0,
     newPublished: 0,
@@ -76,6 +79,7 @@ export function preserveRefreshSummaryAfterErrors(
 ): RefreshSummary {
   return {
     ...previous,
+    syncStatus: 'error',
     configuredFolders: attempted.configuredFolders,
     errors: [...attempted.errors]
   };

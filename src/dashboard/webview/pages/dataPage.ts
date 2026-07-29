@@ -5,6 +5,7 @@ import { RANKING_TABLES_MARKUP } from '../components/rankingTables';
 import { EVOLUTION_CHARTS_MARKUP } from '../components/evolutionCharts';
 import { HOTSPOTS_TABLE_MARKUP } from '../components/hotspotsTable';
 import { COVERAGE_VIEW_MARKUP } from '../components/coverageView';
+import { SYNC_STATUS_MARKUP } from '../components/syncStatus';
 
 const DATA_PAGE_PREFIX = `      <section id="dataPage" class="page">
         <section id="dataLoading" class="dashboard-loading">
@@ -31,7 +32,7 @@ const DATA_PAGE_PREFIX = `      <section id="dataPage" class="page">
           </div>
         </section>
 
-${ANALYSIS_CONTROL_MARKUP}        <section id="results" hidden>
+${SYNC_STATUS_MARKUP}${ANALYSIS_CONTROL_MARKUP}        <section id="results" hidden>
           <div class="dashboard-controls">
             <nav class="segmented" aria-label="Vista de datos">
               <button id="issuesViewTab" class="active" type="button">Defectos</button>
