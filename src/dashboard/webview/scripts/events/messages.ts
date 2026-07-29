@@ -23,6 +23,7 @@ export const MESSAGE_EVENTS_SCRIPT = `
           break;
 
         case 'projectsLoaded':
+          connectionAttemptPending = false;
           if (
             (!message.folderUri ||
               message.folderUri === currentFolderUri) &&
@@ -30,7 +31,14 @@ export const MESSAGE_EVENTS_SCRIPT = `
               message.serverUrl.replace(/\\/+$/, '') ===
                 elements.serverUrl.value.trim().replace(/\\/+$/, ''))
           ) {
-            setProjectOptions(message.projects || [], '');
+            connectionDraftDirty = true;
+            connectionValidated = true;
+            currentConfig.hasToken = true;
+            currentConfig.projectKey = '';
+            currentConfig.projectName = '';
+            selectedProjectKey = '';
+            elements.configState.textContent = 'Sin configurar';
+            setProjectOptions(message.projects || [], '', false);
             currentConfig.sonarCompatibility =
               message.sonarCompatibility;
             renderSonarCompatibility(
@@ -44,10 +52,24 @@ export const MESSAGE_EVENTS_SCRIPT = `
                 'Token guardado · escribe otro para sustituirlo';
               elements.tokenHint.textContent =
                 'Hay un token guardado de forma segura para esta carpeta.';
-              renderEmptyState();
             }
+            renderEmptyState();
           }
           setBusy(false);
+          break;
+
+        case 'connectionValidationFailed':
+          if (!message.folderUri || message.folderUri === currentFolderUri) {
+            connectionAttemptPending = false;
+            connectionDraftDirty = true;
+            connectionValidated = false;
+            currentConfig.hasToken = false;
+            currentConfig.sonarCompatibility = undefined;
+            elements.configState.textContent = 'Sin configurar';
+            resetProjectOptionsForDisconnectedConnection();
+            renderSonarCompatibility(undefined, false);
+            renderEmptyState();
+          }
           break;
 
         case 'sonarCompatibility':
@@ -70,14 +92,10 @@ export const MESSAGE_EVENTS_SCRIPT = `
 
         case 'status':
           setStatus(message.kind, message.message);
-          if (
-            message.kind === 'error' &&
-            elements.projectKey.disabled &&
-            !currentConfig.projectKey &&
-            elements.projectKey.selectedOptions[0]?.textContent ===
-              'Consultando proyectos y aplicaciones visibles…'
-          ) {
-            setProjectOptions([], '');
+          if (message.kind === 'error' && connectionAttemptPending) {
+            connectionAttemptPending = false;
+            connectionValidated = false;
+            resetProjectOptionsForDisconnectedConnection();
           }
           if (message.kind !== 'loading') {
             setBusy(false);

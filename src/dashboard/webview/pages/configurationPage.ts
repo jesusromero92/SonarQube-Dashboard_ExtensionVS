@@ -75,7 +75,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                 </div>
                 <div class="field action-field">
                   <label aria-hidden="true">&nbsp;</label>
-                  <button id="save" type="button">Sincronizar</button>
+                  <button id="save" type="button" disabled>Sincronizar</button>
                 </div>
               </div>
 

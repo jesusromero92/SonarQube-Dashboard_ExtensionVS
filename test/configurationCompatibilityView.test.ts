@@ -32,31 +32,32 @@ test('el webview actualiza compatibilidad al conectar, guardar y recibir estado'
   assert.match(MESSAGE_EVENTS_SCRIPT, /message\.tokenStored/);
 });
 
-test('editar las credenciales deja los paneles en modo no vinculado sin consultar', () => {
+test('editar las credenciales conserva el proyecto vinculado hasta validar la conexión', () => {
   assert.match(CONFIGURATION_EVENTS_SCRIPT, /function markConnectionDraftDirty/);
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /currentConfig\.hasToken = false/);
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /type: 'connectionDraftChanged'/);
-  assert.match(
-    CONFIGURATION_CORE_SCRIPT,
-    /connectionDraftDirty = Boolean\(message\.connectionDraftDirty\)/
-  );
-  assert.doesNotMatch(
-    CONFIGURATION_EVENTS_SCRIPT,
-    /addEventListener\('input',[\s\S]{0,180}type: 'loadProjects'/
-  );
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /connectionDraftDirty = true/);
+  assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /currentConfig\.hasToken = false/);
+  assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /type: 'connectionDraftChanged'/);
+  assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /renderEmptyState\(\);[\s\S]{0,120}connectionDraftChanged/);
 });
 
-test('conectar reinicia el proyecto visible antes de cargar la nueva lista', () => {
+test('conectar obliga a seleccionar de nuevo el proyecto antes de sincronizar', () => {
   assert.match(
     CONFIGURATION_EVENTS_SCRIPT,
     /elements\.loadProjects\.addEventListener\('click'/
   );
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /selectedProjectKey = ''/);
   assert.match(CONFIGURATION_EVENTS_SCRIPT, /currentConfig\.projectKey = ''/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /currentConfig\.projectName = ''/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /selectedProjectKey = ''/);
   assert.match(
     CONFIGURATION_EVENTS_SCRIPT,
     /elements\.projectKey\.disabled = true/
   );
+  assert.match(
+    MESSAGE_EVENTS_SCRIPT,
+    /setProjectOptions\(message\.projects \|\| \[\], '', false\)/
+  );
+  assert.match(MESSAGE_EVENTS_SCRIPT, /connectionValidated = true/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /elements\.configState\.textContent = 'Sin configurar'/);
 });
 
 test('los textos de compatibilidad están disponibles en inglés y español', () => {
@@ -89,4 +90,44 @@ test('los textos de compatibilidad están disponibles en inglés y español', ()
       `El texto fuente ${key} debe aparecer en el webview`
     );
   }
+});
+
+
+test('sincronizar solo se habilita después de validar la conexión y seleccionar un proyecto', () => {
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="save" type="button" disabled/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /let configurationBusy|configurationBusy/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /function canSynchronizeConfiguration/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /connectionValidated/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /elements\.save\.disabled/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /connectionValidated = false/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /connectionValidated = true/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /case 'connectionValidationFailed'[\s\S]*connectionValidated = false/);
+});
+
+
+test('una conexión inválida vacía y deshabilita el selector de proyectos', () => {
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /function resetProjectOptionsForDisconnectedConnection/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /elements\.projectKey\.textContent = ''/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /elements\.projectKey\.disabled = true/
+  );
+  assert.match(
+    MESSAGE_EVENTS_SCRIPT,
+    /case 'connectionValidationFailed'[\s\S]*resetProjectOptionsForDisconnectedConnection\(\)/
+  );
+  assert.match(
+    MESSAGE_EVENTS_SCRIPT,
+    /message\.kind === 'error' && connectionAttemptPending/
+  );
+  assert.match(
+    CONFIGURATION_EVENTS_SCRIPT,
+    /connectionAttemptPending = true/
+  );
 });

@@ -20,11 +20,26 @@ export const CONFIGURATION_CORE_SCRIPT = `
       };
     }
 
+    function canSynchronizeConfiguration() {
+      return Boolean(
+        hasWorkspace &&
+        connectionValidated &&
+        !elements.projectKey.disabled &&
+        elements.projectKey.value
+      );
+    }
+
+    function updateSaveAvailability() {
+      elements.save.disabled =
+        configurationBusy || !canSynchronizeConfiguration();
+    }
+
     function setBusy(busy) {
-      elements.loadProjects.disabled = busy;
-      elements.save.disabled = busy;
-      elements.refresh.disabled = busy;
-      elements.syncEmpty.disabled = busy;
+      configurationBusy = Boolean(busy);
+      elements.loadProjects.disabled = configurationBusy;
+      elements.refresh.disabled = configurationBusy;
+      elements.syncEmpty.disabled = configurationBusy;
+      updateSaveAvailability();
     }
 
     function setStatus(kind) {
@@ -90,13 +105,14 @@ export const CONFIGURATION_CORE_SCRIPT = `
       }
     }
 
-    function setProjectOptions(projects, preferredKey) {
+    function setProjectOptions(projects, preferredKey, preserveSelection = true) {
       loadedProjects = projects;
-      const desiredKey =
-        preferredKey ||
-        selectedProjectKey ||
-        elements.projectKey.value ||
-        currentConfig.projectKey;
+      const desiredKey = preserveSelection
+        ? preferredKey ||
+          selectedProjectKey ||
+          elements.projectKey.value ||
+          currentConfig.projectKey
+        : '';
 
       elements.projectKey.textContent = '';
 
@@ -107,6 +123,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
         elements.projectKey.appendChild(option);
         elements.projectKey.disabled = true;
         selectedProjectKey = '';
+        updateSaveAvailability();
         return;
       }
 
@@ -128,6 +145,54 @@ export const CONFIGURATION_CORE_SCRIPT = `
       const exists = projects.some(project => project.key === desiredKey);
       elements.projectKey.value = exists ? desiredKey : '';
       selectedProjectKey = elements.projectKey.value;
+      updateSaveAvailability();
+    }
+
+    function resetProjectOptionsForDisconnectedConnection() {
+      loadedProjects = [];
+      selectedProjectKey = '';
+      currentConfig.projectKey = '';
+      currentConfig.projectName = '';
+      elements.projectKey.textContent = '';
+
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Introduce servidor y token para cargar la lista';
+      elements.projectKey.appendChild(option);
+      elements.projectKey.disabled = true;
+      updateSaveAvailability();
+    }
+
+    function restoreProjectOptions() {
+      if (loadedProjects.length) {
+        setProjectOptions(
+          loadedProjects,
+          selectedProjectKey || currentConfig.projectKey
+        );
+        return;
+      }
+
+      if (currentConfig.projectKey) {
+        setProjectOptions(
+          [
+            {
+              key: currentConfig.projectKey,
+              name: currentConfig.projectName || currentConfig.projectKey,
+              qualifier: 'TRK'
+            }
+          ],
+          currentConfig.projectKey
+        );
+        return;
+      }
+
+      elements.projectKey.textContent = '';
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Introduce servidor y token para cargar la lista';
+      elements.projectKey.appendChild(option);
+      elements.projectKey.disabled = true;
+      updateSaveAvailability();
     }
 
     function renderState(message) {
@@ -150,7 +215,9 @@ export const CONFIGURATION_CORE_SCRIPT = `
           buildCommand: '',
           customScannerCommand: ''
         };
+        connectionValidated = false;
         elements.configState.textContent = 'Sin carpeta abierta';
+        updateSaveAvailability();
         renderEmptyState();
         return;
       }
@@ -172,6 +239,11 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.folderField.hidden = folders.length === 1;
 
       currentConfig = message.config || {};
+      connectionValidated = Boolean(
+        !connectionDraftDirty &&
+        currentConfig.serverUrl &&
+        currentConfig.hasToken
+      );
       elements.serverUrl.value = currentConfig.serverUrl || '';
       elements.token.value = '';
       elements.token.placeholder = currentConfig.hasToken
@@ -213,29 +285,10 @@ export const CONFIGURATION_CORE_SCRIPT = `
         summaryVisible = false;
       }
 
-      selectedProjectKey = currentConfig.projectKey || selectedProjectKey;
-
-      if (loadedProjects.length && !folderChanged) {
-        setProjectOptions(loadedProjects, selectedProjectKey);
-      } else if (currentConfig.projectKey) {
-        setProjectOptions(
-          [
-            {
-              key: currentConfig.projectKey,
-              name: currentConfig.projectName || currentConfig.projectKey,
-              qualifier: 'TRK'
-            }
-          ],
-          currentConfig.projectKey
-        );
-      } else {
-        elements.projectKey.textContent = '';
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'Introduce servidor y token para cargar la lista';
-        elements.projectKey.appendChild(option);
-        elements.projectKey.disabled = true;
-      }
+      selectedProjectKey = connectionDraftDirty
+        ? ''
+        : currentConfig.projectKey || selectedProjectKey;
+      restoreProjectOptions();
 
       renderAnalysisState(currentAnalysisState);
       renderEmptyState();
@@ -243,6 +296,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
 
     function renderConfigurationSaved(config) {
       connectionDraftDirty = false;
+      connectionValidated = Boolean(config.serverUrl && config.hasToken);
       currentConfig = config;
       selectedProjectKey = config.projectKey || selectedProjectKey;
       elements.projectKey.value = selectedProjectKey;
@@ -262,6 +316,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.customScannerCommand.value = config.customScannerCommand || '';
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       renderSonarCompatibility(config.sonarCompatibility, false);
+      updateSaveAvailability();
       renderEmptyState();
     }
 `;

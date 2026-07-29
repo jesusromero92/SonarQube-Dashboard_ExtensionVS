@@ -289,7 +289,6 @@ export class DashboardPanel {
   private async handleMessage(message: DashboardWebviewMessage): Promise<void> {
     switch (message.type) {
       case 'ready':
-        this.dirtyConnectionFolders.clear();
         this.validatedConnections.clear();
         this.scopeCallback('overall');
         await this.sendState();
@@ -310,9 +309,6 @@ export class DashboardPanel {
         }
         this.selectedFolderUri = message.folderUri;
         await this.sendState();
-        break;
-      case 'connectionDraftChanged':
-        await this.markConnectionDraftDirty(message.folderUri);
         break;
       case 'setLanguage':
         await this.changeLanguage(normalizeDashboardLanguage(message.language));
@@ -444,6 +440,8 @@ export class DashboardPanel {
       connectionDraftDirty,
       config: {
         ...config,
+        projectKey: connectionDraftDirty ? '' : config.projectKey,
+        projectName: connectionDraftDirty ? '' : config.projectName,
         hasToken: connectionDraftDirty ? false : config.hasToken,
         analysisPermission,
         notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
@@ -463,18 +461,13 @@ export class DashboardPanel {
       return;
     }
 
+    const folderUri = folder.uri.toString();
     const serverUrl = normalizeConnectionServerUrl(message.serverUrl ?? '');
     if (!this.isValidHttpUrl(serverUrl)) {
+      await this.invalidateConnection(folderUri);
       this.postStatus('error', 'Introduce una URL válida de SonarQube.');
       return;
     }
-
-    const folderUri = folder.uri.toString();
-    this.dirtyConnectionFolders.add(folderUri);
-    this.validatedConnections.delete(folderUri);
-    await this.refreshConfiguredFolderCount(
-      vscode.workspace.workspaceFolders ?? []
-    );
 
     const savedConnection = await getFolderFormConfig(this.context, folder);
     const replacementToken = (message.token ?? '').trim();
@@ -486,12 +479,18 @@ export class DashboardPanel {
       await this.context.secrets.get(tokenKey(folder));
 
     if (!token) {
+      await this.invalidateConnection(folderUri);
       this.postStatus('error', 'Introduce un token para consultar los proyectos visibles.');
       return;
     }
 
     this.projectLoadController?.abort();
     this.projectLoadController = new AbortController();
+    this.dirtyConnectionFolders.add(folderUri);
+    this.validatedConnections.delete(folderUri);
+    await this.refreshConfiguredFolderCount(
+      vscode.workspace.workspaceFolders ?? []
+    );
     this.postMessage({ type: 'projectsLoading' });
 
     try {
@@ -500,6 +499,22 @@ export class DashboardPanel {
         token,
         this.projectLoadController.signal
       );
+    } catch (error) {
+      if (this.projectLoadController.signal.aborted) {
+        return;
+      }
+      await this.invalidateConnection(folderUri);
+      this.postMessage({
+        type: 'sonarCompatibility',
+        folderUri,
+        serverUrl,
+        sonarCompatibility: undefined
+      });
+      this.postStatus('error', this.errorMessage(error));
+      return;
+    }
+
+    try {
       const compatibilityPromise = fetchSonarCompatibilityInfo(serverUrl, token);
       const [projects, sonarCompatibility] = await Promise.all([
         fetchVisibleProjects(
@@ -536,9 +551,10 @@ export class DashboardPanel {
       if (this.projectLoadController.signal.aborted) {
         return;
       }
+      await this.invalidateConnection(folderUri);
       this.postMessage({
         type: 'sonarCompatibility',
-        folderUri: folder.uri.toString(),
+        folderUri,
         serverUrl,
         sonarCompatibility: undefined
       });
@@ -903,17 +919,16 @@ export class DashboardPanel {
     });
   }
 
-  private async markConnectionDraftDirty(folderUri?: string): Promise<void> {
-    const folder = this.getWorkspaceFolder(folderUri);
-    if (!folder) {
-      return;
-    }
-    const key = folder.uri.toString();
-    this.dirtyConnectionFolders.add(key);
-    this.validatedConnections.delete(key);
+  private async invalidateConnection(folderUri: string): Promise<void> {
+    this.dirtyConnectionFolders.add(folderUri);
+    this.validatedConnections.delete(folderUri);
     await this.refreshConfiguredFolderCount(
       vscode.workspace.workspaceFolders ?? []
     );
+    this.postMessage({
+      type: 'connectionValidationFailed',
+      folderUri
+    });
   }
 
 

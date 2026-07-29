@@ -17,6 +17,8 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
 
     elements.folder.addEventListener('change', () => {
       currentFolderUri = elements.folder.value;
+      connectionValidated = false;
+      updateSaveAvailability();
       loadedProjects = [];
       selectedProjectKey = '';
       summaryVisible = false;
@@ -34,21 +36,15 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
 
     elements.projectKey.addEventListener('change', () => {
       selectedProjectKey = elements.projectKey.value;
+      updateSaveAvailability();
     });
 
     function markConnectionDraftDirty() {
+      connectionDraftDirty = true;
+      connectionValidated = false;
       currentConfig.sonarCompatibility = undefined;
-      currentConfig.hasToken = false;
       elements.sonarCompatibility.hidden = true;
-      elements.configState.textContent = 'Sin configurar';
-      renderEmptyState();
-      if (!connectionDraftDirty) {
-        connectionDraftDirty = true;
-        vscode.postMessage({
-          type: 'connectionDraftChanged',
-          folderUri: currentFolderUri
-        });
-      }
+      updateSaveAvailability();
     }
 
     elements.serverUrl.addEventListener('input', () => {
@@ -60,9 +56,16 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
     });
 
     elements.loadProjects.addEventListener('click', () => {
+      connectionAttemptPending = true;
+      connectionDraftDirty = true;
+      connectionValidated = false;
       selectedProjectKey = '';
       currentConfig.projectKey = '';
       currentConfig.projectName = '';
+      summaryVisible = false;
+      elements.configState.textContent = 'Sin configurar';
+      updateSaveAvailability();
+      renderEmptyState();
       elements.projectKey.textContent = '';
       const loadingOption = document.createElement('option');
       loadingOption.value = '';
@@ -70,8 +73,6 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
         'Consultando proyectos y aplicaciones visibles…';
       elements.projectKey.appendChild(loadingOption);
       elements.projectKey.disabled = true;
-      elements.configState.textContent = 'Sin configurar';
-      renderEmptyState();
       setStatus(
         'loading',
         'Consultando proyectos y aplicaciones visibles…'
