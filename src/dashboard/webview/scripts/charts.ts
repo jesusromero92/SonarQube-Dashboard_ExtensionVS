@@ -82,21 +82,22 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       elements.severityEvolutionHelp.textContent = severityHelp[evolutionGranularities.severity];
     }
 
-    function scopedEvolution(points) {
-      return currentScope === 'newCode'
-        ? points.map(point => ({
-            ...point,
-            bugs: point.newBugs || 0,
-            codeSmells: point.newCodeSmells || 0,
-            vulnerabilities: point.newVulnerabilities || 0,
-            securityHotspots: point.newSecurityHotspots || 0,
-            blockerViolations: point.newBlockerViolations || 0,
-            criticalViolations: point.newCriticalViolations || 0,
-            majorViolations: point.newMajorViolations || 0,
-            minorViolations: point.newMinorViolations || 0,
-            infoViolations: point.newInfoViolations || 0
-          }))
-        : points;
+    function evolutionAvailableForCurrentScope() {
+      return currentScope === 'overall';
+    }
+
+    function updateEvolutionScopeAvailability() {
+      const available = evolutionAvailableForCurrentScope();
+      elements.issuesEvolutionUnavailable.hidden = available;
+      elements.issuesEvolutionGrid.hidden = !available;
+      elements.coverageEvolutionUnavailable.hidden = available;
+      elements.coverageEvolutionGrid.hidden = !available;
+      return available;
+    }
+
+    function clearEvolutionChart(container, legend) {
+      container.textContent = '';
+      legend.textContent = '';
     }
 
     function renderChartLegend(chartKey, legendElement, data) {
@@ -329,12 +330,21 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
 
     function renderEvolutionCharts() {
       document.querySelector('.chart-tooltip')?.remove();
+
+      if (!updateEvolutionScopeAvailability()) {
+        clearEvolutionChart(elements.typeChart, elements.typeLegend);
+        clearEvolutionChart(elements.severityChart, elements.severityLegend);
+        return;
+      }
+
       const source = currentSummary.evolution || [];
-      const typeData = scopedEvolution(
-        groupedEvolution(source, evolutionGranularities.types)
+      const typeData = groupedEvolution(
+        source,
+        evolutionGranularities.types
       );
-      const severityData = scopedEvolution(
-        groupedEvolution(source, evolutionGranularities.severity)
+      const severityData = groupedEvolution(
+        source,
+        evolutionGranularities.severity
       );
       updateEvolutionHelp();
       renderLineChart('types', elements.typeChart, elements.typeLegend, typeData);

@@ -1,3 +1,4 @@
+import { getNewCodeEvolutionUnavailableMarkup } from './ui/scopeUnavailableNotice';
 import { getSelectDropdownMarkup } from './ui/selectDropdown';
 
 const EVOLUTION_GRANULARITY_OPTIONS = [
@@ -18,11 +19,12 @@ function granularityDropdown(id: string): string {
 
 export const EVOLUTION_CHARTS_MARKUP = `          </div>
 
-          <section class="evolution-section">
+          <section id="issuesEvolutionSection" class="evolution-section">
             <div class="evolution-heading">
               <h2>Evolución respecto a análisis anteriores</h2>
             </div>
-            <div class="evolution-grid">
+${getNewCodeEvolutionUnavailableMarkup({ id: 'issuesEvolutionUnavailable' })}
+            <div id="issuesEvolutionGrid" class="evolution-grid">
               <section class="panel chart-card">
                 <div class="chart-card-header">
                   <h3>Issues por tipo</h3>

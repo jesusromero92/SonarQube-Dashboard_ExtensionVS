@@ -68,6 +68,8 @@ export const SOURCE_MESSAGES = {
   "noDefectFiles": "No hay archivos con defectos.",
   "noDefectRules": "No hay reglas con defectos.",
   "evolutionTitle": "Evolución respecto a análisis anteriores",
+  "newCodeEvolutionUnavailableTitle": "No hay evolución histórica para código nuevo",
+  "newCodeEvolutionUnavailableText": "El periodo de código nuevo puede cambiar entre análisis, por lo que su histórico no es directamente comparable. Cambia a Overall para consultar la evolución.",
   "analysisCount": " análisis",
   "groupBy": "Agrupar por",
   "day": "Día",

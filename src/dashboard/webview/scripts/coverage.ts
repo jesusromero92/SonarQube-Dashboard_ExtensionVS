@@ -187,6 +187,12 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
     }
 
     function renderCoverageEvolution() {
+      if (!updateEvolutionScopeAvailability()) {
+        clearEvolutionChart(elements.coverageChart, elements.coverageLegend);
+        clearEvolutionChart(elements.duplicationChart, elements.duplicationLegend);
+        return;
+      }
+
       const source = currentSummary.evolution || [];
       const coverageData = groupedEvolution(
         source,
@@ -196,10 +202,22 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
         source,
         evolutionGranularities.duplication
       );
-      const coverageKey = currentScope === 'newCode' ? 'newCoverage' : 'coverage';
-      const duplicationKey = currentScope === 'newCode' ? 'newDuplicatedLinesDensity' : 'duplicatedLinesDensity';
-      renderSinglePercentChart(elements.coverageChart, elements.coverageLegend, coverageData, coverageKey, 'Cobertura', dashboardColors.coverage.covered);
-      renderSinglePercentChart(elements.duplicationChart, elements.duplicationLegend, duplicationData, duplicationKey, 'Duplicación', dashboardColors.coverage.duplicated);
+      renderSinglePercentChart(
+        elements.coverageChart,
+        elements.coverageLegend,
+        coverageData,
+        'coverage',
+        'Cobertura',
+        dashboardColors.coverage.covered
+      );
+      renderSinglePercentChart(
+        elements.duplicationChart,
+        elements.duplicationLegend,
+        duplicationData,
+        'duplicatedLinesDensity',
+        'Duplicación',
+        dashboardColors.coverage.duplicated
+      );
     }
 
     function renderCoverageView() {

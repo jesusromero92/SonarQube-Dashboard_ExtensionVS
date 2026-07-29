@@ -78,3 +78,15 @@ test('las tarjetas comparan siempre con el análisis inmediatamente anterior', (
     /function previousAnalysis\(summary\)[\s\S]*?groupedEvolution/
   );
 });
+
+
+test('deshabilita la evolución histórica en el ámbito New Code', () => {
+  assert.match(EVOLUTION_CHARTS_MARKUP, /id="issuesEvolutionUnavailable"/);
+  assert.match(EVOLUTION_CHARTS_MARKUP, /id="issuesEvolutionGrid"/);
+  assert.match(COVERAGE_VIEW_MARKUP, /id="coverageEvolutionUnavailable"/);
+  assert.match(COVERAGE_VIEW_MARKUP, /id="coverageEvolutionGrid"/);
+  assert.match(CHARTS_SCRIPT, /currentScope === 'overall'/);
+  assert.match(CHARTS_SCRIPT, /issuesEvolutionGrid\.hidden = !available/);
+  assert.match(CHARTS_SCRIPT, /coverageEvolutionGrid\.hidden = !available/);
+  assert.doesNotMatch(CHARTS_SCRIPT, /point\.newBugs/);
+});

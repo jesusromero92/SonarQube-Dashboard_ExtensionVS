@@ -70,6 +70,8 @@ export const EN_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   "noDefectFiles": "No files contain issues.",
   "noDefectRules": "No rules contain issues.",
   "evolutionTitle": "Evolution compared with previous analyses",
+  "newCodeEvolutionUnavailableTitle": "Historical evolution is unavailable for New Code",
+  "newCodeEvolutionUnavailableText": "The New Code period can change between analyses, so its history is not directly comparable. Switch to Overall to view evolution.",
   "analysisCount": " analyses",
   "groupBy": "Group by",
   "day": "Day",

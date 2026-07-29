@@ -1,3 +1,4 @@
+import { getNewCodeEvolutionUnavailableMarkup } from './ui/scopeUnavailableNotice';
 import { getSelectDropdownMarkup } from './ui/selectDropdown';
 
 const COVERAGE_GRANULARITY_OPTIONS = [
@@ -61,11 +62,12 @@ export const COVERAGE_VIEW_MARKUP = `          <section id="coverageView" hidden
               </section>
             </div>
 
-            <section class="evolution-section">
+            <section id="coverageEvolutionSection" class="evolution-section">
               <div class="evolution-heading">
                 <h2>Evolución de cobertura y duplicación</h2>
               </div>
-              <div class="evolution-grid">
+${getNewCodeEvolutionUnavailableMarkup({ id: 'coverageEvolutionUnavailable' })}
+              <div id="coverageEvolutionGrid" class="evolution-grid">
                 <section class="panel chart-card">
                   <div class="chart-card-header">
                     <h3>Cobertura</h3>

@@ -36,6 +36,28 @@ export const CHART_STYLES = `    .rank-grid {
       margin-bottom: 12px;
     }
     .evolution-heading h2 { margin: 0; font-size: 15px; }
+    .scope-unavailable-notice {
+      display: grid;
+      gap: 6px;
+      min-height: 116px;
+      padding: 20px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+      align-content: center;
+      text-align: center;
+    }
+    .scope-unavailable-notice[hidden] { display: none; }
+    .scope-unavailable-notice strong {
+      color: var(--vscode-foreground);
+      font-size: 13px;
+    }
+    .scope-unavailable-notice span {
+      max-width: 720px;
+      margin: 0 auto;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+      line-height: 1.5;
+    }
     .chart-card-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
