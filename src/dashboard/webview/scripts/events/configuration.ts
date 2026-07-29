@@ -36,14 +36,47 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       selectedProjectKey = elements.projectKey.value;
     });
 
+    function markConnectionDraftDirty() {
+      currentConfig.sonarCompatibility = undefined;
+      currentConfig.hasToken = false;
+      elements.sonarCompatibility.hidden = true;
+      elements.configState.textContent = 'Sin configurar';
+      renderEmptyState();
+      if (!connectionDraftDirty) {
+        connectionDraftDirty = true;
+        vscode.postMessage({
+          type: 'connectionDraftChanged',
+          folderUri: currentFolderUri
+        });
+      }
+    }
+
+    elements.serverUrl.addEventListener('input', () => {
+      markConnectionDraftDirty();
+    });
+
+    elements.token.addEventListener('input', () => {
+      markConnectionDraftDirty();
+    });
+
     elements.loadProjects.addEventListener('click', () => {
-      selectedProjectKey =
-        elements.projectKey.value ||
-        selectedProjectKey;
+      selectedProjectKey = '';
+      currentConfig.projectKey = '';
+      currentConfig.projectName = '';
+      elements.projectKey.textContent = '';
+      const loadingOption = document.createElement('option');
+      loadingOption.value = '';
+      loadingOption.textContent =
+        'Consultando proyectos y aplicaciones visibles…';
+      elements.projectKey.appendChild(loadingOption);
+      elements.projectKey.disabled = true;
+      elements.configState.textContent = 'Sin configurar';
+      renderEmptyState();
       setStatus(
         'loading',
         'Consultando proyectos y aplicaciones visibles…'
       );
+      renderSonarCompatibility(undefined, true);
       vscode.postMessage({
         type: 'loadProjects',
         ...values()

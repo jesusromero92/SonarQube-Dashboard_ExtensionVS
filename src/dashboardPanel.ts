@@ -26,6 +26,11 @@ import {
   RefreshCallback
 } from './dashboard/contracts';
 import { createEmptyRefreshSummary } from './dashboard/summary';
+import {
+  connectionFingerprint,
+  connectionNeedsValidation,
+  normalizeConnectionServerUrl
+} from './dashboard/connectionValidation';
 import { getDashboardHtml } from './dashboard/webview';
 import { AnalysisService } from './scanner/analysisService';
 import { CoverageDecorationManager } from './coverageDecorations';
@@ -35,8 +40,10 @@ import {
   checkAnalysisPermission,
   fetchHotspotDetail,
   fetchIssueLifecycle,
+  fetchSonarCompatibilityInfo,
   fetchVisibleProjects,
-  mutateIssue
+  mutateIssue,
+  validateSonarToken
 } from './sonarClient';
 import {
   AnalysisPermissionStatus,
@@ -62,6 +69,8 @@ export class DashboardPanel {
   private managedIssue: DashboardIssue | undefined;
   private pendingHotspotDetail: DashboardHotspot | undefined;
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
+  private readonly dirtyConnectionFolders = new Set<string>();
+  private readonly validatedConnections = new Map<string, string>();
   private readonly panelDisposables: vscode.Disposable[] = [];
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
@@ -280,6 +289,8 @@ export class DashboardPanel {
   private async handleMessage(message: DashboardWebviewMessage): Promise<void> {
     switch (message.type) {
       case 'ready':
+        this.dirtyConnectionFolders.clear();
+        this.validatedConnections.clear();
         this.scopeCallback('overall');
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
@@ -293,8 +304,15 @@ export class DashboardPanel {
         this.postPendingHotspotDetail();
         break;
       case 'selectFolder':
+        if (this.selectedFolderUri) {
+          this.dirtyConnectionFolders.delete(this.selectedFolderUri);
+          this.validatedConnections.delete(this.selectedFolderUri);
+        }
         this.selectedFolderUri = message.folderUri;
         await this.sendState();
+        break;
+      case 'connectionDraftChanged':
+        await this.markConnectionDraftDirty(message.folderUri);
         break;
       case 'setLanguage':
         await this.changeLanguage(normalizeDashboardLanguage(message.language));
@@ -372,6 +390,7 @@ export class DashboardPanel {
     }
 
     const folders = vscode.workspace.workspaceFolders ?? [];
+    await this.refreshConfiguredFolderCount(folders);
     if (folders.length === 0) {
       this.postMessage({
         type: 'state',
@@ -406,7 +425,12 @@ export class DashboardPanel {
     this.selectedFolderUri = selectedFolder.uri.toString();
 
     const config = await getFolderFormConfig(this.context, selectedFolder);
-    const analysisPermission = await this.analysisPermission(selectedFolder);
+    const connectionDraftDirty = this.dirtyConnectionFolders.has(
+      this.selectedFolderUri
+    );
+    const analysisPermission = connectionDraftDirty
+      ? 'unknown'
+      : await this.analysisPermission(selectedFolder);
 
     this.postMessage({
       type: 'state',
@@ -417,14 +441,19 @@ export class DashboardPanel {
       selectedFolderUri: this.selectedFolderUri,
       workspaceTrusted: vscode.workspace.isTrusted,
       language: this.language,
+      connectionDraftDirty,
       config: {
         ...config,
+        hasToken: connectionDraftDirty ? false : config.hasToken,
         analysisPermission,
         notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
         significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
         significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
       }
     });
+    if (!connectionDraftDirty) {
+      this.runBackgroundTask(this.sendSonarCompatibility(selectedFolder));
+    }
   }
 
   private async loadProjects(message: DashboardWebviewMessage): Promise<void> {
@@ -434,13 +463,26 @@ export class DashboardPanel {
       return;
     }
 
-    const serverUrl = (message.serverUrl ?? '').trim().replace(/\/+$/, '');
+    const serverUrl = normalizeConnectionServerUrl(message.serverUrl ?? '');
     if (!this.isValidHttpUrl(serverUrl)) {
       this.postStatus('error', 'Introduce una URL válida de SonarQube.');
       return;
     }
 
-    const token = (message.token ?? '').trim() ||
+    const folderUri = folder.uri.toString();
+    this.dirtyConnectionFolders.add(folderUri);
+    this.validatedConnections.delete(folderUri);
+    await this.refreshConfiguredFolderCount(
+      vscode.workspace.workspaceFolders ?? []
+    );
+
+    const savedConnection = await getFolderFormConfig(this.context, folder);
+    const replacementToken = (message.token ?? '').trim();
+    const replaceStoredToken = Boolean(
+      replacementToken &&
+      savedConnection.serverUrl.trim().replace(/\/+$/, '') === serverUrl
+    );
+    const token = replacementToken ||
       await this.context.secrets.get(tokenKey(folder));
 
     if (!token) {
@@ -453,15 +495,35 @@ export class DashboardPanel {
     this.postMessage({ type: 'projectsLoading' });
 
     try {
-      const projects = await fetchVisibleProjects(
+      await validateSonarToken(
         serverUrl,
         token,
         this.projectLoadController.signal
       );
+      const compatibilityPromise = fetchSonarCompatibilityInfo(serverUrl, token);
+      const [projects, sonarCompatibility] = await Promise.all([
+        fetchVisibleProjects(
+          serverUrl,
+          token,
+          this.projectLoadController.signal
+        ),
+        compatibilityPromise
+      ]);
+      this.validatedConnections.set(
+        folderUri,
+        connectionFingerprint(serverUrl, token)
+      );
+      if (replaceStoredToken) {
+        await this.context.secrets.store(tokenKey(folder), replacementToken);
+      }
 
       this.postMessage({
         type: 'projectsLoaded',
-        projects
+        projects,
+        folderUri,
+        serverUrl,
+        tokenStored: replaceStoredToken,
+        sonarCompatibility
       });
 
       this.postStatus(
@@ -474,6 +536,12 @@ export class DashboardPanel {
       if (this.projectLoadController.signal.aborted) {
         return;
       }
+      this.postMessage({
+        type: 'sonarCompatibility',
+        folderUri: folder.uri.toString(),
+        serverUrl,
+        sonarCompatibility: undefined
+      });
       this.postStatus('error', this.errorMessage(error));
     }
   }
@@ -485,11 +553,12 @@ export class DashboardPanel {
       return;
     }
 
-    const serverUrl = (message.serverUrl ?? '').trim().replace(/\/+$/, '');
+    const serverUrl = normalizeConnectionServerUrl(message.serverUrl ?? '');
     const projectKey = (message.projectKey ?? '').trim();
     const projectName = (message.projectName ?? '').trim() || projectKey;
     const token = (message.token ?? '').trim();
     const existingToken = await this.context.secrets.get(tokenKey(folder));
+    const savedConnection = await getFolderFormConfig(this.context, folder);
 
     if (!this.isValidHttpUrl(serverUrl)) {
       this.postStatus('error', 'Introduce una URL válida de SonarQube.');
@@ -503,6 +572,27 @@ export class DashboardPanel {
 
     if (!token && !existingToken) {
       this.postStatus('error', 'Introduce un token de SonarQube.');
+      return;
+    }
+
+    const effectiveToken = token || existingToken || '';
+    const requiresValidation = connectionNeedsValidation(
+      savedConnection.serverUrl,
+      existingToken,
+      serverUrl,
+      token
+    );
+    const validatedConnection = this.validatedConnections.get(
+      folder.uri.toString()
+    );
+    if (
+      requiresValidation &&
+      validatedConnection !== connectionFingerprint(serverUrl, effectiveToken)
+    ) {
+      this.postStatus(
+        'error',
+        'Pulsa Conectar y valida el servidor y el token antes de sincronizar.'
+      );
       return;
     }
 
@@ -528,12 +618,15 @@ export class DashboardPanel {
       });
       this.analysisPermissions.delete(folder.uri.toString());
       const savedConfig = await getFolderConfig(this.context, folder);
-      const analysisPermission = savedConfig
-        ? await checkAnalysisPermission(savedConfig)
-        : 'unknown';
+      const [analysisPermission, sonarCompatibility] = savedConfig
+        ? await Promise.all([
+            checkAnalysisPermission(savedConfig),
+            fetchSonarCompatibilityInfo(savedConfig.serverUrl, savedConfig.token)
+          ])
+        : ['unknown' as const, undefined];
       this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
 
-      this.postMessage({
+      const configurationSavedMessage = {
         type: 'configurationSaved',
         config: {
           serverUrl,
@@ -546,14 +639,18 @@ export class DashboardPanel {
           scannerMode,
           buildCommand: message.buildCommand ?? '',
           customScannerCommand: message.customScannerCommand ?? '',
+          sonarCompatibility,
           notificationsEnabled: message.notificationsEnabled !== false,
           significantIncreasePercent: Math.max(1, Number(message.significantIncreasePercent) || 20),
           significantIncreaseMinimum: Math.max(1, Number(message.significantIncreaseMinimum) || 5)
         }
-      });
+      };
       this.postStatus('loading', 'Configuración guardada. Sincronizando issues…');
       const summary = await this.refreshCallback('sync');
+      this.dirtyConnectionFolders.delete(folder.uri.toString());
+      this.validatedConnections.delete(folder.uri.toString());
       this.setRefreshSummary(summary, true);
+      this.postMessage(configurationSavedMessage);
 
       if (summary.errors.length > 0) {
         this.postStatus('error', summary.errors.join(' | '));
@@ -741,6 +838,10 @@ export class DashboardPanel {
     this.postStatus('loading', 'Actualizando issues…');
     const summary = await this.refreshCallback();
     this.setRefreshSummary(summary, summary.configuredFolders > 0);
+    const selectedFolder = this.getWorkspaceFolder(this.selectedFolderUri);
+    if (selectedFolder) {
+      this.runBackgroundTask(this.sendSonarCompatibility(selectedFolder));
+    }
 
     if (summary.configuredFolders === 0) {
       this.postStatus('error', 'Guarda primero la conexión y el proyecto.');
@@ -751,6 +852,68 @@ export class DashboardPanel {
       this.postStatus('success', `${summary.published} issues encontrados.`);
       this.navigate('data');
     }
+  }
+
+  private async sendSonarCompatibility(
+    folder: vscode.WorkspaceFolder
+  ): Promise<void> {
+    const folderUri = folder.uri.toString();
+    if (this.dirtyConnectionFolders.has(folderUri)) {
+      return;
+    }
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      this.postMessage({
+        type: 'sonarCompatibility',
+        folderUri,
+        sonarCompatibility: undefined
+      });
+      return;
+    }
+
+    const sonarCompatibility = await fetchSonarCompatibilityInfo(
+      config.serverUrl,
+      config.token
+    );
+    this.postMessage({
+      type: 'sonarCompatibility',
+      folderUri,
+      serverUrl: config.serverUrl,
+      sonarCompatibility
+    });
+  }
+
+  private async refreshConfiguredFolderCount(
+    folders: readonly vscode.WorkspaceFolder[]
+  ): Promise<void> {
+    const configs = await Promise.all(
+      folders.map(folder => getFolderConfig(this.context, folder))
+    );
+    const configuredFolders = configs.filter(
+      (config, index) =>
+        Boolean(config) &&
+        !this.dirtyConnectionFolders.has(folders[index].uri.toString())
+    ).length;
+    if (this.lastSummary.configuredFolders === configuredFolders) {
+      return;
+    }
+    this.setRefreshSummary({
+      ...this.lastSummary,
+      configuredFolders
+    });
+  }
+
+  private async markConnectionDraftDirty(folderUri?: string): Promise<void> {
+    const folder = this.getWorkspaceFolder(folderUri);
+    if (!folder) {
+      return;
+    }
+    const key = folder.uri.toString();
+    this.dirtyConnectionFolders.add(key);
+    this.validatedConnections.delete(key);
+    await this.refreshConfiguredFolderCount(
+      vscode.workspace.workspaceFolders ?? []
+    );
   }
 
 

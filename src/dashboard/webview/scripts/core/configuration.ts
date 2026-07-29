@@ -31,6 +31,65 @@ export const CONFIGURATION_CORE_SCRIPT = `
       setBusy(kind === 'loading');
     }
 
+    function renderSonarCompatibility(compatibility, loading) {
+      const hasConnection = Boolean(
+        elements.serverUrl.value.trim() &&
+        (elements.token.value || currentConfig.hasToken)
+      );
+      elements.sonarCompatibility.hidden =
+        !hasConnection && !compatibility && !loading;
+
+      if (loading) {
+        elements.sonarVersion.textContent = 'Detectando…';
+        elements.sonarProfile.textContent = '—';
+        elements.sonarProfileProvisional.hidden = true;
+        elements.sonarProfileFallback.hidden = true;
+        elements.sonarCompatibilityHint.textContent =
+          'Consultando la compatibilidad del servidor…';
+        return;
+      }
+
+      if (!compatibility) {
+        elements.sonarVersion.textContent = 'No disponible';
+        elements.sonarProfile.textContent = '—';
+        elements.sonarProfileProvisional.hidden = true;
+        elements.sonarProfileFallback.hidden = true;
+        elements.sonarCompatibilityHint.textContent =
+          hasConnection
+            ? 'No se pudo consultar la compatibilidad del servidor.'
+            : '';
+        return;
+      }
+
+      elements.sonarCompatibility.hidden = false;
+      elements.sonarVersion.textContent =
+        compatibility.version || 'No disponible';
+      elements.sonarProfile.textContent =
+        (compatibility.appliedProfiles || [compatibility.profile])
+          .filter(Boolean)
+          .join(' / ') || '—';
+      elements.sonarProfileProvisional.hidden =
+        !compatibility.provisional;
+      elements.sonarProfileFallback.hidden =
+        !compatibility.fallbackApplied;
+
+      if (compatibility.fallbackApplied) {
+        elements.sonarCompatibilityHint.textContent =
+          'SonarQube rechazó parámetros del perfil base; el fallback se recuerda para los endpoints afectados.';
+      } else if (compatibility.provisional) {
+        elements.sonarCompatibilityHint.textContent =
+          compatibility.version
+            ? 'La versión no tiene un perfil exacto; se aplica el perfil conocido más cercano.'
+            : 'No se pudo detectar la versión; se aplica el perfil de compatibilidad por defecto.';
+      } else if (compatibility.capabilitiesAvailable) {
+        elements.sonarCompatibilityHint.textContent =
+          'Parámetros verificados con la API del servidor.';
+      } else {
+        elements.sonarCompatibilityHint.textContent =
+          'Perfil seleccionado a partir de la versión detectada.';
+      }
+    }
+
     function setProjectOptions(projects, preferredKey) {
       loadedProjects = projects;
       const desiredKey =
@@ -72,6 +131,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
     }
 
     function renderState(message) {
+      connectionDraftDirty = Boolean(message.connectionDraftDirty);
       const folders = message.folders || [];
       elements.language.value = message.language || dashboardLanguage;
       hasWorkspace = folders.length > 0;
@@ -135,6 +195,14 @@ export const CONFIGURATION_CORE_SCRIPT = `
         currentConfig.significantIncreaseMinimum || 5
       );
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
+      renderSonarCompatibility(
+        currentConfig.sonarCompatibility,
+        Boolean(
+          currentConfig.serverUrl &&
+          currentConfig.hasToken &&
+          !currentConfig.sonarCompatibility
+        )
+      );
       elements.configState.textContent = currentConfig.projectKey
         ? 'Configurado: ' + currentConfig.projectKey
         : 'Sin configurar';
@@ -174,6 +242,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
     }
 
     function renderConfigurationSaved(config) {
+      connectionDraftDirty = false;
       currentConfig = config;
       selectedProjectKey = config.projectKey || selectedProjectKey;
       elements.projectKey.value = selectedProjectKey;
@@ -192,6 +261,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.buildCommand.value = config.buildCommand || '';
       elements.customScannerCommand.value = config.customScannerCommand || '';
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
+      renderSonarCompatibility(config.sonarCompatibility, false);
       renderEmptyState();
     }
 `;

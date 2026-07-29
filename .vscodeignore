@@ -1,7 +1,10 @@
 .vscode/**
 src/**
+test/**
+.test-dist/**
 .gitignore
 tsconfig.json
+tsconfig.test.json
 **/*.map
 node_modules/**
 .scannerwork/**

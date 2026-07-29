@@ -149,6 +149,46 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
     .required { color: var(--vscode-errorForeground); }
     .form-grid { display: grid; gap: 14px; }
     .connection-row { grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) auto; align-items: start; }
+    .compatibility-summary {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      min-height: 38px;
+      margin-top: 14px;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-textBlockQuote-background);
+      font-size: 12px;
+    }
+    .compatibility-summary[hidden] { display: none; }
+    .compatibility-title { font-weight: 600; }
+    .compatibility-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    .compatibility-item code {
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--vscode-textPreformat-foreground);
+      background: var(--vscode-textCodeBlock-background);
+    }
+    .compatibility-badge {
+      padding: 2px 7px;
+      border: 1px solid var(--vscode-editorWarning-foreground);
+      border-radius: 10px;
+      color: var(--vscode-editorWarning-foreground);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .fallback-badge {
+      border-color: var(--vscode-testing-iconPassed);
+      color: var(--vscode-testing-iconPassed);
+    }
+    #sonarCompatibilityHint { margin-left: auto; }
     .project-row { grid-template-columns: minmax(320px, 1fr) auto; align-items: start; margin-top: 14px; }
     .action-field button { width: 100%; white-space: nowrap; }
     .workspace-row { margin-bottom: 14px; }

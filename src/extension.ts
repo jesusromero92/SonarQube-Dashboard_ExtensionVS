@@ -15,7 +15,10 @@ import {
   RATING_GRADE_RANKS,
   SONAR_CONFIGURATION_SECTION
 } from './constants';
-import { createEmptyRefreshSummary } from './dashboard/summary';
+import {
+  createEmptyRefreshSummary,
+  preserveRefreshSummaryAfterErrors
+} from './dashboard/summary';
 import {
   getDashboardLanguage,
   localeTag,
@@ -424,14 +427,11 @@ function preserveSummaryAfterErrors(
   pendingDiagnostics: vscode.DiagnosticCollection
 ): RefreshSummary {
   pendingDiagnostics.dispose();
-  const preserved = {
-    ...previousSummary,
-    errors: [...summary.errors]
-  };
+  const preserved = preserveRefreshSummaryAfterErrors(previousSummary, summary);
 
   dashboardPanel?.setRefreshSummary(
     preserved,
-    previousSummary.configuredFolders > 0
+    summary.configuredFolders > 0
   );
   dashboardPanel?.setLoading(false);
   vscode.window.setStatusBarMessage(

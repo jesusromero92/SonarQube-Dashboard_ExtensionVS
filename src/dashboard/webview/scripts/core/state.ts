@@ -15,6 +15,7 @@ export const DASHBOARD_STATE_SCRIPT = `
     let loadedProjects = [];
     let selectedProjectKey = '';
     let currentFolderUri = '';
+    let connectionDraftDirty = false;
     let hasWorkspace = false;
     let dashboardLoading = true;
     let workspaceTrusted = true;

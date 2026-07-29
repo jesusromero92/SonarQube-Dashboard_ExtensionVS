@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   SONAR_COVERAGE_METRICS,
   SONAR_EVOLUTION_LIMIT,
@@ -6,6 +7,17 @@ import {
   SONAR_PAGE_SIZE,
   SONAR_SUMMARY_METRICS
 } from './constants';
+import {
+  candidateProfiles,
+  resolveSonarCompatibility,
+  SONAR_API_PROFILES,
+  SonarApiProfile,
+  SonarCompatibility,
+  SonarCompatibilityInfo,
+  sonarCompatibilityInfo,
+  translateHotspotSearchParameters,
+  translateIssueSearchParameters
+} from './sonarApiCompatibility';
 import {
   AnalysisPermissionStatus,
   FolderSonarConfig,
@@ -83,7 +95,8 @@ async function requestJson<T>(
     throw new SonarHttpError(
       response.status,
       `SonarQube respondió ${response.status} ${response.statusText}` +
-        (detail ? `: ${detail}` : '')
+        (detail ? `: ${detail}` : ''),
+      detail
     );
   }
 
@@ -117,7 +130,8 @@ async function requestForm<T>(
     throw new SonarHttpError(
       response.status,
       `SonarQube respondió ${response.status} ${response.statusText}` +
-        (detail ? `: ${detail}` : '')
+        (detail ? `: ${detail}` : ''),
+      detail
     );
   }
   const text = await response.text();
@@ -127,11 +141,128 @@ async function requestForm<T>(
 class SonarHttpError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    public readonly body = ''
   ) {
     super(message);
     this.name = 'SonarHttpError';
   }
+}
+
+type CompatibleSearchEndpoint = 'issues.search' | 'hotspots.search';
+
+const apiProfileOverrides = new Map<string, SonarApiProfile['id']>();
+
+function isCompatibilityParameterError(error: unknown): boolean {
+  if (!(error instanceof SonarHttpError)) {
+    return false;
+  }
+  const detail = error.body.toLowerCase();
+  if (error.status === 400) {
+    return detail.includes('parameter') ||
+      detail.includes('possible value') ||
+      detail.includes('must be one of') ||
+      detail.includes('not available') ||
+      detail.includes('unknown') ||
+      detail.includes('cannot be used');
+  }
+  if (error.status === 404 || error.status === 405) {
+    return detail.includes('endpoint') ||
+      detail.includes('web service') ||
+      detail.includes('action') ||
+      detail.includes('method not allowed') ||
+      detail.includes('not found');
+  }
+  return false;
+}
+
+async function getSonarCompatibility(config: FolderSonarConfig): Promise<SonarCompatibility> {
+  return resolveCompatibility(config.serverUrl, config.token);
+}
+
+async function resolveCompatibility(
+  rawServerUrl: string,
+  token: string
+): Promise<SonarCompatibility> {
+  const serverUrl = normalizeServerUrl(rawServerUrl);
+  const credentialFingerprint = createHash('sha256')
+    .update(token)
+    .digest('hex');
+  return resolveSonarCompatibility(
+    `${serverUrl}\u0000${credentialFingerprint}`,
+    endpoint => requestJson(new URL(`${serverUrl}${endpoint}`), token)
+  );
+}
+
+export async function fetchSonarCompatibilityInfo(
+  serverUrl: string,
+  token: string
+): Promise<SonarCompatibilityInfo> {
+  const compatibility = await resolveCompatibility(serverUrl, token);
+  const info = sonarCompatibilityInfo(compatibility);
+  const overridePrefix = `${normalizeServerUrl(serverUrl)}|`;
+  const overrideProfiles = [...apiProfileOverrides.entries()]
+    .filter(([key]) => key.startsWith(overridePrefix))
+    .map(([, profile]) => profile);
+  const appliedProfiles = [...new Set([info.profile, ...overrideProfiles])];
+  return {
+    ...info,
+    appliedProfiles,
+    fallbackApplied: appliedProfiles.some(profile => profile !== info.profile)
+  };
+}
+
+async function requestCompatibleSearch<T>(
+  config: FolderSonarConfig,
+  compatibility: SonarCompatibility,
+  endpoint: CompatibleSearchEndpoint,
+  canonicalParameters: Readonly<Record<string, string | undefined>>,
+  translate: (
+    profile: SonarApiProfile,
+    canonical: Readonly<Record<string, string | undefined>>,
+    capabilities: SonarCompatibility['capabilities']
+  ) => URLSearchParams,
+  signal?: AbortSignal
+): Promise<T> {
+  const signature = Object.keys(canonicalParameters).sort().join(',');
+  const overrideKey = [
+    normalizeServerUrl(config.serverUrl),
+    endpoint,
+    signature
+  ].join('|');
+  const overrideId = apiProfileOverrides.get(overrideKey);
+  const preferred = SONAR_API_PROFILES.find(profile => profile.id === overrideId) ??
+    compatibility.selection.profile;
+  const attempted = new Set<string>();
+  let firstError: unknown;
+
+  for (const profile of candidateProfiles(preferred)) {
+    const parameters = translate(profile, canonicalParameters, compatibility.capabilities);
+    const serialized = parameters.toString();
+    if (attempted.has(serialized)) {
+      continue;
+    }
+    attempted.add(serialized);
+
+    const url = new URL(
+      `${normalizeServerUrl(config.serverUrl)}${profile.endpoints[endpoint]}`
+    );
+    url.search = serialized;
+    try {
+      const response = await requestJson<T>(url, config.token, signal);
+      apiProfileOverrides.set(overrideKey, profile.id);
+      return response;
+    } catch (error) {
+      firstError ??= error;
+      if (!isCompatibilityParameterError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw firstError ?? new Error(
+    `No se pudo consultar ${endpoint} con ningún perfil compatible.`
+  );
 }
 
 export async function checkAnalysisPermission(
@@ -255,6 +386,20 @@ export async function fetchVisibleProjects(
   return [...unique.values()].sort((left, right) =>
     left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
   );
+}
+
+export async function validateSonarToken(
+  serverUrl: string,
+  token: string,
+  signal?: AbortSignal
+): Promise<void> {
+  const url = new URL(
+    `${normalizeServerUrl(serverUrl)}/api/authentication/validate`
+  );
+  const payload = await requestJson<{ valid?: boolean }>(url, token, signal);
+  if (payload.valid !== true) {
+    throw new Error('El token de SonarQube no es válido.');
+  }
 }
 
 async function fetchInstanceMode(
@@ -747,40 +892,20 @@ async function fetchCoverageData(
   };
 }
 
-function createIssueSearchUrl(
+function createIssueSearchParameters(
   config: FolderSonarConfig,
   onlyNewCode: boolean,
-  page: number,
-  supportsIssueStatuses: boolean
-): URL {
-  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/issues/search`);
-  url.searchParams.set('componentKeys', config.projectKey);
-  if (supportsIssueStatuses) {
-    url.searchParams.set('issueStatuses', 'OPEN,CONFIRMED,ACCEPTED,FALSE_POSITIVE');
-  } else {
-    url.searchParams.set('resolved', 'false');
-  }
-  url.searchParams.set('additionalFields', '_all');
-  url.searchParams.set('p', String(page));
-  url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
-  if (onlyNewCode) {
-    url.searchParams.set('inNewCodePeriod', 'true');
-  }
-  if (config.branch?.trim()) {
-    url.searchParams.set('branch', config.branch.trim());
-  }
-  return url;
-}
-
-function shouldRetryIssueSearchWithoutStatuses(
-  error: unknown,
-  page: number,
-  supportsIssueStatuses: boolean
-): boolean {
-  return supportsIssueStatuses &&
-    page === 1 &&
-    error instanceof SonarHttpError &&
-    error.status === 400;
+  page: number
+): Readonly<Record<string, string | undefined>> {
+  return {
+    componentKeys: config.projectKey,
+    resolved: 'false',
+    additionalFields: '_all',
+    p: String(page),
+    ps: String(SONAR_PAGE_SIZE),
+    inNewCodePeriod: onlyNewCode ? 'true' : undefined,
+    branch: config.branch?.trim() || undefined
+  };
 }
 
 function collectIssueComponents(
@@ -794,6 +919,7 @@ function collectIssueComponents(
 
 async function fetchIssueSet(
   config: FolderSonarConfig,
+  compatibility: SonarCompatibility,
   onlyNewCode: boolean,
   signal?: AbortSignal
 ): Promise<{ issues: SonarIssue[]; components: SonarComponent[] }> {
@@ -801,20 +927,16 @@ async function fetchIssueSet(
   const components = new Map<string, SonarComponent>();
   let page = 1;
   let total = Number.POSITIVE_INFINITY;
-  let supportsIssueStatuses = true;
 
   while (issues.length < total) {
-    const url = createIssueSearchUrl(config, onlyNewCode, page, supportsIssueStatuses);
-    let payload: SonarIssuesResponse;
-    try {
-      payload = await requestJson<SonarIssuesResponse>(url, config.token, signal);
-    } catch (error) {
-      if (shouldRetryIssueSearchWithoutStatuses(error, page, supportsIssueStatuses)) {
-        supportsIssueStatuses = false;
-        continue;
-      }
-      throw error;
-    }
+    const payload = await requestCompatibleSearch<SonarIssuesResponse>(
+      config,
+      compatibility,
+      'issues.search',
+      createIssueSearchParameters(config, onlyNewCode, page),
+      translateIssueSearchParameters,
+      signal
+    );
 
     total = getTotal(payload);
     issues.push(...payload.issues);
@@ -830,10 +952,11 @@ async function fetchIssueSet(
 
 async function fetchNewIssueSet(
   config: FolderSonarConfig,
+  compatibility: SonarCompatibility,
   signal?: AbortSignal
 ): Promise<{ issues: SonarIssue[]; components: SonarComponent[] }> {
   try {
-    return await fetchIssueSet(config, true, signal);
+    return await fetchIssueSet(config, compatibility, true, signal);
   } catch (error) {
     if (signal?.aborted) {
       throw error;
@@ -848,6 +971,7 @@ function hotspotItems(payload: SonarHotspotsResponse): SonarHotspot[] {
 
 async function fetchHotspotSet(
   config: FolderSonarConfig,
+  compatibility: SonarCompatibility,
   onlyNewCode: boolean,
   signal?: AbortSignal
 ): Promise<SonarHotspot[]> {
@@ -857,17 +981,20 @@ async function fetchHotspotSet(
 
   try {
     while (hotspots.length < total) {
-      const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/hotspots/search`);
-      url.searchParams.set('projectKey', config.projectKey);
-      url.searchParams.set('p', String(page));
-      url.searchParams.set('ps', String(SONAR_PAGE_SIZE));
-      if (onlyNewCode) {
-        url.searchParams.set('inNewCodePeriod', 'true');
-      }
-      if (config.branch?.trim()) {
-        url.searchParams.set('branch', config.branch.trim());
-      }
-      const payload = await requestJson<SonarHotspotsResponse>(url, config.token, signal);
+      const payload = await requestCompatibleSearch<SonarHotspotsResponse>(
+        config,
+        compatibility,
+        'hotspots.search',
+        {
+          projectKey: config.projectKey,
+          p: String(page),
+          ps: String(SONAR_PAGE_SIZE),
+          inNewCodePeriod: onlyNewCode ? 'true' : undefined,
+          branch: config.branch?.trim() || undefined
+        },
+        translateHotspotSearchParameters,
+        signal
+      );
       const pageItems = hotspotItems(payload);
       hotspots.push(...pageItems);
       total = payload.paging?.total ?? hotspots.length;
@@ -917,6 +1044,7 @@ export async function fetchAllIssues(
   signal?: AbortSignal
 ): Promise<LoadedIssues> {
   const componentPaths = new Map<string, string>();
+  const compatibility = await getSonarCompatibility(config);
   const [
     configuredMode,
     overallResult,
@@ -926,10 +1054,10 @@ export async function fetchAllIssues(
     coverage
   ] = await Promise.all([
     fetchInstanceMode(config, signal),
-    fetchIssueSet(config, false, signal),
-    fetchNewIssueSet(config, signal),
-    fetchHotspotSet(config, false, signal),
-    fetchHotspotSet(config, true, signal),
+    fetchIssueSet(config, compatibility, false, signal),
+    fetchNewIssueSet(config, compatibility, signal),
+    fetchHotspotSet(config, compatibility, false, signal),
+    fetchHotspotSet(config, compatibility, true, signal),
     fetchCoverageData(config, signal)
   ]);
   for (const component of [...overallResult.components, ...newCodeResult.components]) {

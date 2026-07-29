@@ -66,3 +66,14 @@ export function createEmptyRefreshSummary(): RefreshSummary {
     }
   };
 }
+
+export function preserveRefreshSummaryAfterErrors(
+  previous: RefreshSummary,
+  attempted: RefreshSummary
+): RefreshSummary {
+  return {
+    ...previous,
+    configuredFolders: attempted.configuredFolders,
+    errors: [...attempted.errors]
+  };
+}

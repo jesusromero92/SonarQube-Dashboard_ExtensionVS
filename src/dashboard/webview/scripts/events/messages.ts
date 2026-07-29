@@ -23,15 +23,62 @@ export const MESSAGE_EVENTS_SCRIPT = `
           break;
 
         case 'projectsLoaded':
-          setProjectOptions(
-            message.projects || [],
-            selectedProjectKey || currentConfig.projectKey
-          );
+          if (
+            (!message.folderUri ||
+              message.folderUri === currentFolderUri) &&
+            (!message.serverUrl ||
+              message.serverUrl.replace(/\\/+$/, '') ===
+                elements.serverUrl.value.trim().replace(/\\/+$/, ''))
+          ) {
+            setProjectOptions(message.projects || [], '');
+            currentConfig.sonarCompatibility =
+              message.sonarCompatibility;
+            renderSonarCompatibility(
+              message.sonarCompatibility,
+              false
+            );
+            if (message.tokenStored) {
+              currentConfig.hasToken = true;
+              elements.token.value = '';
+              elements.token.placeholder =
+                'Token guardado · escribe otro para sustituirlo';
+              elements.tokenHint.textContent =
+                'Hay un token guardado de forma segura para esta carpeta.';
+              renderEmptyState();
+            }
+          }
           setBusy(false);
+          break;
+
+        case 'sonarCompatibility':
+          if (
+            !connectionDraftDirty &&
+            (!message.folderUri ||
+              message.folderUri === currentFolderUri) &&
+            (!message.serverUrl ||
+              message.serverUrl.replace(/\\/+$/, '') ===
+                elements.serverUrl.value.trim().replace(/\\/+$/, ''))
+          ) {
+            currentConfig.sonarCompatibility =
+              message.sonarCompatibility;
+            renderSonarCompatibility(
+              message.sonarCompatibility,
+              false
+            );
+          }
           break;
 
         case 'status':
           setStatus(message.kind, message.message);
+          if (
+            message.kind === 'error' &&
+            elements.projectKey.disabled &&
+            !currentConfig.projectKey &&
+            elements.projectKey.selectedOptions[0]?.textContent ===
+              'Consultando proyectos y aplicaciones visibles…'
+          ) {
+            setProjectOptions([], '');
+          }
           if (message.kind !== 'loading') {
             setBusy(false);
           }

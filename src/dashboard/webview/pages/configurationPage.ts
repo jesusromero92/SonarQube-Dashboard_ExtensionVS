@@ -50,6 +50,21 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
                 </div>
               </div>
 
+              <div id="sonarCompatibility" class="compatibility-summary" hidden>
+                <span class="compatibility-title">Compatibilidad de la API</span>
+                <span class="compatibility-item">
+                  Versión detectada:
+                  <strong id="sonarVersion">—</strong>
+                </span>
+                <span class="compatibility-item">
+                  Perfil aplicado:
+                  <code id="sonarProfile">—</code>
+                </span>
+                <span id="sonarProfileProvisional" class="compatibility-badge" hidden>Provisional</span>
+                <span id="sonarProfileFallback" class="compatibility-badge fallback-badge" hidden>Fallback activo</span>
+                <span id="sonarCompatibilityHint" class="muted"></span>
+              </div>
+
               <div class="form-grid project-row">
                 <div class="field">
                   <label for="projectKey"><span class="required">*</span> Proyecto o aplicación visible</label>

@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
   "description": "%extension.description%",
-  "version": "0.17.2",
+  "version": "0.18.0",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -315,6 +315,7 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "test": "npm run compile && tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js",
     "watch": "tsc -watch -p ./",
     "package": "npx --yes @vscode/vsce package",
     "package:vsix": "powershell -ExecutionPolicy Bypass -File ./generar-vsix.ps1"
