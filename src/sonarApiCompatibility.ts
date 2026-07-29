@@ -404,6 +404,20 @@ export async function resolveSonarCompatibility(
   });
 
   compatibilityCache.set(cacheKey, { loadedAt: now, value });
+  value.then(
+    compatibility => {
+      // Durante un reinicio parcial SonarQube puede servir webservices/list antes
+      // que system/status. El perfil provisional permite continuar y listar los
+      // proyectos, pero no debe quedar fijado durante el TTL de la caché.
+      if (
+        compatibility.version.major <= 0 &&
+        compatibilityCache.get(cacheKey)?.value === value
+      ) {
+        compatibilityCache.delete(cacheKey);
+      }
+    },
+    () => undefined
+  );
   value.catch(() => {
     if (compatibilityCache.get(cacheKey)?.value === value) {
       compatibilityCache.delete(cacheKey);

@@ -206,6 +206,37 @@ test('no aplica ni cachea un perfil provisional cuando SonarQube no está dispon
   assert.equal(recovered.selection.provisional, false);
 });
 
+test('no cachea la detección provisional si system/status falla durante un reinicio', async () => {
+  let statusAttempts = 0;
+  const request = async <T>(endpoint: string): Promise<T> => {
+    if (endpoint === '/api/system/status') {
+      statusAttempts += 1;
+      if (statusAttempts === 1) {
+        throw Object.assign(new Error('Service Unavailable'), { status: 503 });
+      }
+      return { version: '26.7' } as T;
+    }
+    return { webServices: [] } as T;
+  };
+
+  const provisional = await resolveSonarCompatibility(
+    'test-partial-restart',
+    request
+  );
+  const recovered = await resolveSonarCompatibility(
+    'test-partial-restart',
+    request
+  );
+
+  assert.equal(provisional.version.raw, '');
+  assert.equal(provisional.selection.profile.id, '25x');
+  assert.equal(provisional.selection.provisional, true);
+  assert.equal(recovered.version.raw, '26.7');
+  assert.equal(recovered.selection.profile.id, '26x');
+  assert.equal(recovered.selection.provisional, false);
+  assert.equal(statusAttempts, 2);
+});
+
 test('detecta versión y capacidades una sola vez durante la vigencia de la caché', async () => {
   const requestedEndpoints: string[] = [];
   const request = async <T>(endpoint: string): Promise<T> => {
