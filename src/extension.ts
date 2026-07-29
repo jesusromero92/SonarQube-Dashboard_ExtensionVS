@@ -132,16 +132,66 @@ function aggregateTypes(
   return types;
 }
 
+function maximumEvolutionMetric(
+  left: number | null,
+  right: number | null
+): number | null {
+  if (left === null) {
+    return right;
+  }
+  if (right === null) {
+    return left;
+  }
+  return Math.max(left, right);
+}
+
+function mergeEvolutionPoint(current: EvolutionPoint, point: EvolutionPoint): void {
+  current.date = Date.parse(point.date) > Date.parse(current.date) ? point.date : current.date;
+  current.bugs += point.bugs;
+  current.codeSmells += point.codeSmells;
+  current.vulnerabilities += point.vulnerabilities;
+  current.securityHotspots += point.securityHotspots;
+  current.blockerViolations += point.blockerViolations;
+  current.criticalViolations += point.criticalViolations;
+  current.majorViolations += point.majorViolations;
+  current.minorViolations += point.minorViolations;
+  current.infoViolations += point.infoViolations;
+  current.newBugs += point.newBugs;
+  current.newCodeSmells += point.newCodeSmells;
+  current.newVulnerabilities += point.newVulnerabilities;
+  current.newSecurityHotspots += point.newSecurityHotspots;
+  current.newBlockerViolations += point.newBlockerViolations;
+  current.newCriticalViolations += point.newCriticalViolations;
+  current.newMajorViolations += point.newMajorViolations;
+  current.newMinorViolations += point.newMinorViolations;
+  current.newInfoViolations += point.newInfoViolations;
+  current.coverage = maximumEvolutionMetric(current.coverage, point.coverage);
+  current.newCoverage = maximumEvolutionMetric(current.newCoverage, point.newCoverage);
+  current.duplicatedLinesDensity = maximumEvolutionMetric(
+    current.duplicatedLinesDensity,
+    point.duplicatedLinesDensity
+  );
+  current.newDuplicatedLinesDensity = maximumEvolutionMetric(
+    current.newDuplicatedLinesDensity,
+    point.newDuplicatedLinesDensity
+  );
+}
+
+function latestEvolutionByDay(points: EvolutionPoint[]): EvolutionPoint[] {
+  const byDay = new Map<string, EvolutionPoint>();
+  for (const point of [...points].sort((left, right) =>
+    Date.parse(left.date) - Date.parse(right.date)
+  )) {
+    const parsed = new Date(point.date);
+    const day = Number.isFinite(parsed.getTime())
+      ? parsed.toISOString().slice(0, 10)
+      : point.date.slice(0, 10);
+    byDay.set(day, { ...point, label: day });
+  }
+  return [...byDay.values()];
+}
+
 function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
-  const maximumMetric = (left: number | null, right: number | null): number | null => {
-    if (left === null) {
-      return right;
-    }
-    if (right === null) {
-      return left;
-    }
-    return Math.max(left, right);
-  };
   const byLabel = new Map<string, EvolutionPoint>();
   for (const point of points) {
     const current = byLabel.get(point.label);
@@ -149,39 +199,32 @@ function aggregateEvolution(points: EvolutionPoint[]): EvolutionPoint[] {
       byLabel.set(point.label, { ...point });
       continue;
     }
-    current.date = Date.parse(point.date) > Date.parse(current.date) ? point.date : current.date;
-    current.bugs += point.bugs;
-    current.codeSmells += point.codeSmells;
-    current.vulnerabilities += point.vulnerabilities;
-    current.securityHotspots += point.securityHotspots;
-    current.blockerViolations += point.blockerViolations;
-    current.criticalViolations += point.criticalViolations;
-    current.majorViolations += point.majorViolations;
-    current.minorViolations += point.minorViolations;
-    current.infoViolations += point.infoViolations;
-    current.newBugs += point.newBugs;
-    current.newCodeSmells += point.newCodeSmells;
-    current.newVulnerabilities += point.newVulnerabilities;
-    current.newSecurityHotspots += point.newSecurityHotspots;
-    current.newBlockerViolations += point.newBlockerViolations;
-    current.newCriticalViolations += point.newCriticalViolations;
-    current.newMajorViolations += point.newMajorViolations;
-    current.newMinorViolations += point.newMinorViolations;
-    current.newInfoViolations += point.newInfoViolations;
-    current.coverage = maximumMetric(current.coverage, point.coverage);
-    current.newCoverage = maximumMetric(current.newCoverage, point.newCoverage);
-    current.duplicatedLinesDensity = maximumMetric(
-      current.duplicatedLinesDensity,
-      point.duplicatedLinesDensity
-    );
-    current.newDuplicatedLinesDensity = maximumMetric(
-      current.newDuplicatedLinesDensity,
-      point.newDuplicatedLinesDensity
-    );
+    mergeEvolutionPoint(current, point);
   }
   return [...byLabel.values()]
-    .sort((left, right) => left.label.localeCompare(right.label))
-    .slice(-15);
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function appendAnalysisComparison(
+  summary: RefreshSummary,
+  evolution: EvolutionPoint[]
+): void {
+  if (evolution.length < 2) {
+    summary.analysisComparisonAvailable = false;
+    return;
+  }
+  const latest = evolution[evolution.length - 1];
+  const previous = evolution[evolution.length - 2];
+  if (summary.latestAnalysis) {
+    mergeEvolutionPoint(summary.latestAnalysis, latest);
+  } else {
+    summary.latestAnalysis = { ...latest };
+  }
+  if (summary.previousAnalysis) {
+    mergeEvolutionPoint(summary.previousAnalysis, previous);
+  } else {
+    summary.previousAnalysis = { ...previous };
+  }
 }
 
 
@@ -305,7 +348,8 @@ function appendFolderData(
     summary.coverage.newCode = coverage.newCode;
   }
 
-  summary.evolution.push(...loaded.evolution);
+  summary.evolution.push(...latestEvolutionByDay(loaded.evolution));
+  appendAnalysisComparison(summary, loaded.evolution);
   summary.qualityGate.status = worstQualityGateStatus(
     summary.qualityGate.status,
     loaded.qualityGate.status

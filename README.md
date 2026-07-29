@@ -34,12 +34,12 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Filterable issue table with direct navigation to source code.
 - Issue lifecycle management without leaving VS Code: accept, false positive, reopen, assignment, comments, history, and current assignee.
 - Security execution-flow navigation with source, intermediate steps, sink, secondary locations, CodeLens, and editor decorations.
-- Coverage and duplication view with global/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and historical trends.
+- Coverage and duplication view with global/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and historical trends grouped by day, week, or month.
 - Keyboard navigation, status-bar counter, and an issue explorer grouped by file, rule, or severity.
 - Automatic regression notifications for critical issues, Quality Gate failures, issue increases, new hotspots, and completed analyses.
 - Dedicated Security Hotspots table.
 - File and rule rankings with sortable columns.
-- Historical evolution by issue type and severity.
+- Historical evolution by issue type and severity, with independent day, week, or month grouping for every chart.
 - Native diagnostics published in **Problems**.
 - Support for branches and local subfolders.
 
@@ -103,6 +103,8 @@ The `▲` and `▼` indicators make regressions and improvements easier to ident
 
 Historical comparison is shown only when the total from the latest SonarQube analysis matches the issues associated with local files. When paths are omitted, the extension avoids comparing the local subset against the project's global total.
 
+This top comparison always uses the analysis **immediately preceding** the latest available analysis. It is independent of the day, week, or month grouping selected in the evolution charts.
+
 ### Issues table
 
 The table contains:
@@ -165,7 +167,9 @@ The lower section contains two charts:
 - **Issues by type:** Bugs, Code Smells, Vulnerabilities, and Security Hotspots.
 - **Issues by severity:** Blocker, Critical, Major, Minor, and Info.
 
-Each point represents a previous analysis. Moving the pointer over a chart displays a tooltip that follows the cursor and shows the date and values for every visible series.
+Each chart has its own **Day / Week / Month** selector in the upper-right corner. Selectors are independent, so changing one chart's grouping does not modify any other chart.
+
+Each point represents the latest analysis in the selected interval: the latest analysis of each day, week, or month. Moving the pointer over a chart displays a tooltip that follows the cursor and shows that analysis's actual date and the values for every visible series.
 
 The legends are centered and interactive. Select a series to hide it or display it again.
 
@@ -234,6 +238,8 @@ The **Coverage and duplication** data tab provides separate Overall and New Code
 - files with the lowest coverage;
 - files with the highest duplication;
 - historical coverage and duplication charts.
+
+The coverage and duplication charts also provide independent **Day / Week / Month** selectors and retain the latest analysis from each interval.
 
 Selecting a file loads line-level data on demand. Covered, partially covered, and uncovered lines are marked in the gutter and overview ruler. Duplicated lines receive a dedicated decoration, and the detail dialog lists each duplicated block together with every matching local file and range.
 

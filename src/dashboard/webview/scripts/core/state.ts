@@ -7,6 +7,12 @@ export const DASHBOARD_STATE_SCRIPT = `
     let currentHotspots = [];
     let currentScope = 'overall';
     let currentDataView = 'issues';
+    const evolutionGranularities = {
+      types: 'week',
+      severity: 'week',
+      coverage: 'week',
+      duplication: 'week'
+    };
     const topSort = {
       files: { key: 'count', direction: 'desc' },
       rules: { key: 'count', direction: 'desc' }

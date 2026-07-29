@@ -8,5 +8,6 @@ export const RESPONSIVE_STYLES = `    @media (max-width: 980px) {
       .table-toolbar input { width: 100%; margin-left: 0; }
       .dashboard-controls { flex-wrap: wrap; }
       .scope-control { margin-left: 0; }
+      .evolution-heading { align-items: flex-start; flex-wrap: wrap; }
     }
   `;

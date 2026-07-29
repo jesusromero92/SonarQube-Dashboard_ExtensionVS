@@ -30,11 +30,27 @@ export const CHART_STYLES = `    .rank-grid {
     .evolution-section { margin-top: 20px; }
     .evolution-heading {
       display: flex;
-      align-items: baseline;
+      align-items: center;
+      justify-content: space-between;
       gap: 10px;
       margin-bottom: 12px;
     }
     .evolution-heading h2 { margin: 0; font-size: 15px; }
+    .chart-card-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 0 14px;
+    }
+    .chart-card-header > h3 {
+      align-self: center;
+    }
+    .chart-card-header > .chart-granularity {
+      justify-self: end;
+    }
+    .chart-card-header > p {
+      grid-column: 1 / -1;
+    }
     .evolution-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -45,9 +61,10 @@ export const CHART_STYLES = `    .rank-grid {
       margin-top: 0;
     }
     .chart-card {
+      position: relative;
       min-width: 0;
       padding: 16px;
-      overflow: hidden;
+      overflow: visible;
     }
     .chart-card-header h3 { margin: 0; font-size: 13px; }
     .chart-card-header p {

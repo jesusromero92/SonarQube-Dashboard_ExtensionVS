@@ -14,6 +14,9 @@ export function createEmptyRefreshSummary(): RefreshSummary {
     severity: [],
     newSeverity: [],
     evolution: [],
+    latestAnalysis: null,
+    previousAnalysis: null,
+    analysisComparisonAvailable: true,
     qualityGate: { status: 'NONE', conditions: [] },
     ratings: {
       overall: {

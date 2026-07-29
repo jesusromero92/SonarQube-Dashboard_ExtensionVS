@@ -633,6 +633,9 @@ export interface RefreshSummary {
   severity: SeverityCount[];
   newSeverity: SeverityCount[];
   evolution: EvolutionPoint[];
+  latestAnalysis: EvolutionPoint | null;
+  previousAnalysis: EvolutionPoint | null;
+  analysisComparisonAvailable: boolean;
   qualityGate: QualityGateSummary;
   ratings: RatingsSummary;
   types: DefectTypeSummary;

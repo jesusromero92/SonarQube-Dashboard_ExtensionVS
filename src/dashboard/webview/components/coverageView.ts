@@ -1,3 +1,21 @@
+import { getSelectDropdownMarkup } from './ui/selectDropdown';
+
+const COVERAGE_GRANULARITY_OPTIONS = [
+  { value: 'day', label: 'Día' },
+  { value: 'week', label: 'Semana' },
+  { value: 'month', label: 'Mes' }
+] as const;
+
+function granularityDropdown(id: string): string {
+  return getSelectDropdownMarkup({
+    ariaLabel: 'Agrupar por',
+    className: 'chart-granularity',
+    id,
+    options: COVERAGE_GRANULARITY_OPTIONS,
+    selectedValue: 'week'
+  });
+}
+
 export const COVERAGE_VIEW_MARKUP = `          <section id="coverageView" hidden>
             <div id="coverageSummary" class="metrics-summary coverage-summary" aria-label="Resumen de cobertura"></div>
 
@@ -46,12 +64,12 @@ export const COVERAGE_VIEW_MARKUP = `          <section id="coverageView" hidden
             <section class="evolution-section">
               <div class="evolution-heading">
                 <h2>Evolución de cobertura y duplicación</h2>
-                <span id="coverageEvolutionCount" class="muted">0 análisis</span>
               </div>
               <div class="evolution-grid">
                 <section class="panel chart-card">
                   <div class="chart-card-header">
                     <h3>Cobertura</h3>
+${granularityDropdown('coverageEvolutionGranularity')}
                     <p>Evolución histórica del porcentaje de cobertura.</p>
                   </div>
                   <div id="coverageChart" class="chart-stage"></div>
@@ -60,6 +78,7 @@ export const COVERAGE_VIEW_MARKUP = `          <section id="coverageView" hidden
                 <section class="panel chart-card">
                   <div class="chart-card-header">
                     <h3>Duplicación</h3>
+${granularityDropdown('duplicationEvolutionGranularity')}
                     <p>Evolución histórica del porcentaje de líneas duplicadas.</p>
                   </div>
                   <div id="duplicationChart" class="chart-stage"></div>

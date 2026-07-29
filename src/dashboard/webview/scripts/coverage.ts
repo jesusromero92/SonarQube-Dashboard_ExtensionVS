@@ -187,12 +187,19 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
     }
 
     function renderCoverageEvolution() {
-      const data = currentSummary.evolution || [];
+      const source = currentSummary.evolution || [];
+      const coverageData = groupedEvolution(
+        source,
+        evolutionGranularities.coverage
+      );
+      const duplicationData = groupedEvolution(
+        source,
+        evolutionGranularities.duplication
+      );
       const coverageKey = currentScope === 'newCode' ? 'newCoverage' : 'coverage';
       const duplicationKey = currentScope === 'newCode' ? 'newDuplicatedLinesDensity' : 'duplicatedLinesDensity';
-      elements.coverageEvolutionCount.textContent = String(data.length) + ' análisis';
-      renderSinglePercentChart(elements.coverageChart, elements.coverageLegend, data, coverageKey, 'Cobertura', dashboardColors.coverage.covered);
-      renderSinglePercentChart(elements.duplicationChart, elements.duplicationLegend, data, duplicationKey, 'Duplicación', dashboardColors.coverage.duplicated);
+      renderSinglePercentChart(elements.coverageChart, elements.coverageLegend, coverageData, coverageKey, 'Cobertura', dashboardColors.coverage.covered);
+      renderSinglePercentChart(elements.duplicationChart, elements.duplicationLegend, duplicationData, duplicationKey, 'Duplicación', dashboardColors.coverage.duplicated);
     }
 
     function renderCoverageView() {

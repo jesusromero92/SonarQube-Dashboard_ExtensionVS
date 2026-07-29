@@ -12,10 +12,12 @@ import { RANKING_TABLES_SCRIPT } from './tables/rankingTables';
 import { ANALYSIS_SCRIPT } from './analysis';
 import { ISSUE_MANAGEMENT_SCRIPT } from './features/issues';
 import { COVERAGE_SCRIPT } from './coverage';
+import { SELECT_DROPDOWN_SCRIPT } from './ui/selectDropdown';
 
 export function getDashboardScript(language: DashboardLanguage, locale: string): string {
   return [
     getBootstrapScript(language, locale),
+    SELECT_DROPDOWN_SCRIPT,
     ISSUES_TABLE_SCRIPT,
     RULE_DIALOG_SCRIPT,
     HOTSPOTS_TABLE_SCRIPT,

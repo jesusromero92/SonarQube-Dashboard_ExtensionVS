@@ -14,6 +14,32 @@ export const DASHBOARD_EVENTS_SCRIPT = `
     elements.clear.addEventListener('click', () => {
       vscode.postMessage({ type: 'clear' });
     });
+    const bindEvolutionGranularity = (element, chart, render) => {
+      element.addEventListener('change', () => {
+        evolutionGranularities[chart] = element.value;
+        render();
+      });
+    };
+    bindEvolutionGranularity(
+      elements.typeEvolutionGranularity,
+      'types',
+      renderEvolutionCharts
+    );
+    bindEvolutionGranularity(
+      elements.severityEvolutionGranularity,
+      'severity',
+      renderEvolutionCharts
+    );
+    bindEvolutionGranularity(
+      elements.coverageEvolutionGranularity,
+      'coverage',
+      renderCoverageEvolution
+    );
+    bindEvolutionGranularity(
+      elements.duplicationEvolutionGranularity,
+      'duplication',
+      renderCoverageEvolution
+    );
 
     elements.issuesViewTab.addEventListener('click', () => {
       currentDataView = 'issues';

@@ -40,17 +40,18 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
     }
 
     function previousAnalysis(summary) {
-      const evolution = summary.evolution || [];
-      if (evolution.length <= 1) return null;
-
-      const latest = evolution[evolution.length - 1];
+      if (!summary.analysisComparisonAvailable ||
+          !summary.latestAnalysis ||
+          !summary.previousAnalysis) {
+        return null;
+      }
       const localTotal = Number(scopeData(summary).published || 0);
-      const latestProjectTotal = previousIssueTotal(latest);
+      const latestProjectTotal = previousIssueTotal(summary.latestAnalysis);
 
       // SonarQube history belongs to the complete project. It is comparable
       // with the local summary only when every issue resolves to a local file.
       return latestProjectTotal === localTotal
-        ? evolution[evolution.length - 2]
+        ? summary.previousAnalysis
         : null;
     }
 

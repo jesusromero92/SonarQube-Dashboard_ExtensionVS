@@ -35,12 +35,12 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Tabla de defectos con filtro y navegación al código.
 - Gestión del ciclo de vida del defecto sin salir de VS Code: aceptar, falso positivo, reapertura, asignación, comentarios, historial y responsable actual.
 - Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias, CodeLens y decoraciones en el editor.
-- Vista de cobertura y duplicación con métricas globales/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico.
+- Vista de cobertura y duplicación con métricas globales/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico agrupable por día, semana o mes.
 - Navegación mediante atajos, contador en la barra de estado y explorador agrupado por archivo, regla o severidad.
 - Notificaciones automáticas de regresiones, fallos del Quality Gate, nuevos hotspots y análisis completados.
 - Tabla específica de Security Hotspots.
 - Rankings de archivos y reglas con ordenación por columnas.
-- Evolución histórica por tipo de issue y criticidad.
+- Evolución histórica por tipo de issue y criticidad, con agrupación independiente por día, semana o mes en cada gráfica.
 - Publicación de diagnósticos en **Problems**.
 - Compatibilidad con ramas y subcarpetas locales.
 
@@ -104,6 +104,8 @@ Los indicadores `▲` y `▼` permiten detectar rápidamente regresiones y mejor
 
 La comparación histórica solo se muestra cuando el total del último análisis de SonarQube coincide con los issues asociados a archivos locales. Si hay rutas omitidas, la extensión evita comparar el subconjunto local con el total global del proyecto.
 
+Esta comparación superior siempre utiliza el **análisis inmediatamente anterior** al último análisis disponible. No depende de la agrupación por día, semana o mes seleccionada en las gráficas de evolución.
+
 ### Tabla de defectos
 
 La tabla contiene:
@@ -166,7 +168,9 @@ La sección inferior incluye dos gráficas:
 - **Issues por tipo:** Bugs, Code Smells, Vulnerabilidades y Security Hotspots.
 - **Issues por criticidad:** Blocker, Critical, Major, Minor e Info.
 
-Cada punto representa un análisis anterior. Al mover el ratón sobre la gráfica aparece un tooltip que sigue el cursor e indica la fecha y los valores de todas las series visibles.
+Cada gráfica dispone de su propio selector **Día / Semana / Mes** en la esquina superior derecha. Los selectores son independientes: cambiar la agrupación de una gráfica no modifica ninguna otra.
+
+Cada punto representa el último análisis del intervalo seleccionado: el último análisis de cada día, de cada semana o de cada mes. Al mover el ratón sobre la gráfica aparece un tooltip que sigue el cursor e indica la fecha real de ese análisis y los valores de todas las series visibles.
 
 Las leyendas están centradas y son interactivas: al pulsar una serie se puede ocultar o volver a mostrar.
 
@@ -235,6 +239,8 @@ La pestaña **Cobertura y duplicación** incluye vistas independientes para Over
 - archivos con menor cobertura;
 - archivos con mayor duplicación;
 - evolución histórica de cobertura y duplicación.
+
+Las gráficas de cobertura y duplicación también incluyen selectores **Día / Semana / Mes** independientes y conservan el último análisis de cada intervalo.
 
 Al seleccionar un archivo se cargan los datos por línea bajo demanda. Las líneas cubiertas, parcialmente cubiertas y no cubiertas se marcan en el gutter y el overview ruler. Las líneas duplicadas utilizan una decoración propia, y el modal de detalle enumera cada bloque duplicado junto con todos los archivos y rangos locales coincidentes.
 

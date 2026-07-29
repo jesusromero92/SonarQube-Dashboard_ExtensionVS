@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
   SONAR_COVERAGE_METRICS,
-  SONAR_EVOLUTION_LIMIT,
   SONAR_EVOLUTION_METRICS,
   SONAR_MODE_SETTING_KEY,
   SONAR_PAGE_SIZE,
@@ -548,17 +547,7 @@ function emptyEvolutionPoint(date: string): EvolutionPoint {
   };
 }
 
-function weekBucket(date: string): string {
-  const parsed = new Date(date);
-  if (!Number.isFinite(parsed.getTime())) {
-    return date.slice(0, 10);
-  }
-  const day = parsed.getUTCDay() || 7;
-  parsed.setUTCDate(parsed.getUTCDate() - day + 1);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[] {
+export function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[] {
   const byDate = new Map<string, EvolutionPoint>();
 
   for (const measure of measures) {
@@ -577,15 +566,11 @@ function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[] {
     }
   }
 
-  const byWeek = new Map<string, EvolutionPoint>();
-  for (const point of [...byDate.values()].sort((left, right) =>
+  // Preserve every analysis. Charts apply their own day/week/month grouping,
+  // while the summary cards always compare the two latest analyses.
+  return [...byDate.values()].sort((left, right) =>
     Date.parse(left.date) - Date.parse(right.date)
-  )) {
-    const bucket = weekBucket(point.date);
-    byWeek.set(bucket, { ...point, label: bucket });
-  }
-
-  return [...byWeek.values()].slice(-SONAR_EVOLUTION_LIMIT);
+  );
 }
 
 async function fetchEvolution(

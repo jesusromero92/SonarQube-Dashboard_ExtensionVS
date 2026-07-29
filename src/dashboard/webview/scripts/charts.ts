@@ -36,6 +36,69 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       }).format(Number(value) || 0);
     }
 
+    function evolutionBucket(dateValue, granularity) {
+      const date = new Date(dateValue);
+      if (!Number.isFinite(date.getTime())) {
+        const fallback = String(dateValue || '');
+        return granularity === 'month' ? fallback.slice(0, 7) : fallback.slice(0, 10);
+      }
+      if (granularity === 'month') {
+        return date.getUTCFullYear() + '-' +
+          String(date.getUTCMonth() + 1).padStart(2, '0');
+      }
+      if (granularity === 'week') {
+        const monday = new Date(date);
+        const day = monday.getUTCDay() || 7;
+        monday.setUTCDate(monday.getUTCDate() - day + 1);
+        return monday.toISOString().slice(0, 10);
+      }
+      return date.toISOString().slice(0, 10);
+    }
+
+    function groupedEvolution(points, granularity) {
+      const byBucket = new Map();
+      const ordered = [...(points || [])].sort(
+        (left, right) => Date.parse(left.date) - Date.parse(right.date)
+      );
+      for (const point of ordered) {
+        const bucket = evolutionBucket(point.date || point.label, granularity);
+        byBucket.set(bucket, { ...point, label: bucket });
+      }
+      return [...byBucket.values()].slice(-dashboardConstants.evolutionLimit);
+    }
+
+    function updateEvolutionHelp() {
+      const typeHelp = {
+        day: 'Evolución diaria de bugs, code smells, vulnerabilidades y security hotspots.',
+        week: 'Evolución semanal de bugs, code smells, vulnerabilidades y security hotspots.',
+        month: 'Evolución mensual de bugs, code smells, vulnerabilidades y security hotspots.'
+      };
+      const severityHelp = {
+        day: 'Evolución diaria de issues por nivel de criticidad.',
+        week: 'Evolución semanal de issues por nivel de criticidad.',
+        month: 'Evolución mensual de issues por nivel de criticidad.'
+      };
+      elements.typeEvolutionHelp.textContent = typeHelp[evolutionGranularities.types];
+      elements.severityEvolutionHelp.textContent = severityHelp[evolutionGranularities.severity];
+    }
+
+    function scopedEvolution(points) {
+      return currentScope === 'newCode'
+        ? points.map(point => ({
+            ...point,
+            bugs: point.newBugs || 0,
+            codeSmells: point.newCodeSmells || 0,
+            vulnerabilities: point.newVulnerabilities || 0,
+            securityHotspots: point.newSecurityHotspots || 0,
+            blockerViolations: point.newBlockerViolations || 0,
+            criticalViolations: point.newCriticalViolations || 0,
+            majorViolations: point.newMajorViolations || 0,
+            minorViolations: point.newMinorViolations || 0,
+            infoViolations: point.newInfoViolations || 0
+          }))
+        : points;
+    }
+
     function renderChartLegend(chartKey, legendElement, data) {
       legendElement.textContent = '';
       for (const series of evolutionSeries[chartKey]) {
@@ -267,24 +330,20 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
     function renderEvolutionCharts() {
       document.querySelector('.chart-tooltip')?.remove();
       const source = currentSummary.evolution || [];
-      const data = currentScope === 'newCode'
-        ? source.map(point => ({
-            ...point,
-            bugs: point.newBugs || 0,
-            codeSmells: point.newCodeSmells || 0,
-            vulnerabilities: point.newVulnerabilities || 0,
-            securityHotspots: point.newSecurityHotspots || 0,
-            blockerViolations: point.newBlockerViolations || 0,
-            criticalViolations: point.newCriticalViolations || 0,
-            majorViolations: point.newMajorViolations || 0,
-            minorViolations: point.newMinorViolations || 0,
-            infoViolations: point.newInfoViolations || 0
-          }))
-        : source;
-      elements.evolutionCount.textContent = String(data.length) +
-        (data.length === 1 ? ' análisis' : ' análisis');
-      renderLineChart('types', elements.typeChart, elements.typeLegend, data);
-      renderLineChart('severity', elements.severityChart, elements.severityLegend, data);
+      const typeData = scopedEvolution(
+        groupedEvolution(source, evolutionGranularities.types)
+      );
+      const severityData = scopedEvolution(
+        groupedEvolution(source, evolutionGranularities.severity)
+      );
+      updateEvolutionHelp();
+      renderLineChart('types', elements.typeChart, elements.typeLegend, typeData);
+      renderLineChart(
+        'severity',
+        elements.severityChart,
+        elements.severityLegend,
+        severityData
+      );
     }
 
     const observedChartWidths = new WeakMap();

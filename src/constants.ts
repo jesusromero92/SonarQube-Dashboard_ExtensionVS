@@ -211,6 +211,7 @@ export const ISSUE_TREE_GROUPS = ['file', 'rule', 'severity'] as const;
 export type IssueTreeGroup = typeof ISSUE_TREE_GROUPS[number];
 
 export const DASHBOARD_WEBVIEW_CONSTANTS = {
+  evolutionLimit: SONAR_EVOLUTION_LIMIT,
   typeIconClasses: {
     BUG: 'bug',
     CODE_SMELL: 'code-smell',
