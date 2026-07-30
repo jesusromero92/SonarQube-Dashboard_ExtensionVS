@@ -46,6 +46,7 @@ import {
   QualityGateStatus,
   QualityGateSummary,
   DashboardHotspotDetail,
+  DashboardRuleDetail,
   DefectTypeSummary,
   RatingGrade,
   RatingsSummary,
@@ -1121,6 +1122,105 @@ export async function fetchHotspotDetail(
     riskDescription: rule.riskDescription ?? '',
     vulnerabilityDescription: rule.vulnerabilityDescription ?? '',
     fixRecommendations: rule.fixRecommendations ?? ''
+  };
+}
+
+
+function firstDefinedText(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return '';
+}
+
+function ruleRemediation(rule: NonNullable<SonarRuleResponse['rule']>): DashboardRuleDetail['remediation'] {
+  return {
+    functionType: firstDefinedText(
+      rule.remFnType,
+      rule.debtRemFnType,
+      rule.defaultRemFnType,
+      rule.defaultDebtRemFnType
+    ),
+    baseEffort: firstDefinedText(
+      rule.remFnBaseEffort,
+      rule.debtRemFnBaseEffort,
+      rule.defaultRemFnBaseEffort,
+      rule.defaultDebtRemFnBaseEffort
+    ),
+    gapMultiplier: firstDefinedText(
+      rule.remFnGapMultiplier,
+      rule.debtRemFnGapMultiplier,
+      rule.defaultRemFnGapMultiplier,
+      rule.defaultDebtRemFnGapMultiplier
+    ),
+    gapDescription: rule.gapDescription?.trim() ?? ''
+  };
+}
+
+export async function fetchRuleDetail(
+  config: FolderSonarConfig,
+  ruleKey: string,
+  signal?: AbortSignal
+): Promise<DashboardRuleDetail> {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/rules/show`);
+  url.searchParams.set('key', ruleKey);
+  url.searchParams.set('actives', 'true');
+
+  const payload = await requestJson<SonarRuleResponse>(
+    url,
+    config.token,
+    signal
+  );
+  const rule = payload.rule;
+
+  if (!rule) {
+    throw new Error(`SonarQube no devolvió información para la regla ${ruleKey}.`);
+  }
+
+  const tags = [
+    ...(rule.tags ?? []),
+    ...(rule.sysTags ?? [])
+  ]
+    .map(tag => tag.trim())
+    .filter(Boolean);
+
+  return {
+    key: firstDefinedText(rule.key, ruleKey),
+    repository: rule.repo?.trim() ?? '',
+    name: firstDefinedText(rule.name, rule.key, ruleKey),
+    language: rule.lang?.trim() ?? '',
+    languageName: rule.langName?.trim() ?? '',
+    status: rule.status?.trim() ?? '',
+    type: rule.type?.trim() ?? '',
+    severity: rule.severity?.trim() ?? '',
+    scope: rule.scope?.trim() ?? '',
+    description: firstDefinedText(rule.htmlDesc, rule.mdDesc),
+    note: firstDefinedText(rule.htmlNote, rule.mdNote),
+    cleanCodeAttribute: rule.cleanCodeAttribute?.trim() ?? '',
+    cleanCodeAttributeCategory:
+      rule.cleanCodeAttributeCategory?.trim() ?? '',
+    impacts: rule.impacts ?? [],
+    remediation: ruleRemediation(rule),
+    parameters: (rule.params ?? []).map(parameter => ({
+      key: parameter.key,
+      description: parameter.htmlDesc?.trim() ?? '',
+      defaultValue: parameter.defaultValue?.trim() ?? '',
+      type: parameter.type?.trim() ?? ''
+    })),
+    tags: [...new Set(tags)],
+    activeProfiles: (payload.actives ?? []).map(active => ({
+      profile: active.qProfile?.trim() ?? '',
+      inheritance: active.inherit?.trim() ?? '',
+      severity: active.severity?.trim() ?? ''
+    })),
+    isTemplate: rule.isTemplate === true,
+    templateKey: rule.templateKey?.trim() ?? '',
+    isExternal: (rule.external ?? rule.isExternal) === true,
+    createdAt: rule.createdAt?.trim() ?? '',
+    updatedAt: rule.updatedAt?.trim() ?? ''
   };
 }
 

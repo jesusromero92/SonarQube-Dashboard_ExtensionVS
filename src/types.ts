@@ -53,11 +53,63 @@ export interface SonarIssue {
   transitions?: string[];
 }
 
+export interface SonarRuleParameter {
+  key: string;
+  htmlDesc?: string;
+  defaultValue?: string;
+  type?: string;
+}
+
+export interface SonarRuleActive {
+  qProfile?: string;
+  inherit?: string;
+  severity?: string;
+}
+
+export interface SonarRuleDefinition {
+  key: string;
+  repo?: string;
+  name?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  htmlDesc?: string;
+  mdDesc?: string;
+  htmlNote?: string;
+  mdNote?: string;
+  severity?: string;
+  status?: string;
+  isTemplate?: boolean;
+  templateKey?: string;
+  tags?: string[];
+  sysTags?: string[];
+  lang?: string;
+  langName?: string;
+  params?: SonarRuleParameter[];
+  defaultDebtRemFnType?: string;
+  defaultDebtRemFnGapMultiplier?: string;
+  defaultDebtRemFnBaseEffort?: string;
+  debtRemFnType?: string;
+  debtRemFnGapMultiplier?: string;
+  debtRemFnBaseEffort?: string;
+  defaultRemFnType?: string;
+  defaultRemFnGapMultiplier?: string;
+  defaultRemFnBaseEffort?: string;
+  remFnType?: string;
+  remFnGapMultiplier?: string;
+  remFnBaseEffort?: string;
+  gapDescription?: string;
+  scope?: string;
+  type?: string;
+  external?: boolean;
+  isExternal?: boolean;
+  cleanCodeAttribute?: string;
+  cleanCodeAttributeCategory?: string;
+  impacts?: SonarImpact[];
+}
+
 export interface SonarRuleResponse {
-  rule?: {
-    key: string;
-    name?: string;
-  };
+  rule?: SonarRuleDefinition;
+  actives?: SonarRuleActive[];
 }
 
 export interface SonarMeasureHistoryEntry {
@@ -538,6 +590,52 @@ export interface IssueMutationRequest {
   transition?: string;
   assignee?: string;
   comment?: string;
+}
+
+export interface DashboardRuleParameter {
+  key: string;
+  description: string;
+  defaultValue: string;
+  type: string;
+}
+
+export interface DashboardRuleActiveProfile {
+  profile: string;
+  inheritance: string;
+  severity: string;
+}
+
+export interface DashboardRuleRemediation {
+  functionType: string;
+  baseEffort: string;
+  gapMultiplier: string;
+  gapDescription: string;
+}
+
+export interface DashboardRuleDetail {
+  key: string;
+  repository: string;
+  name: string;
+  language: string;
+  languageName: string;
+  status: string;
+  type: string;
+  severity: string;
+  scope: string;
+  description: string;
+  note: string;
+  cleanCodeAttribute: string;
+  cleanCodeAttributeCategory: string;
+  impacts: SonarImpact[];
+  remediation: DashboardRuleRemediation;
+  parameters: DashboardRuleParameter[];
+  tags: string[];
+  activeProfiles: DashboardRuleActiveProfile[];
+  isTemplate: boolean;
+  templateKey: string;
+  isExternal: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardHotspot {

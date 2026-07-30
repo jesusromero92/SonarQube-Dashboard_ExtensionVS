@@ -177,7 +177,7 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
       button.className = 'rule-button';
       button.type = 'button';
       button.textContent = issue.ruleName || issue.rule;
-      button.title = 'Ver descripción' +
+      button.title = 'Ver detalle de la regla' +
         (issue.ruleName && issue.ruleName !== issue.rule ? ' · ' + issue.rule : '');
       button.setAttribute('aria-haspopup', 'dialog');
 

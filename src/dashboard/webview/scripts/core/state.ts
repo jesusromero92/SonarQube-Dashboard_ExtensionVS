@@ -18,6 +18,7 @@ export const DASHBOARD_STATE_SCRIPT = `
       rules: { key: 'count', direction: 'desc' }
     };
     let selectedHotspot = null;
+    let selectedRuleIssue = null;
     let loadedProjects = [];
     let creationCapabilities = {
       canCreateProjects: false,

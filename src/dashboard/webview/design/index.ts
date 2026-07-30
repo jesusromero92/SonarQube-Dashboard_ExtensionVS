@@ -9,6 +9,7 @@ import { TABLE_HELPER_STYLES } from './components/tableHelpers';
 import { COVERAGE_FEATURE_STYLES } from './features/coverage';
 import { ISSUE_FEATURE_STYLES } from './features/issues';
 import { QUALITY_GATE_FEATURE_STYLES } from './features/qualityGate';
+import { RULE_FEATURE_STYLES } from './features/rules';
 
 export function getDashboardDesignStyles(): string {
   return [
@@ -22,6 +23,7 @@ export function getDashboardDesignStyles(): string {
     TABLE_HELPER_STYLES,
     ISSUE_FEATURE_STYLES,
     COVERAGE_FEATURE_STYLES,
-    QUALITY_GATE_FEATURE_STYLES
+    QUALITY_GATE_FEATURE_STYLES,
+    RULE_FEATURE_STYLES
   ].join('');
 }

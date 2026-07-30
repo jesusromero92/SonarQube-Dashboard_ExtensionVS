@@ -17,6 +17,7 @@ export const ISSUE_ACTIONS_SCRIPT = `
       }
 
       elements.issueAssignee.value = selectedLogin;
+      refreshSelectDropdown(elements.issueAssignee, true);
     }
 
     function createTransitionButton(issue, transition, currentTransition) {

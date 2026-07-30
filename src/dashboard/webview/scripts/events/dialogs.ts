@@ -21,8 +21,20 @@ export const DIALOG_EVENTS_SCRIPT = `
 
     bindDialogDismiss(
       elements.ruleDialog,
-      [elements.ruleDialogClose]
+      [
+        elements.ruleDialogClose,
+        elements.closeRuleDialog
+      ]
     );
+    elements.openRuleFile.addEventListener('click', () => {
+      if (!selectedRuleIssue?.fileUri) return;
+
+      vscode.postMessage({
+        type: 'openIssue',
+        fileUri: selectedRuleIssue.fileUri,
+        line: selectedRuleIssue.line
+      });
+    });
 
     bindDialogDismiss(
       elements.qualityGateDialog,

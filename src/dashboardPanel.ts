@@ -42,6 +42,7 @@ import {
   checkAnalysisPermission,
   fetchHotspotDetail,
   fetchIssueLifecycle,
+  fetchRuleDetail,
   fetchSonarCompatibilityInfo,
   fetchVisibleProjects,
   fetchCreationCapabilities,
@@ -348,6 +349,9 @@ export class DashboardPanel {
         break;
       case 'loadHotspotDetail':
         await this.loadHotspotDetail(message);
+        break;
+      case 'loadRuleDetail':
+        await this.loadRuleDetail(message);
         break;
       case 'loadIssueLifecycle':
         await this.loadIssueLifecycle(message);
@@ -1371,6 +1375,47 @@ export class DashboardPanel {
         'error',
         `No se pudo abrir la comparación de duplicados: ${this.errorMessage(error)}`
       );
+    }
+  }
+
+  private async loadRuleDetail(message: DashboardWebviewMessage): Promise<void> {
+    const ruleKey = message.ruleKey?.trim();
+    const folderUri = message.folderUri?.trim();
+    if (!ruleKey || !folderUri) {
+      this.postMessage({
+        type: 'ruleDetailError',
+        message: 'No se pudo identificar la regla de SonarQube.'
+      });
+      return;
+    }
+
+    const folder = this.getWorkspaceFolder(folderUri);
+    if (!folder) {
+      this.postMessage({
+        type: 'ruleDetailError',
+        message: 'La carpeta asociada a la regla ya no está abierta.'
+      });
+      return;
+    }
+
+    const config = await getFolderConfig(this.context, folder);
+    if (!config) {
+      this.postMessage({
+        type: 'ruleDetailError',
+        message: 'La carpeta no tiene una conexión válida con SonarQube.'
+      });
+      return;
+    }
+
+    this.postMessage({ type: 'ruleDetailLoading', ruleKey });
+    try {
+      const detail = await fetchRuleDetail(config, ruleKey);
+      this.postMessage({ type: 'ruleDetail', detail });
+    } catch (error) {
+      this.postMessage({
+        type: 'ruleDetailError',
+        message: `No se pudo cargar el detalle de la regla: ${this.errorMessage(error)}`
+      });
     }
   }
 

@@ -30,6 +30,7 @@ export interface DashboardWebviewMessage {
   scope?: 'overall' | 'newCode';
   hotspotKey?: string;
   issueKey?: string;
+  ruleKey?: string;
   mutationKind?: IssueMutationKind;
   transition?: string;
   assignee?: string;

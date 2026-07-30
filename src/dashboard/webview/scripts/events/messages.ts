@@ -243,6 +243,21 @@ export const MESSAGE_EVENTS_SCRIPT = `
           elements.coverageDialogContent.hidden = true;
           break;
 
+        case 'ruleDetailLoading':
+          elements.ruleDialogLoading.textContent =
+            dashboardMessages.ruleDetail.loading;
+          elements.ruleDialogLoading.hidden = false;
+          elements.ruleDialogContent.hidden = true;
+          break;
+
+        case 'ruleDetail':
+          renderRuleDetail(message.detail || {});
+          break;
+
+        case 'ruleDetailError':
+          setRuleDetailError(message.message);
+          break;
+
         case 'showHotspotDetail':
           if (message.hotspot) {
             showHotspotDialog(message.hotspot);
