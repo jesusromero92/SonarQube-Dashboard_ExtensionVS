@@ -62,18 +62,14 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
 
     function createCoverageFileRow(file, value, thirdValue, thirdSuffix) {
       const row = document.createElement('tr');
-      row.tabIndex = 0;
       row.appendChild(fileCellUtils.create(file.relativePath));
       row.appendChild(createCell(formatPercent(value), 'count-cell'));
       row.appendChild(createCell(String(thirdValue || 0) + (thirdSuffix || ''), 'count-cell'));
-      const open = () => openCoverageDetail(file);
-      row.addEventListener('click', open);
-      row.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          open();
-        }
-      });
+      bindRowAction(
+        row,
+        'Abrir ' + file.relativePath,
+        () => openCoverageDetail(file)
+      );
       return row;
     }
 

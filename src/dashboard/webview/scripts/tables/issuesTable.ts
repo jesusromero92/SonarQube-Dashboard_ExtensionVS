@@ -218,24 +218,31 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
       return cell;
     }
 
+    function bindRowAction(row, title, action) {
+      row.tabIndex = 0;
+      row.title = title;
+      row.addEventListener('click', action);
+      row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          action();
+        }
+      });
+    }
+
     function bindOpen(row, issue) {
       if (!issue) {
         return;
       }
-      row.tabIndex = 0;
-      row.title = 'Abrir ' + issue.relativePath + ':' + issue.line;
-      const open = () => vscode.postMessage({
-        type: 'openIssue',
-        fileUri: issue.fileUri,
-        line: issue.line
-      });
-      row.addEventListener('click', open);
-      row.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          open();
-        }
-      });
+      bindRowAction(
+        row,
+        'Abrir ' + issue.relativePath + ':' + issue.line,
+        () => vscode.postMessage({
+          type: 'openIssue',
+          fileUri: issue.fileUri,
+          line: issue.line
+        })
+      );
     }
 
     function renderIssues() {
