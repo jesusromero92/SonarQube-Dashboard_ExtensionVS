@@ -3,6 +3,10 @@ export const MESSAGE_EVENTS_SCRIPT = `
       const message = event.data;
 
       switch (message.type) {
+        case 'languageChanged':
+          applyDashboardLocalization(message.localization);
+          break;
+
         case 'navigate':
           navigate(message.page);
           break;

@@ -148,6 +148,11 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
     label { display: block; margin-bottom: 6px; color: var(--vscode-descriptionForeground); }
     .required { color: var(--vscode-errorForeground); }
     .form-grid { display: grid; gap: 14px; }
+    .language-row { justify-content: start; }
+    .language-row .configuration-select {
+      width: 220px;
+      max-width: 100%;
+    }
     .connection-row { grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) auto; align-items: start; }
     .connection-status {
       margin-top: 14px;

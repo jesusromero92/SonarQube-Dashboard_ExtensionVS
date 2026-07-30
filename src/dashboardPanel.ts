@@ -13,6 +13,7 @@ import {
   normalizeDashboardLanguage,
   setDashboardLanguage
 } from './i18n';
+import { getWebviewLocalizationBundle } from './i18n/runtimeWebview';
 import {
   getFolderConfig,
   getFolderFormConfig,
@@ -1525,37 +1526,31 @@ export class DashboardPanel {
   }
 
   private async changeLanguage(language: DashboardLanguage): Promise<void> {
-    if (language === this.language) {
-      await this.sendState();
-      return;
+    if (language !== this.language) {
+      await setDashboardLanguage(language);
+      this.language = language;
+      this.languageEmitter.fire(language);
     }
 
-    await setDashboardLanguage(language);
-    this.language = language;
-    this.languageEmitter.fire(language);
-
-    if (this.panel) {
-      this.panel.webview.html = getDashboardHtml(
-        this.panel.webview,
-        this.context.extensionUri,
-        this.language
-      );
-    }
+    this.postLanguageChanged();
   }
 
   async refreshLanguage(): Promise<void> {
     const language = getDashboardLanguage();
-    if (language !== this.language) {
-      this.language = language;
-      this.languageEmitter.fire(language);
-      if (this.panel) {
-        this.panel.webview.html = getDashboardHtml(
-          this.panel.webview,
-          this.context.extensionUri,
-          this.language
-        );
-      }
+    if (language === this.language) {
+      return;
     }
+
+    this.language = language;
+    this.languageEmitter.fire(language);
+    this.postLanguageChanged();
+  }
+
+  private postLanguageChanged(): void {
+    this.postMessage({
+      type: 'languageChanged',
+      localization: getWebviewLocalizationBundle(this.language)
+    });
   }
 
   getLanguage(): DashboardLanguage {

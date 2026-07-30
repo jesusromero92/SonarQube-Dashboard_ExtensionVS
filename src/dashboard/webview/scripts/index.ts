@@ -15,9 +15,9 @@ import { COVERAGE_SCRIPT } from './coverage';
 import { SELECT_DROPDOWN_SCRIPT } from './ui/selectDropdown';
 import { CREATE_COMPONENT_DIALOG_SCRIPT } from './modals/createComponentDialog';
 
-export function getDashboardScript(language: DashboardLanguage, locale: string): string {
+export function getDashboardScript(language: DashboardLanguage): string {
   return [
-    getBootstrapScript(language, locale),
+    getBootstrapScript(language),
     SELECT_DROPDOWN_SCRIPT,
     CREATE_COMPONENT_DIALOG_SCRIPT,
     ISSUES_TABLE_SCRIPT,

@@ -5,7 +5,11 @@ import {
   DASHBOARD_TYPE_ICON_FILES,
   DASHBOARD_WEBVIEW_CONSTANTS
 } from '../constants';
-import { DashboardLanguage, localizeWebviewSource } from '../i18n';
+import { DashboardLanguage } from '../i18n';
+import {
+  getRuntimeLocalizationScript,
+  getWebviewLocalizationBundle
+} from '../i18n/runtimeWebview';
 
 export function getDashboardLauncherHtml(
   webview: vscode.Webview,
@@ -20,6 +24,9 @@ export function getDashboardLauncherHtml(
     const codeSmellIconUri = iconUri(DASHBOARD_TYPE_ICON_FILES.CODE_SMELL);
     const vulnerabilityIconUri = iconUri(DASHBOARD_TYPE_ICON_FILES.VULNERABILITY);
     const hotspotIconUri = iconUri(DASHBOARD_TYPE_ICON_FILES.SECURITY_HOTSPOT);
+    const localizationScript = getRuntimeLocalizationScript(
+      getWebviewLocalizationBundle(language)
+    );
 
     const source = `<!DOCTYPE html>
 <html lang="${language}">
@@ -369,6 +376,7 @@ export function getDashboardLauncherHtml(
   </section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    ${localizationScript}
     const dashboardConstants = ${JSON.stringify(DASHBOARD_WEBVIEW_CONSTANTS)};
     const dataTab = document.getElementById('dataTab');
     const configurationTab = document.getElementById('configurationTab');
@@ -502,12 +510,16 @@ export function getDashboardLauncherHtml(
     });
 
     window.addEventListener('message', event => {
-      if (event.data?.type === 'state') render(event.data);
+      if (event.data?.type === 'languageChanged') {
+        applyDashboardLocalization(event.data.localization);
+      } else if (event.data?.type === 'state') {
+        render(event.data);
+      }
     });
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>
 </html>`;
 
-    return localizeWebviewSource(source, language);
+    return source;
   }

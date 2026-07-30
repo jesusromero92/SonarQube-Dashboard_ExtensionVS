@@ -3,6 +3,7 @@ import { DASHBOARD_LAUNCHER_VIEW_ID } from './constants';
 import { getDashboardLauncherHtml } from './dashboard/launcherWebview';
 import { DashboardPanel } from './dashboardPanel';
 import { localizeRuntimeText } from './i18n';
+import { getWebviewLocalizationBundle } from './i18n/runtimeWebview';
 
 export const DASHBOARD_VIEW_ID = DASHBOARD_LAUNCHER_VIEW_ID;
 
@@ -17,7 +18,10 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
       dashboardPanel.onDidChangeSummary(() => this.postState()),
       dashboardPanel.onDidChangeLoading(() => this.postState()),
       dashboardPanel.onDidChangePage(() => this.postState()),
-      dashboardPanel.onDidChangeLanguage(() => this.reloadWebview())
+      dashboardPanel.onDidChangeLanguage(() => {
+        this.postLanguage();
+        this.postState();
+      })
     );
   }
 
@@ -58,15 +62,15 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
     queueMicrotask(() => void this.dashboardPanel.show());
   }
 
-  private reloadWebview(): void {
-    if (!this.view) {
-      return;
-    }
-    this.view.webview.html = getDashboardLauncherHtml(
-      this.view.webview,
-      this.context.extensionUri,
-      this.dashboardPanel.getLanguage()
-    );
+  private postLanguage(): void {
+    this.view?.webview.postMessage({
+      type: 'languageChanged',
+      localization: getWebviewLocalizationBundle(
+        this.dashboardPanel.getLanguage()
+      )
+    }).then(undefined, error => {
+      console.error('[SonarQube Dashboard] launcher language update failed', error);
+    });
   }
 
   private postState(): void {
