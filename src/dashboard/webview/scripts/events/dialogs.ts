@@ -152,6 +152,26 @@ export const DIALOG_EVENTS_SCRIPT = `
     });
 
     bindDialogDismiss(
+      elements.analysisConfirmationDialog,
+      [
+        elements.analysisConfirmationClose,
+        elements.analysisConfirmationCancel
+      ]
+    );
+    elements.analysisConfirmationConfirm.addEventListener(
+      'click',
+      confirmRepositoryAnalysis
+    );
+
+    bindDialogDismiss(
+      elements.createComponentDialog,
+      [
+        elements.createComponentClose,
+        elements.createComponentCancel
+      ]
+    );
+
+    bindDialogDismiss(
       elements.analysisDialog,
       [
         elements.analysisDialogClose,

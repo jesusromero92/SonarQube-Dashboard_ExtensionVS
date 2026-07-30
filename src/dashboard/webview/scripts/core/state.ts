@@ -19,6 +19,12 @@ export const DASHBOARD_STATE_SCRIPT = `
     };
     let selectedHotspot = null;
     let loadedProjects = [];
+    let creationCapabilities = {
+      canCreateProjects: false,
+      canCreateApplications: false
+    };
+    let createComponentKind = 'project';
+    let componentKeyEdited = false;
     let selectedProjectKey = '';
     let currentFolderUri = '';
     let connectionDraftDirty = false;

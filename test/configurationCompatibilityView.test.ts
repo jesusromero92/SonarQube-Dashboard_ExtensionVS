@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
+import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisConfirmationDialog';
+import { CREATE_COMPONENT_DIALOG_MARKUP } from '../src/dashboard/webview/modals/createComponentDialog';
+import { ANALYSIS_STYLES } from '../src/dashboard/webview/styles/analysis';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
 import { ELEMENT_REGISTRY_SCRIPT } from '../src/dashboard/webview/scripts/core/elements';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
@@ -73,7 +76,7 @@ test('conectar obliga a seleccionar de nuevo el proyecto antes de sincronizar', 
   );
   assert.match(
     MESSAGE_EVENTS_SCRIPT,
-    /setProjectOptions\(message\.projects \|\| \[\], '', false\)/
+    /setProjectOptions\([\s\S]*message\.projects \|\| \[\],[\s\S]*'',[\s\S]*false,[\s\S]*message\.creationCapabilities[\s\S]*\)/
   );
   assert.match(MESSAGE_EVENTS_SCRIPT, /connectionValidated = true/);
   assert.match(MESSAGE_EVENTS_SCRIPT, /elements\.configState\.textContent = 'Sin configurar'/);
@@ -215,4 +218,42 @@ test('conserva el borrador de servidor y token al navegar entre páginas', () =>
   assert.match(CONFIGURATION_CORE_SCRIPT, /draftConnectionValidated/);
   assert.match(CONFIGURATION_EVENTS_SCRIPT, /connectionDraftFolderUri = currentFolderUri/);
   assert.match(MESSAGE_EVENTS_SCRIPT, /currentConfig\.serverUrl = elements\.serverUrl\.value\.trim\(\)/);
+});
+
+
+test('los modales de análisis y creación usan una distribución compacta', () => {
+  assert.match(
+    ANALYSIS_CONFIRMATION_DIALOG_MARKUP,
+    /class="confirmation-warning"/
+  );
+  assert.match(
+    ANALYSIS_CONFIRMATION_DIALOG_MARKUP,
+    /<dl class="confirmation-details">[\s\S]*<div><dt>Proyecto/
+  );
+  assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="create-component-grid"/);
+  assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="field field--wide"/);
+  assert.match(ANALYSIS_STYLES, /\.confirmation-dialog \{/);
+  assert.match(ANALYSIS_STYLES, /\.create-component-grid \{/);
+  assert.match(ANALYSIS_STYLES, /display: flex;/);
+  assert.match(ANALYSIS_STYLES, /flex-wrap: wrap;/);
+  assert.match(ANALYSIS_STYLES, /flex: 1 1 calc\(50% - 8px\)/);
+});
+
+test('las capacidades de creación se restauran al abrir una conexión guardada', () => {
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /message\.creationCapabilities/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /restoreProjectOptions\(\)/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /creationCapabilities\.canCreateProjects/
+  );
+  assert.match(
+    CONFIGURATION_CORE_SCRIPT,
+    /creationCapabilities\.canCreateApplications/
+  );
 });

@@ -1,5 +1,11 @@
 import { DashboardLanguage } from '../i18n';
-import { IssueMutationKind, RefreshSummary, ScannerMode } from '../types';
+import {
+  IssueMutationKind,
+  RefreshSummary,
+  ScannerMode,
+  SonarCreatableComponentKind,
+  SonarCreationCapabilities
+} from '../types';
 
 export type RefreshCallback = (source?: 'sync' | 'analysis') => Promise<RefreshSummary>;
 export type ClearCallback = () => void;
@@ -34,4 +40,10 @@ export interface DashboardWebviewMessage {
   notificationsEnabled?: boolean;
   significantIncreasePercent?: number;
   significantIncreaseMinimum?: number;
+  componentKind?: SonarCreatableComponentKind;
+  componentKey?: string;
+  componentName?: string;
+  componentDescription?: string;
+  componentVisibility?: 'private' | 'public';
+  creationCapabilities?: SonarCreationCapabilities;
 }

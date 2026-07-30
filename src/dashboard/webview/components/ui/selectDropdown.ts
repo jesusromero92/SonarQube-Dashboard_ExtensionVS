@@ -82,7 +82,7 @@ ${nativeOptions}
                   class="select-dropdown__menu"
                   role="listbox"
                   aria-labelledby="${escapeAttribute(buttonId)}"
-                  hidden
+                  popover="manual"
                 ></div>
               </div>`;
 }

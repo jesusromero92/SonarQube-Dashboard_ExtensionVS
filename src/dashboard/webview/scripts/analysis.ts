@@ -8,6 +8,29 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         setStatus('error', 'El token no tiene permiso para ejecutar análisis en este proyecto.');
         return;
       }
+
+      const selectedFolder = elements.folder.selectedOptions[0];
+      const selectedProject = elements.projectKey.selectedOptions[0];
+      elements.analysisConfirmationProject.textContent =
+        selectedProject?.dataset.projectName ||
+        currentConfig.projectName ||
+        currentConfig.projectKey ||
+        '—';
+      elements.analysisConfirmationFolder.textContent =
+        selectedFolder?.textContent || currentFolderUri || '—';
+      elements.analysisConfirmationScanner.textContent =
+        elements.scannerMode.selectedOptions[0]?.textContent ||
+        elements.scannerMode.value ||
+        'Automático';
+      if (!elements.analysisConfirmationDialog.open) {
+        elements.analysisConfirmationDialog.showModal();
+      }
+    }
+
+    function confirmRepositoryAnalysis() {
+      if (elements.analysisConfirmationDialog.open) {
+        elements.analysisConfirmationDialog.close();
+      }
       renderAnalysisState({
         running: true,
         phase: 'detecting',

@@ -38,7 +38,12 @@ export const MESSAGE_EVENTS_SCRIPT = `
             currentConfig.projectName = '';
             selectedProjectKey = '';
             elements.configState.textContent = 'Sin configurar';
-            setProjectOptions(message.projects || [], '', false);
+            setProjectOptions(
+              message.projects || [],
+              '',
+              false,
+              message.creationCapabilities
+            );
             currentConfig.sonarCompatibility =
               message.sonarCompatibility;
             renderSonarCompatibility(
@@ -101,6 +106,36 @@ export const MESSAGE_EVENTS_SCRIPT = `
               false
             );
           }
+          break;
+
+        case 'componentCreationLoading':
+          setCreateComponentBusy(true);
+          break;
+
+        case 'componentCreated':
+          setCreateComponentBusy(false);
+          setProjectOptions(
+            message.projects || [],
+            message.component?.key || '',
+            true,
+            message.creationCapabilities
+          );
+          if (message.component?.key) {
+            elements.projectKey.value = message.component.key;
+            selectedProjectKey = message.component.key;
+            refreshSelectDropdown(elements.projectKey);
+            updateSaveAvailability();
+          }
+          if (elements.createComponentDialog.open) {
+            elements.createComponentDialog.close();
+          }
+          break;
+
+        case 'componentCreationError':
+          setCreateComponentBusy(false);
+          showCreateComponentError(
+            message.message || 'No se pudo crear el componente.'
+          );
           break;
 
         case 'status':

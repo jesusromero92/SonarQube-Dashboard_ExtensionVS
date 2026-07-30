@@ -43,6 +43,8 @@ import {
   fetchIssueLifecycle,
   fetchSonarCompatibilityInfo,
   fetchVisibleProjects,
+  fetchCreationCapabilities,
+  createSonarComponent,
   mutateIssue,
   validateSonarToken
 } from './sonarClient';
@@ -53,7 +55,9 @@ import {
   FolderSonarConfig,
   IssueMutationRequest,
   RefreshSummary,
-  ScannerMode
+  ScannerMode,
+  SonarCreationCapabilities,
+  SonarCreatableComponentKind
 } from './types';
 
 export class DashboardPanel {
@@ -72,6 +76,13 @@ export class DashboardPanel {
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private readonly dirtyConnectionFolders = new Set<string>();
   private readonly validatedConnections = new Map<string, string>();
+  private readonly creationCapabilities = new Map<
+    string,
+    {
+      fingerprint: string;
+      value: SonarCreationCapabilities;
+    }
+  >();
   private readonly panelDisposables: vscode.Disposable[] = [];
   private readonly summaryEmitter = new vscode.EventEmitter<RefreshSummary>();
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
@@ -185,7 +196,17 @@ export class DashboardPanel {
   }
 
   async analyze(): Promise<void> {
-    await this.analyzeRepository(this.selectedFolderUri);
+    const confirmed = await vscode.window.showWarningMessage(
+      localizeRuntimeText(
+        'El análisis puede ejecutar herramientas, compilaciones y scripts del repositorio. ¿Quieres continuar?',
+        this.language
+      ),
+      { modal: true },
+      localizeRuntimeText('Analizar', this.language)
+    );
+    if (confirmed) {
+      await this.analyzeRepository(this.selectedFolderUri);
+    }
   }
 
   cancelAnalysis(): void {
@@ -345,6 +366,9 @@ export class DashboardPanel {
       case 'loadProjects':
         await this.loadProjects(message);
         break;
+      case 'createComponent':
+        await this.createComponent(message);
+        break;
       case 'save':
         await this.save(message);
         break;
@@ -425,9 +449,14 @@ export class DashboardPanel {
     const connectionDraftDirty = this.dirtyConnectionFolders.has(
       this.selectedFolderUri
     );
-    const analysisPermission = connectionDraftDirty
-      ? 'unknown'
-      : await this.analysisPermission(selectedFolder);
+    let analysisPermission: AnalysisPermissionStatus = 'unknown';
+    let creationCapabilities = this.emptyCreationCapabilities();
+    if (!connectionDraftDirty) {
+      [analysisPermission, creationCapabilities] = await Promise.all([
+        this.analysisPermission(selectedFolder),
+        this.creationCapabilitiesForFolder(selectedFolder, config)
+      ]);
+    }
 
     this.postMessage({
       type: 'state',
@@ -439,6 +468,7 @@ export class DashboardPanel {
       workspaceTrusted: vscode.workspace.isTrusted,
       language: this.language,
       connectionDraftDirty,
+      creationCapabilities,
       config: {
         ...config,
         projectKey: connectionDraftDirty ? '' : config.projectKey,
@@ -520,18 +550,25 @@ export class DashboardPanel {
 
     try {
       const compatibilityPromise = fetchSonarCompatibilityInfo(serverUrl, token);
-      const [projects, sonarCompatibility] = await Promise.all([
+      const [projects, sonarCompatibility, creationCapabilities] = await Promise.all([
         fetchVisibleProjects(
           serverUrl,
           token,
           this.projectLoadController.signal
         ),
-        compatibilityPromise
+        compatibilityPromise,
+        fetchCreationCapabilities(
+          serverUrl,
+          token,
+          this.projectLoadController.signal
+        )
       ]);
-      this.validatedConnections.set(
-        folderUri,
-        connectionFingerprint(serverUrl, token)
-      );
+      const fingerprint = connectionFingerprint(serverUrl, token);
+      this.validatedConnections.set(folderUri, fingerprint);
+      this.creationCapabilities.set(folderUri, {
+        fingerprint,
+        value: creationCapabilities
+      });
       if (replaceStoredToken) {
         await this.context.secrets.store(tokenKey(folder), replacementToken);
       }
@@ -542,7 +579,8 @@ export class DashboardPanel {
         folderUri,
         serverUrl,
         tokenStored: replaceStoredToken,
-        sonarCompatibility
+        sonarCompatibility,
+        creationCapabilities
       });
 
       this.postStatus(
@@ -567,6 +605,119 @@ export class DashboardPanel {
         localizeRuntimeText(connectionErrorMessage(error), this.language)
       );
     }
+  }
+
+  private async createComponent(
+    message: DashboardWebviewMessage
+  ): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri);
+    if (!folder) {
+      this.postMessage({
+        type: 'componentCreationError',
+        message: 'Abre una carpeta antes de crear un proyecto o aplicación.'
+      });
+      return;
+    }
+
+    const serverUrl = normalizeConnectionServerUrl(message.serverUrl ?? '');
+    const replacementToken = (message.token ?? '').trim();
+    const token = replacementToken ||
+      await this.context.secrets.get(tokenKey(folder));
+    const kind = message.componentKind;
+    const key = (message.componentKey ?? '').trim();
+    const name = (message.componentName ?? '').trim();
+
+    if (!this.isValidHttpUrl(serverUrl) || !token) {
+      this.postMessage({
+        type: 'componentCreationError',
+        message: 'Conecta primero con un servidor y un token válidos.'
+      });
+      return;
+    }
+    if (kind !== 'project' && kind !== 'application') {
+      this.postMessage({
+        type: 'componentCreationError',
+        message: 'Selecciona un tipo de componente válido.'
+      });
+      return;
+    }
+    if (!name || !this.isValidComponentKey(key)) {
+      this.postMessage({
+        type: 'componentCreationError',
+        message: 'Introduce un nombre y una clave válidos.'
+      });
+      return;
+    }
+    if (
+      this.validatedConnections.get(folder.uri.toString()) !==
+      connectionFingerprint(serverUrl, token)
+    ) {
+      this.postMessage({
+        type: 'componentCreationError',
+        message: 'Pulsa Conectar y valida el servidor y el token antes de crear el componente.'
+      });
+      return;
+    }
+
+    this.postMessage({ type: 'componentCreationLoading' });
+    try {
+      const capabilities = await fetchCreationCapabilities(serverUrl, token);
+      this.creationCapabilities.set(folder.uri.toString(), {
+        fingerprint: connectionFingerprint(serverUrl, token),
+        value: capabilities
+      });
+      if (!this.canCreateComponent(capabilities, kind)) {
+        throw new Error(
+          kind === 'application'
+            ? 'El token no tiene permiso para crear aplicaciones.'
+            : 'El token no tiene permiso para crear proyectos.'
+        );
+      }
+
+      const component = await createSonarComponent(serverUrl, token, {
+        kind,
+        key,
+        name,
+        description: (message.componentDescription ?? '').trim(),
+        visibility: message.componentVisibility ?? 'private'
+      });
+      const projects = await fetchVisibleProjects(serverUrl, token);
+
+      this.postMessage({
+        type: 'componentCreated',
+        component,
+        projects,
+        creationCapabilities: capabilities
+      });
+      this.postStatus(
+        'success',
+        kind === 'application'
+          ? 'La aplicación se ha creado correctamente.'
+          : 'El proyecto se ha creado correctamente.'
+      );
+    } catch (error) {
+      this.postMessage({
+        type: 'componentCreationError',
+        message: `No se pudo crear el componente: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private canCreateComponent(
+    capabilities: SonarCreationCapabilities,
+    kind: SonarCreatableComponentKind
+  ): boolean {
+    return kind === 'application'
+      ? capabilities.canCreateApplications
+      : capabilities.canCreateProjects;
+  }
+
+  private isValidComponentKey(key: string): boolean {
+    return Boolean(
+      key &&
+      !/^\d+$/.test(key) &&
+      /^[A-Za-z0-9_.:-]+$/.test(key)
+    );
   }
 
   private async save(message: DashboardWebviewMessage): Promise<void> {
@@ -838,6 +989,58 @@ export class DashboardPanel {
     return root;
   }
 
+  private emptyCreationCapabilities(): SonarCreationCapabilities {
+    return {
+      canCreateProjects: false,
+      canCreateApplications: false
+    };
+  }
+
+  private async creationCapabilitiesForFolder(
+    folder: vscode.WorkspaceFolder,
+    config: {
+      serverUrl: string;
+      hasToken: boolean;
+    }
+  ): Promise<SonarCreationCapabilities> {
+    if (!config.serverUrl || !config.hasToken) {
+      return this.emptyCreationCapabilities();
+    }
+
+    const token = await this.context.secrets.get(tokenKey(folder));
+    if (!token) {
+      return this.emptyCreationCapabilities();
+    }
+
+    const folderUri = folder.uri.toString();
+    const fingerprint = connectionFingerprint(config.serverUrl, token);
+    const cached = this.creationCapabilities.get(folderUri);
+    if (cached?.fingerprint === fingerprint) {
+      if (
+        cached.value.canCreateProjects ||
+        cached.value.canCreateApplications
+      ) {
+        this.validatedConnections.set(folderUri, fingerprint);
+      }
+      return cached.value;
+    }
+
+    try {
+      const value = await fetchCreationCapabilities(config.serverUrl, token);
+      this.creationCapabilities.set(folderUri, {
+        fingerprint,
+        value
+      });
+      if (value.canCreateProjects || value.canCreateApplications) {
+        this.validatedConnections.set(folderUri, fingerprint);
+      }
+      return value;
+    } catch {
+      this.creationCapabilities.delete(folderUri);
+      return this.emptyCreationCapabilities();
+    }
+  }
+
   private async analysisPermission(
     folder: vscode.WorkspaceFolder
   ): Promise<AnalysisPermissionStatus> {
@@ -941,6 +1144,7 @@ export class DashboardPanel {
   private async invalidateConnection(folderUri: string): Promise<void> {
     this.dirtyConnectionFolders.add(folderUri);
     this.validatedConnections.delete(folderUri);
+    this.creationCapabilities.delete(folderUri);
     await this.refreshConfiguredFolderCount(
       vscode.workspace.workspaceFolders ?? []
     );

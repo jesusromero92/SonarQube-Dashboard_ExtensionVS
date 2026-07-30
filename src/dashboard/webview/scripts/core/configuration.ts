@@ -1,4 +1,7 @@
 export const CONFIGURATION_CORE_SCRIPT = `
+    const CREATE_PROJECT_OPTION = '__create_project__';
+    const CREATE_APPLICATION_OPTION = '__create_application__';
+
     function values() {
       return {
         folderUri: elements.folder.value,
@@ -158,8 +161,17 @@ export const CONFIGURATION_CORE_SCRIPT = `
       updateSaveAvailability();
     }
 
-    function setProjectOptions(projects, preferredKey, preserveSelection = true) {
+    function setProjectOptions(
+      projects,
+      preferredKey,
+      preserveSelection = true,
+      capabilities = creationCapabilities
+    ) {
       loadedProjects = projects;
+      creationCapabilities = capabilities || {
+        canCreateProjects: false,
+        canCreateApplications: false
+      };
       const desiredKey = preserveSelection
         ? preferredKey ||
           selectedProjectKey ||
@@ -169,7 +181,11 @@ export const CONFIGURATION_CORE_SCRIPT = `
 
       elements.projectKey.textContent = '';
 
-      if (!projects.length) {
+      const canCreate = Boolean(
+        creationCapabilities.canCreateProjects ||
+        creationCapabilities.canCreateApplications
+      );
+      if (!projects.length && !canCreate) {
         const option = document.createElement('option');
         option.value = '';
         option.textContent = 'No hay proyectos o aplicaciones visibles';
@@ -195,6 +211,19 @@ export const CONFIGURATION_CORE_SCRIPT = `
         elements.projectKey.appendChild(option);
       }
 
+      if (creationCapabilities.canCreateProjects) {
+        const createProject = document.createElement('option');
+        createProject.value = CREATE_PROJECT_OPTION;
+        createProject.textContent = '＋ Crear proyecto';
+        elements.projectKey.appendChild(createProject);
+      }
+      if (creationCapabilities.canCreateApplications) {
+        const createApplication = document.createElement('option');
+        createApplication.value = CREATE_APPLICATION_OPTION;
+        createApplication.textContent = '＋ Crear aplicación';
+        elements.projectKey.appendChild(createApplication);
+      }
+
       elements.projectKey.disabled = false;
       const exists = projects.some(project => project.key === desiredKey);
       elements.projectKey.value = exists ? desiredKey : '';
@@ -205,6 +234,10 @@ export const CONFIGURATION_CORE_SCRIPT = `
 
     function resetProjectOptionsForDisconnectedConnection() {
       loadedProjects = [];
+      creationCapabilities = {
+        canCreateProjects: false,
+        canCreateApplications: false
+      };
       selectedProjectKey = '';
       currentConfig.projectKey = '';
       currentConfig.projectName = '';
@@ -284,6 +317,9 @@ export const CONFIGURATION_CORE_SCRIPT = `
       const draftCompatibility = preserveConnectionDraft
         ? currentConfig.sonarCompatibility
         : undefined;
+      const draftCreationCapabilities = preserveConnectionDraft
+        ? creationCapabilities
+        : undefined;
 
       connectionDraftDirty = Boolean(message.connectionDraftDirty) ||
         preserveConnectionDraft;
@@ -342,6 +378,11 @@ export const CONFIGURATION_CORE_SCRIPT = `
           sonarCompatibility: draftCompatibility
         };
       }
+      creationCapabilities = draftCreationCapabilities ||
+        message.creationCapabilities || {
+          canCreateProjects: false,
+          canCreateApplications: false
+        };
       connectionValidated = Boolean(
         draftConnectionValidated ||
         (!connectionDraftDirty &&

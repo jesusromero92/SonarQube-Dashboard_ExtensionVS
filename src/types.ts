@@ -284,6 +284,36 @@ export interface SonarProject {
   visibility?: string;
 }
 
+export type SonarCreatableComponentKind = 'project' | 'application';
+
+export interface SonarCreationCapabilities {
+  canCreateProjects: boolean;
+  canCreateApplications: boolean;
+}
+
+export interface CreateSonarComponentRequest {
+  kind: SonarCreatableComponentKind;
+  key: string;
+  name: string;
+  description?: string;
+  visibility?: 'private' | 'public';
+}
+
+export interface SonarCurrentUserResponse {
+  permissions?: {
+    global?: string[];
+  };
+}
+
+export interface SonarNavigationGlobalResponse {
+  qualifiers?: string[];
+}
+
+export interface SonarCreatedComponentResponse {
+  project?: SonarProject;
+  application?: SonarProject;
+}
+
 export interface SonarProjectsResponse {
   paging?: {
     pageIndex: number;

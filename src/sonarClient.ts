@@ -35,6 +35,11 @@ import {
   SonarMeasuresComponentResponse,
   SonarProject,
   SonarProjectsResponse,
+  SonarCreationCapabilities,
+  SonarCurrentUserResponse,
+  SonarNavigationGlobalResponse,
+  SonarCreatedComponentResponse,
+  CreateSonarComponentRequest,
   SonarQualityGateResponse,
   SonarRuleResponse,
   SonarSettingsResponse,
@@ -385,6 +390,101 @@ export async function fetchVisibleProjects(
   return [...unique.values()].sort((left, right) =>
     left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
   );
+}
+
+
+export async function fetchCreationCapabilities(
+  serverUrl: string,
+  token: string,
+  signal?: AbortSignal
+): Promise<SonarCreationCapabilities> {
+  const unavailable: SonarCreationCapabilities = {
+    canCreateProjects: false,
+    canCreateApplications: false
+  };
+
+  try {
+    const [currentUser, navigation] = await Promise.all([
+      requestJson<SonarCurrentUserResponse>(
+        new URL(`${normalizeServerUrl(serverUrl)}/api/users/current`),
+        token,
+        signal
+      ),
+      requestJson<SonarNavigationGlobalResponse>(
+        new URL(`${normalizeServerUrl(serverUrl)}/api/navigation/global`),
+        token,
+        signal
+      ).catch(() => ({ qualifiers: [] }))
+    ]);
+
+    const globalPermissions = new Set(
+      (currentUser.permissions?.global ?? []).map(permission =>
+        permission.toLowerCase()
+      )
+    );
+    const isSystemAdministrator = globalPermissions.has('admin');
+    const supportsApplications = (navigation.qualifiers ?? []).includes('APP');
+
+    return {
+      canCreateProjects:
+        isSystemAdministrator || globalPermissions.has('provisioning'),
+      canCreateApplications:
+        supportsApplications &&
+        (isSystemAdministrator || globalPermissions.has('applicationcreator'))
+    };
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    if (
+      error instanceof SonarHttpError &&
+      [400, 401, 403, 404].includes(error.status)
+    ) {
+      return unavailable;
+    }
+    throw error;
+  }
+}
+
+export async function createSonarComponent(
+  serverUrl: string,
+  token: string,
+  request: CreateSonarComponentRequest,
+  signal?: AbortSignal
+): Promise<SonarProject> {
+  const endpoint = request.kind === 'application'
+    ? '/api/applications/create'
+    : '/api/projects/create';
+  const url = new URL(`${normalizeServerUrl(serverUrl)}${endpoint}`);
+  const values: Record<string, string> = request.kind === 'application'
+    ? {
+        key: request.key,
+        name: request.name,
+        description: request.description ?? '',
+        visibility: request.visibility ?? 'private'
+      }
+    : {
+        project: request.key,
+        name: request.name,
+        visibility: request.visibility ?? 'private'
+      };
+
+  const payload = await requestForm<SonarCreatedComponentResponse>(
+    url,
+    token,
+    values,
+    signal
+  );
+  const component = request.kind === 'application'
+    ? payload.application
+    : payload.project;
+
+  return component ?? {
+    key: request.key,
+    name: request.name,
+    qualifier: request.kind === 'application' ? 'APP' : 'TRK',
+    visibility: request.visibility
+  };
 }
 
 export async function validateSonarToken(

@@ -37,7 +37,23 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
     });
 
     elements.projectKey.addEventListener('change', () => {
-      selectedProjectKey = elements.projectKey.value;
+      const selectedValue = elements.projectKey.value;
+      if (
+        selectedValue === CREATE_PROJECT_OPTION ||
+        selectedValue === CREATE_APPLICATION_OPTION
+      ) {
+        const kind = selectedValue === CREATE_APPLICATION_OPTION
+          ? 'application'
+          : 'project';
+        elements.projectKey.value = '';
+        selectedProjectKey = '';
+        refreshSelectDropdown(elements.projectKey);
+        updateSaveAvailability();
+        openCreateComponentDialog(kind);
+        return;
+      }
+
+      selectedProjectKey = selectedValue;
       updateSaveAvailability();
     });
 
@@ -46,7 +62,12 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       connectionDraftFolderUri = currentFolderUri;
       connectionValidated = false;
       currentConfig.sonarCompatibility = undefined;
+      creationCapabilities = {
+        canCreateProjects: false,
+        canCreateApplications: false
+      };
       elements.sonarCompatibility.hidden = true;
+      restoreProjectOptions();
       clearStatus();
       updateSaveAvailability();
     }

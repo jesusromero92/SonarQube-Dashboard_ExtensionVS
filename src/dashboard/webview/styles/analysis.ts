@@ -83,6 +83,104 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .confirmation-dialog {
+      width: min(560px, calc(100vw - 40px));
+    }
+    .rule-dialog-body.confirmation-dialog-body {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px 16px;
+      line-height: 1.4;
+      white-space: normal;
+    }
+    .confirmation-dialog-body p { margin: 0; }
+    .confirmation-warning {
+      padding: 10px 12px;
+      border-left: 3px solid var(--vscode-editorWarning-foreground);
+      background: var(--vscode-textBlockQuote-background);
+    }
+    .confirmation-details {
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editor-background);
+    }
+    .confirmation-details > div {
+      display: flex;
+      gap: 12px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .confirmation-details > div:last-child { border-bottom: 0; }
+    .confirmation-details dt {
+      width: 92px;
+      flex: 0 0 92px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .confirmation-details dd {
+      min-width: 0;
+      flex: 1 1 auto;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+    .confirmation-note {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .create-component-dialog {
+      width: min(680px, calc(100vw - 40px));
+    }
+    .rule-dialog-body.create-component-form {
+      display: block;
+      padding: 14px 16px 16px;
+      line-height: 1.4;
+      white-space: normal;
+    }
+    .create-component-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 16px;
+      align-content: start;
+      align-items: start;
+    }
+    .create-component-grid .field {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .create-component-grid .field > label {
+      margin: 0;
+    }
+    .create-component-grid .field > input,
+    .create-component-grid .field > textarea,
+    .create-component-grid .field > .select-dropdown,
+    .create-component-grid .field > .hint {
+      margin: 0;
+    }
+    .create-component-grid .field > .hint {
+      line-height: 1.35;
+    }
+    .create-component-grid .field--wide {
+      grid-column: 1 / -1;
+    }
+    .create-component-grid #createComponentTypeField[hidden] + .field {
+      grid-column: 1 / -1;
+    }
+    .create-component-form textarea {
+      width: 100%;
+      min-height: 72px;
+      box-sizing: border-box;
+      resize: vertical;
+    }
+    .create-component-form .connection-status {
+      margin: 0 0 12px;
+    }
+
+
     @media (prefers-reduced-motion: reduce) {
       .analysis-icon.running::before,
       .analysis-status-indicator {
@@ -90,6 +188,8 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       }
     }
     @media (max-width: 760px) {
+      .create-component-grid { grid-template-columns: 1fr; }
+      .confirmation-details dt { width: 78px; flex-basis: 78px; }
       .analysis-panel { align-items: flex-start; flex-direction: column; }
       .analysis-actions { width: 100%; margin-left: 0; }
       .analysis-actions button { flex: 1; }

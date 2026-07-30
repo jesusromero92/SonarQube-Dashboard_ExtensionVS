@@ -1,4 +1,6 @@
 import { ANALYSIS_DIALOG_MARKUP } from './analysisDialog';
+import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from './analysisConfirmationDialog';
+import { CREATE_COMPONENT_DIALOG_MARKUP } from './createComponentDialog';
 import { COVERAGE_DIALOG_MARKUP } from './coverageDialog';
 import { HOTSPOT_DIALOG_MARKUP } from './hotspotDialog';
 import { ISSUE_DIALOG_MARKUP } from './issueDialog';
@@ -12,6 +14,8 @@ export function getDashboardModalsMarkup(): string {
     HOTSPOT_DIALOG_MARKUP,
     ISSUE_DIALOG_MARKUP,
     COVERAGE_DIALOG_MARKUP,
-    ANALYSIS_DIALOG_MARKUP
+    ANALYSIS_DIALOG_MARKUP,
+    ANALYSIS_CONFIRMATION_DIALOG_MARKUP,
+    CREATE_COMPONENT_DIALOG_MARKUP
   ].join('');
 }

@@ -63,14 +63,11 @@ export const SELECT_DROPDOWN_STYLES = `
       transform: translateY(2px) rotate(225deg);
     }
     .select-dropdown__menu {
-      position: absolute;
-      top: calc(100% + 7px);
-      right: 0;
-      left: 0;
+      position: fixed;
+      inset: auto;
       box-sizing: border-box;
-      width: 100%;
-      min-width: 100%;
       max-height: 220px;
+      margin: 0;
       padding: 3px;
       overflow-x: hidden;
       overflow-y: auto;
@@ -78,6 +75,10 @@ export const SELECT_DROPDOWN_STYLES = `
       color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
       background: var(--vscode-dropdown-background, var(--vscode-editorWidget-background));
       box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+      z-index: 1000;
+    }
+    .select-dropdown__menu:popover-open {
+      display: block;
     }
     .select-dropdown__option {
       display: block;

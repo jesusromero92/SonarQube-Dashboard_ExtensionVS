@@ -12,10 +12,57 @@ export const SELECT_DROPDOWN_SCRIPT = `
 
       root.dataset.dropdownInitialized = 'true';
 
+      const supportsPopover = typeof menu.showPopover === 'function'
+        && typeof menu.hidePopover === 'function';
+      const menuGap = 7;
+      const viewportMargin = 8;
+
+      if (!supportsPopover) menu.hidden = true;
+
+      const isMenuOpen = () => supportsPopover
+        ? menu.matches(':popover-open')
+        : !menu.hidden;
+
       const closeDropdown = () => {
         root.dataset.open = 'false';
         trigger.setAttribute('aria-expanded', 'false');
-        menu.hidden = true;
+        if (supportsPopover) {
+          if (isMenuOpen()) menu.hidePopover();
+        } else {
+          menu.hidden = true;
+        }
+      };
+
+      const positionMenu = () => {
+        if (!isMenuOpen()) return;
+
+        const triggerRect = trigger.getBoundingClientRect();
+        const availableBelow = window.innerHeight - triggerRect.bottom - menuGap - viewportMargin;
+        const availableAbove = triggerRect.top - menuGap - viewportMargin;
+        const openAbove = availableBelow < 120 && availableAbove > availableBelow;
+        const availableHeight = Math.max(72, openAbove ? availableAbove : availableBelow);
+        const maxHeight = Math.min(220, availableHeight);
+        const width = triggerRect.width;
+        const left = Math.min(
+          Math.max(viewportMargin, triggerRect.left),
+          Math.max(viewportMargin, window.innerWidth - width - viewportMargin)
+        );
+
+        menu.style.width = width + 'px';
+        menu.style.minWidth = width + 'px';
+        menu.style.maxHeight = maxHeight + 'px';
+        menu.style.left = left + 'px';
+        menu.style.right = 'auto';
+
+        if (openAbove) {
+          const menuHeight = Math.min(menu.scrollHeight, maxHeight);
+          menu.style.top = Math.max(viewportMargin, triggerRect.top - menuGap - menuHeight) + 'px';
+        } else {
+          menu.style.top = Math.min(
+            window.innerHeight - viewportMargin - Math.min(menu.scrollHeight, maxHeight),
+            triggerRect.bottom + menuGap
+          ) + 'px';
+        }
       };
 
       const availableOptions = () =>
@@ -69,7 +116,9 @@ export const SELECT_DROPDOWN_SCRIPT = `
         closeAllSelectDropdowns(root);
         root.dataset.open = 'true';
         trigger.setAttribute('aria-expanded', 'true');
-        menu.hidden = false;
+        if (supportsPopover) menu.showPopover();
+        else menu.hidden = false;
+        positionMenu();
         if (focusSelected) {
           const options = availableOptions();
           const selectedIndex = Math.max(
@@ -136,6 +185,8 @@ export const SELECT_DROPDOWN_SCRIPT = `
       });
 
       select.addEventListener('change', syncFromSelect);
+      window.addEventListener('resize', positionMenu);
+      document.addEventListener('scroll', positionMenu, true);
 
       const observer = new MutationObserver(rebuildOptions);
       observer.observe(select, {
@@ -148,6 +199,7 @@ export const SELECT_DROPDOWN_SCRIPT = `
       selectDropdownControllers.set(select, {
         close: closeDropdown,
         rebuild: rebuildOptions,
+        reposition: positionMenu,
         sync: syncFromSelect
       });
 
