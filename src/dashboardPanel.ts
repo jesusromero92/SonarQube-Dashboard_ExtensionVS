@@ -267,11 +267,18 @@ export class DashboardPanel {
     this.disposePanelListeners();
     this.panel = panel;
     panel.title = 'SonarQube Dashboard';
-    panel.iconPath = vscode.Uri.joinPath(
-      this.context.extensionUri,
-      'media',
-      'SonarQube.svg'
-    );
+    panel.iconPath = {
+      light: vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'media',
+        'SonarQube-light.svg'
+      ),
+      dark: vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'media',
+        'SonarQube-dark.svg'
+      )
+    };
     panel.webview.options = {
       enableScripts: true
     };
