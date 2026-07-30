@@ -8,10 +8,14 @@ export const DASHBOARD_STATE_SCRIPT = `
     let currentScope = 'overall';
     let currentDataView = 'issues';
     const evolutionGranularities = {
-      types: 'week',
-      severity: 'week',
-      coverage: 'week',
-      duplication: 'week'
+      types: 'day',
+      severity: 'day',
+      coverage: 'day',
+      duplication: 'day'
+    };
+    const issueSort = {
+      key: 'severityRank',
+      direction: 'desc'
     };
     const topSort = {
       files: { key: 'count', direction: 'desc' },

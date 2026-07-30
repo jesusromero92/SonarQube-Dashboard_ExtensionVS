@@ -9,11 +9,31 @@ export const ISSUES_TABLE_MARKUP = `          <section class="panel">
               <table class="issues-table defects-table" aria-label="Defectos">
                 <thead>
                   <tr>
-                    <th class="col-severity">Severidad</th>
-                    <th class="col-type">Tipo</th>
-                    <th class="col-file">Archivo</th>
-                    <th class="col-status">Estado</th>
-                    <th class="col-rule">Regla</th>
+                    <th class="col-severity" data-sort-header="issues" data-sort-key="severityRank">
+                      <button class="sort-button" type="button">
+                        Severidad <span class="sort-indicator" aria-hidden="true"></span>
+                      </button>
+                    </th>
+                    <th class="col-type" data-sort-header="issues" data-sort-key="type">
+                      <button class="sort-button" type="button">
+                        Tipo <span class="sort-indicator" aria-hidden="true"></span>
+                      </button>
+                    </th>
+                    <th class="col-file" data-sort-header="issues" data-sort-key="relativePath">
+                      <button class="sort-button" type="button">
+                        Archivo <span class="sort-indicator" aria-hidden="true"></span>
+                      </button>
+                    </th>
+                    <th class="col-status" data-sort-header="issues" data-sort-key="status">
+                      <button class="sort-button" type="button">
+                        Estado <span class="sort-indicator" aria-hidden="true"></span>
+                      </button>
+                    </th>
+                    <th class="col-rule" data-sort-header="issues" data-sort-key="ruleName">
+                      <button class="sort-button" type="button">
+                        Regla <span class="sort-indicator" aria-hidden="true"></span>
+                      </button>
+                    </th>
                     <th class="col-actions">Acciones</th>
                   </tr>
                 </thead>

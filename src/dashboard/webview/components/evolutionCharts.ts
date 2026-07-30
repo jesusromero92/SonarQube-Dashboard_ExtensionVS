@@ -13,7 +13,7 @@ function granularityDropdown(id: string): string {
     className: 'chart-granularity',
     id,
     options: EVOLUTION_GRANULARITY_OPTIONS,
-    selectedValue: 'week'
+    selectedValue: 'day'
   });
 }
 
@@ -29,7 +29,7 @@ ${getNewCodeEvolutionUnavailableMarkup({ id: 'issuesEvolutionUnavailable' })}
                 <div class="chart-card-header">
                   <h3>Issues por tipo</h3>
 ${granularityDropdown('typeEvolutionGranularity')}
-                  <p id="typeEvolutionHelp">Evolución semanal de bugs, code smells, vulnerabilidades y security hotspots.</p>
+                  <p id="typeEvolutionHelp">Evolución diaria de bugs, code smells, vulnerabilidades y security hotspots.</p>
                 </div>
                 <div id="typeChart" class="chart-stage"></div>
                 <div id="typeLegend" class="chart-legend"></div>
@@ -38,7 +38,7 @@ ${granularityDropdown('typeEvolutionGranularity')}
                 <div class="chart-card-header">
                   <h3>Issues por criticidad</h3>
 ${granularityDropdown('severityEvolutionGranularity')}
-                  <p id="severityEvolutionHelp">Evolución semanal de issues por nivel de criticidad.</p>
+                  <p id="severityEvolutionHelp">Evolución diaria de issues por nivel de criticidad.</p>
                 </div>
                 <div id="severityChart" class="chart-stage"></div>
                 <div id="severityLegend" class="chart-legend"></div>

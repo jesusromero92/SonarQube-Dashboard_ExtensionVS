@@ -13,7 +13,7 @@ function granularityDropdown(id: string): string {
     className: 'chart-granularity',
     id,
     options: COVERAGE_GRANULARITY_OPTIONS,
-    selectedValue: 'week'
+    selectedValue: 'day'
   });
 }
 

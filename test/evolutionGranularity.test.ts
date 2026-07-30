@@ -7,6 +7,7 @@ import { DASHBOARD_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events
 import { SELECT_DROPDOWN_SCRIPT } from '../src/dashboard/webview/scripts/ui/selectDropdown';
 import { SELECT_DROPDOWN_STYLES } from '../src/dashboard/webview/design/components/selectDropdown';
 import { ISSUES_TABLE_SCRIPT } from '../src/dashboard/webview/scripts/tables/issuesTable';
+import { DASHBOARD_STATE_SCRIPT } from '../src/dashboard/webview/scripts/core/state';
 import { buildEvolution } from '../src/sonarClient';
 
 test('conserva todos los análisis para poder comparar con el inmediatamente anterior', () => {
@@ -63,13 +64,23 @@ test('cada gráfica ofrece su propio selector de día, semana y mes', () => {
     4
   );
   assert.match(SELECT_DROPDOWN_SCRIPT, /dispatchEvent\(new Event\('change'/);
-  assert.match(SELECT_DROPDOWN_STYLES, /top: calc\(100% \+ 7px\)/);
+  assert.match(SELECT_DROPDOWN_STYLES, /position: fixed/);
   assert.match(SELECT_DROPDOWN_STYLES, /width: 100%/);
   assert.match(SELECT_DROPDOWN_SCRIPT, /MutationObserver/);
   assert.match(SELECT_DROPDOWN_SCRIPT, /function refreshSelectDropdown/);
   assert.match(CHARTS_SCRIPT, /byBucket\.set\(bucket, \{ \.\.\.point, label: bucket \}\)/);
   assert.match(CHARTS_SCRIPT, /slice\(-dashboardConstants\.evolutionLimit\)/);
   assert.match(DASHBOARD_EVENTS_SCRIPT, /bindEvolutionGranularity/);
+  assert.equal(
+    (EVOLUTION_CHARTS_MARKUP + COVERAGE_VIEW_MARKUP).match(/value="day" selected/g)?.length,
+    4
+  );
+  assert.match(DASHBOARD_STATE_SCRIPT, /types: 'day'/);
+  assert.match(DASHBOARD_STATE_SCRIPT, /severity: 'day'/);
+  assert.match(DASHBOARD_STATE_SCRIPT, /coverage: 'day'/);
+  assert.match(DASHBOARD_STATE_SCRIPT, /duplication: 'day'/);
+  assert.match(EVOLUTION_CHARTS_MARKUP, /Evolución diaria de bugs/);
+  assert.match(EVOLUTION_CHARTS_MARKUP, /Evolución diaria de issues/);
 });
 
 test('las tarjetas comparan siempre con el análisis inmediatamente anterior', () => {

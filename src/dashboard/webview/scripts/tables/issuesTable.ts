@@ -245,6 +245,57 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
       );
     }
 
+    function issueSortValue(issue, key) {
+      if (key === 'severityRank') {
+        return Number(issue.severityRank || 0);
+      }
+      if (key === 'ruleName') {
+        return issue.ruleName || issue.rule || '';
+      }
+      return issue[key] || '';
+    }
+
+    function compareIssueValues(left, right, key) {
+      if (key === 'severityRank') {
+        return Number(issueSortValue(left, key)) - Number(issueSortValue(right, key));
+      }
+
+      const comparison = String(issueSortValue(left, key)).localeCompare(
+        String(issueSortValue(right, key)),
+        dashboardLanguage,
+        { sensitivity: 'base', numeric: true }
+      );
+      if (comparison || key !== 'relativePath') {
+        return comparison;
+      }
+      return Number(left.line || 0) - Number(right.line || 0);
+    }
+
+    function sortIssues(issues) {
+      const direction = issueSort.direction === 'asc' ? 1 : -1;
+      return issues
+        .map((issue, index) => ({ issue, index }))
+        .sort((left, right) =>
+          compareIssueValues(left.issue, right.issue, issueSort.key) * direction ||
+          left.index - right.index
+        )
+        .map(item => item.issue);
+    }
+
+    function updateIssueSortHeaders() {
+      for (const header of document.querySelectorAll('[data-sort-header="issues"]')) {
+        const active = header.dataset.sortKey === issueSort.key;
+        header.setAttribute(
+          'aria-sort',
+          active ? (issueSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'
+        );
+        const indicator = header.querySelector('.sort-indicator');
+        if (indicator) {
+          indicator.textContent = active ? (issueSort.direction === 'asc' ? '▲' : '▼') : '';
+        }
+      }
+    }
+
     function renderIssues() {
       const query = elements.filter.value.trim().toLowerCase();
       const filtered = currentIssues.filter(issue => {
@@ -264,19 +315,21 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
           .toLowerCase()
           .includes(query);
       });
+      const sorted = sortIssues(filtered);
+      updateIssueSortHeaders();
       elements.issuesBody.textContent = '';
-      elements.tableCount.textContent = String(filtered.length) +
-        (filtered.length === 1 ? dashboardMessages.issueSingular : dashboardMessages.issuePlural);
-      elements.noResults.hidden = filtered.length > 0;
+      elements.tableCount.textContent = String(sorted.length) +
+        (sorted.length === 1 ? dashboardMessages.issueSingular : dashboardMessages.issuePlural);
+      elements.noResults.hidden = sorted.length > 0;
 
-      if (!filtered.length) {
+      if (!sorted.length) {
         elements.noResults.textContent = currentIssues.length
           ? 'No hay defectos que coincidan con el filtro.'
           : 'No se han encontrado defectos para el proyecto seleccionado.';
         return;
       }
 
-      for (const issue of filtered) {
+      for (const issue of sorted) {
         const row = document.createElement('tr');
         bindOpen(row, issue);
 

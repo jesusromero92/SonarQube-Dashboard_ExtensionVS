@@ -4,6 +4,18 @@ Todos los cambios relevantes de SonarQube Dashboard se documentarán en este arc
 
 All notable changes to SonarQube Dashboard will be documented in this file.
 
+## [0.19.0] - 2026-07-30
+
+### Añadido / Added
+
+- La tabla de **Issues** permite ordenar por severidad, tipo, archivo, estado y regla.
+- The **Issues** table can be sorted by severity, type, file, status, and rule.
+
+### Cambiado / Changed
+
+- La evolución de **Issues**, **Cobertura** y **Duplicación** se agrupa por **Día** de forma predeterminada.
+- **Issues**, **Coverage**, and **Duplication** evolution is grouped by **Day** by default.
+
 ## [0.18.5] - 2026-07-30
 
 ### Corregido / Fixed

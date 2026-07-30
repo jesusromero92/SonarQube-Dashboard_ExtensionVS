@@ -95,7 +95,10 @@ export const DASHBOARD_EVENTS_SCRIPT = `
       header.querySelector('button')?.addEventListener('click', () => {
         const tableName = header.dataset.sortHeader;
         const key = header.dataset.sortKey;
-        const sort = topSort[tableName];
+        const sort = tableName === 'issues'
+          ? issueSort
+          : topSort[tableName];
+        if (!sort || !key) return;
 
         if (sort.key === key) {
           sort.direction =
@@ -105,14 +108,16 @@ export const DASHBOARD_EVENTS_SCRIPT = `
         } else {
           sort.key = key;
           sort.direction =
-            key === 'key'
-              ? 'asc'
-              : 'desc';
+            key === 'severityRank' || key === 'count'
+              ? 'desc'
+              : 'asc';
         }
 
-        if (tableName === 'files') {
+        if (tableName === 'issues') {
+          renderIssues();
+        } else if (tableName === 'files') {
           renderTopFiles();
-        } else {
+        } else if (tableName === 'rules') {
           renderTopRules();
         }
       });
