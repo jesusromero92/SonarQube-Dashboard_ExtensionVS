@@ -116,6 +116,13 @@ export function localizeAnalysisState<T extends LocalizedAnalysisState>(
     ...state,
     message: localizeRuntimeText(state.message, language),
     scanner: localizeRuntimeText(state.scanner, language),
-    log: state.log.map(line => localizeRuntimeText(line, language))
+    log: state.log.map(line => localizeRuntimeText(line, language)),
+    steps: state.steps?.map(step => ({
+      ...step,
+      name: localizeRuntimeText(step.name, language),
+      message: step.message
+        ? localizeRuntimeText(step.message, language)
+        : undefined
+    }))
   };
 }

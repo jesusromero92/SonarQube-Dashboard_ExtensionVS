@@ -401,7 +401,10 @@ export interface FolderSonarConfig {
   token: string;
   scannerMode: ScannerMode;
   buildCommand?: string;
+  testCommand?: string;
   customScannerCommand?: string;
+  preAnalysisCommands?: string;
+  postAnalysisCommands?: string;
 }
 
 export interface FolderSonarFormConfig {
@@ -413,7 +416,10 @@ export interface FolderSonarFormConfig {
   hasToken: boolean;
   scannerMode: ScannerMode;
   buildCommand: string;
+  testCommand: string;
   customScannerCommand: string;
+  preAnalysisCommands: string;
+  postAnalysisCommands: string;
 }
 
 export interface RemoteCoverageFile {

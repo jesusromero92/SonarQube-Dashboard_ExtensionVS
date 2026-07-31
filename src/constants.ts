@@ -15,7 +15,9 @@ export const SONAR_CONFIGURATION_KEYS = {
   baseDir: 'baseDir',
   scannerMode: 'scannerMode',
   buildCommand: 'buildCommand',
-  customScannerCommand: 'customScannerCommand'
+  customScannerCommand: 'customScannerCommand',
+  preAnalysisCommands: 'preAnalysisCommands',
+  postAnalysisCommands: 'postAnalysisCommands'
 } as const;
 
 export const DASHBOARD_CONFIGURATION_KEYS = {

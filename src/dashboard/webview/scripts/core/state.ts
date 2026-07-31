@@ -37,6 +37,7 @@ export const DASHBOARD_STATE_SCRIPT = `
     let connectionValidated = false;
     let connectionAttemptPending = false;
     let configurationBusy = false;
+    let pipelineSaving = false;
     let hasWorkspace = false;
     let dashboardLoading = true;
     let workspaceTrusted = true;
@@ -46,7 +47,8 @@ export const DASHBOARD_STATE_SCRIPT = `
       message: 'Listo para analizar el repositorio.',
       scanner: '',
       canCancel: false,
-      log: []
+      log: [],
+      steps: []
     };
     const hiddenChartSeries = {
       types: new Set(),

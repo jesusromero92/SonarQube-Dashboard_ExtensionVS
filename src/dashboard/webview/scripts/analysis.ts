@@ -22,12 +22,40 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         elements.scannerMode.selectedOptions[0]?.textContent ||
         elements.scannerMode.value ||
         'Automático';
+
+      renderAnalysisRunSteps();
       if (!elements.analysisConfirmationDialog.open) {
         elements.analysisConfirmationDialog.showModal();
       }
     }
 
     function confirmRepositoryAnalysis() {
+      updateAnalysisConfirmAvailability();
+      const incompleteRow = [...elements.analysisRunSteps.querySelectorAll('.analysis-run-step')]
+        .find(analysisRunStepIsIncomplete);
+      if (incompleteRow) {
+        incompleteRow.querySelector(
+          '.pipeline-step-name-dropdown .select-dropdown__trigger'
+        )?.focus();
+        return;
+      }
+
+      const steps = collectAnalysisRunSteps();
+      const invalidStep = steps.find(step =>
+        step.enabled && step.kind !== 'sonar' && !step.command
+      );
+      if (invalidStep) {
+        const row = elements.analysisRunSteps.querySelector(
+          '[data-step-id="' + CSS.escape(invalidStep.id) + '"]'
+        );
+        const templateTrigger = row?.querySelector(
+          '.pipeline-step-name-dropdown .select-dropdown__trigger'
+        );
+        if (templateTrigger) templateTrigger.focus();
+        else row?.querySelector('.pipeline-step-command')?.focus();
+        return;
+      }
+
       if (elements.analysisConfirmationDialog.open) {
         elements.analysisConfirmationDialog.close();
       }
@@ -38,10 +66,17 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         scanner: '',
         startedAt: new Date().toISOString(),
         canCancel: false,
-        log: []
+        log: [],
+        steps: steps
+          .filter(step => step.enabled)
+          .map(step => ({ ...step, status: 'pending' }))
       });
       if (!elements.analysisDialog.open) elements.analysisDialog.showModal();
-      vscode.postMessage({ type: 'analyze', folderUri: currentFolderUri });
+      vscode.postMessage({
+        type: 'analyze',
+        folderUri: currentFolderUri,
+        analysisSteps: steps
+      });
     }
 
     function cancelRepositoryAnalysis() {
@@ -55,7 +90,8 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         message: 'Listo para analizar el repositorio.',
         scanner: '',
         canCancel: false,
-        log: []
+        log: [],
+        steps: []
       };
 
       const running = Boolean(currentAnalysisState.running);
@@ -74,6 +110,7 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
       elements.analysisDialogCancel.hidden = !currentAnalysisState.canCancel;
       elements.showAnalysisLog.disabled = logs.length === 0 && phase === 'idle';
 
+      renderAnalysisStepper(currentAnalysisState.steps || []);
       elements.analysisDialogMessage.textContent = message;
       elements.analysisDialogScanner.textContent = scanner ? 'Scanner: ' + scanner : 'Detección automática';
       elements.analysisDialogIndicator.className = 'analysis-status-indicator ' + phase;

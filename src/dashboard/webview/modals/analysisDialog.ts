@@ -6,6 +6,7 @@ export const ANALYSIS_DIALOG_MARKUP = `  <dialog id="analysisDialog" class="rule
       </div>
       <button id="analysisDialogClose" class="rule-dialog-close secondary" type="button" aria-label="Cerrar">×</button>
     </div>
+    <ol id="analysisStepper" class="analysis-stepper" aria-label="Progreso del pipeline"></ol>
     <div class="analysis-dialog-status">
       <div id="analysisDialogIndicator" class="analysis-status-indicator idle" aria-hidden="true"></div>
       <div>

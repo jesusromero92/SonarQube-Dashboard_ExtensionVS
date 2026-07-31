@@ -207,6 +207,70 @@ export const SELECT_DROPDOWN_SCRIPT = `
       closeDropdown();
     }
 
+    let generatedSelectDropdownId = 0;
+
+    function createSelectDropdownControl({
+      ariaLabel,
+      className = '',
+      disabled = false,
+      id,
+      options = [],
+      selectedValue = ''
+    }) {
+      generatedSelectDropdownId += 1;
+      const controlId = id || 'dynamicSelectDropdown' + generatedSelectDropdownId;
+      const root = document.createElement('div');
+      root.className = ['select-dropdown', className].filter(Boolean).join(' ');
+      root.dataset.selectDropdown = '';
+      root.dataset.dropdownLabel = ariaLabel;
+
+      const select = document.createElement('select');
+      select.id = controlId;
+      select.className = 'select-dropdown__native';
+      select.setAttribute('aria-label', ariaLabel);
+      select.tabIndex = -1;
+      select.disabled = disabled;
+
+      for (const item of options) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        option.disabled = Boolean(item.disabled);
+        option.selected = item.value === selectedValue;
+        select.appendChild(option);
+      }
+
+      if (!select.selectedOptions.length && select.options.length) {
+        select.options[0].selected = true;
+      }
+
+      const trigger = document.createElement('button');
+      trigger.id = controlId + 'Trigger';
+      trigger.className = 'select-dropdown__trigger';
+      trigger.type = 'button';
+      trigger.setAttribute('aria-haspopup', 'listbox');
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-controls', controlId + 'Listbox');
+
+      const value = document.createElement('span');
+      value.className = 'select-dropdown__value';
+      const chevron = document.createElement('span');
+      chevron.className = 'select-dropdown__chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      trigger.append(value, chevron);
+
+      const menu = document.createElement('div');
+      menu.id = controlId + 'Listbox';
+      menu.className = 'select-dropdown__menu';
+      menu.role = 'listbox';
+      menu.setAttribute('aria-labelledby', trigger.id);
+      menu.setAttribute('popover', 'manual');
+
+      root.append(select, trigger, menu);
+      initializeSelectDropdown(root);
+      return { root, select };
+    }
+
     function closeAllSelectDropdowns(except) {
       for (const [select, controller] of selectDropdownControllers) {
         const root = select.closest('[data-select-dropdown]');

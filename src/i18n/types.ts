@@ -9,4 +9,5 @@ export interface LocalizedAnalysisState {
   completedAt?: string;
   canCancel: boolean;
   log: string[];
+  steps?: Array<{ name: string; message?: string }>;
 }

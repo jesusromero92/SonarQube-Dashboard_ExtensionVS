@@ -6,6 +6,7 @@ import {
   getWebviewLocalizationBundle
 } from '../src/i18n/runtimeWebview';
 import { MESSAGE_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/messages';
+import { getDashboardScript } from '../src/dashboard/webview/scripts';
 
 test('el cambio de idioma se aplica en el DOM sin reconstruir el webview', () => {
   const panelSource = readFileSync(
@@ -53,4 +54,24 @@ test('el panel lateral actualiza idioma y estado sin recargar su HTML', () => {
   assert.match(providerSource, /this\.postLanguage\(\)/);
   assert.match(providerSource, /this\.postState\(\)/);
   assert.doesNotMatch(providerSource, /reloadWebview/);
+});
+
+
+test('el JavaScript completo del dashboard mantiene una sintaxis válida', () => {
+  assert.doesNotThrow(() => new Function(getDashboardScript('en')));
+  assert.doesNotThrow(() => new Function(getDashboardScript('es')));
+});
+
+test('los textos dinámicos del pipeline están disponibles en ambos idiomas', () => {
+  const english = new Map(getWebviewLocalizationBundle('en').translations);
+  const spanish = new Map(getWebviewLocalizationBundle('es').translations);
+
+  assert.equal(english.get('Scanner configurado'), 'Configured scanner');
+  assert.equal(english.get('Paso previo '), 'Pre-analysis step ');
+  assert.equal(english.get('Paso posterior '), 'Post-analysis step ');
+  assert.equal(spanish.get('Configured scanner'), 'Scanner configurado');
+  assert.equal(spanish.get('Pre-analysis step '), 'Paso previo ');
+  assert.equal(spanish.get('Post-analysis step '), 'Paso posterior ');
+  assert.equal(english.get('Selecciona un paso'), 'Select a step');
+  assert.equal(spanish.get('Select a step'), 'Selecciona un paso');
 });

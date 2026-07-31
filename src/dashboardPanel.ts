@@ -35,6 +35,13 @@ import {
 } from './dashboard/connectionValidation';
 import { getDashboardHtml } from './dashboard/webview';
 import { AnalysisService } from './scanner/analysisService';
+import { detectProjectActions } from './scanner/projectActions';
+import { parseAnalysisPipeline } from './scanner/pipeline';
+import {
+  AnalysisExecutionOptions,
+  AnalysisExecutionStep,
+  AnalysisRequest
+} from './scanner/types';
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { DuplicationComparisonPanel } from './dashboard/duplicationComparisonPanel';
@@ -384,11 +391,16 @@ export class DashboardPanel {
       case 'save':
         await this.save(message);
         break;
+      case 'savePipeline':
+        await this.savePipeline(message);
+        break;
       case 'refresh':
         await this.refreshFromPanel();
         break;
       case 'analyze':
-        await this.analyzeRepository(message.folderUri);
+        await this.analyzeRepository(message.folderUri, {
+          steps: this.normalizeRequestedAnalysisSteps(message.analysisSteps)
+        });
         break;
       case 'cancelAnalysis':
         this.analysisService.cancel();
@@ -440,7 +452,12 @@ export class DashboardPanel {
           hasToken: false,
           scannerMode: 'auto',
           buildCommand: '',
+          testCommand: '',
+          detectedBuildCommand: '',
+          detectedTestCommand: '',
           customScannerCommand: '',
+          preAnalysisCommands: '',
+          postAnalysisCommands: '',
           notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
           significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
           significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
@@ -458,6 +475,8 @@ export class DashboardPanel {
     this.selectedFolderUri = selectedFolder.uri.toString();
 
     const config = await getFolderFormConfig(this.context, selectedFolder);
+    const configuredRoot = this.analysisRoot(selectedFolder, config.baseDir) ?? selectedFolder.uri.fsPath;
+    const detectedProjectActions = await detectProjectActions(configuredRoot);
     const connectionDraftDirty = this.dirtyConnectionFolders.has(
       this.selectedFolderUri
     );
@@ -483,6 +502,8 @@ export class DashboardPanel {
       creationCapabilities,
       config: {
         ...config,
+        detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
+        detectedTestCommand: detectedProjectActions.testCommand ?? '',
         projectKey: connectionDraftDirty ? '' : config.projectKey,
         projectName: connectionDraftDirty ? '' : config.projectName,
         hasToken: connectionDraftDirty ? false : config.hasToken,
@@ -732,6 +753,54 @@ export class DashboardPanel {
     );
   }
 
+  private async savePipeline(message: DashboardWebviewMessage): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri);
+    if (!folder) {
+      this.postMessage({
+        type: 'pipelineSaveError',
+        message: 'Abre una carpeta antes de guardar el pipeline.'
+      });
+      return;
+    }
+
+    try {
+      const current = await getFolderFormConfig(this.context, folder);
+      await saveFolderConfig(this.context, folder, {
+        serverUrl: current.serverUrl,
+        projectKey: current.projectKey,
+        projectName: current.projectName,
+        branch: current.branch,
+        baseDir: current.baseDir,
+        scannerMode: current.scannerMode,
+        buildCommand: message.buildCommand ?? '',
+        testCommand: message.testCommand ?? '',
+        customScannerCommand: current.customScannerCommand,
+        preAnalysisCommands: message.preAnalysisCommands ?? '',
+        postAnalysisCommands: message.postAnalysisCommands ?? ''
+      });
+
+      const configuredRoot = this.analysisRoot(folder, current.baseDir) ??
+        folder.uri.fsPath;
+      const detectedProjectActions = await detectProjectActions(configuredRoot);
+      this.postMessage({
+        type: 'pipelineSaved',
+        config: {
+          buildCommand: message.buildCommand ?? '',
+          testCommand: message.testCommand ?? '',
+          detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
+          detectedTestCommand: detectedProjectActions.testCommand ?? '',
+          preAnalysisCommands: message.preAnalysisCommands ?? '',
+          postAnalysisCommands: message.postAnalysisCommands ?? ''
+        }
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineSaveError',
+        message: `No se pudo guardar el pipeline: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
   private async save(message: DashboardWebviewMessage): Promise<void> {
     const folder = this.getWorkspaceFolder(message.folderUri);
     if (!folder) {
@@ -800,7 +869,10 @@ export class DashboardPanel {
         token,
         scannerMode,
         buildCommand: message.buildCommand ?? '',
-        customScannerCommand: message.customScannerCommand ?? ''
+        testCommand: message.testCommand ?? '',
+        customScannerCommand: message.customScannerCommand ?? '',
+        preAnalysisCommands: message.preAnalysisCommands ?? '',
+        postAnalysisCommands: message.postAnalysisCommands ?? ''
       });
       this.analysisPermissions.delete(folder.uri.toString());
       const savedConfig = await getFolderConfig(this.context, folder);
@@ -811,6 +883,8 @@ export class DashboardPanel {
           ])
         : ['unknown' as const, undefined];
       this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
+      const savedRoot = this.analysisRoot(folder, message.baseDir ?? '') ?? folder.uri.fsPath;
+      const detectedProjectActions = await detectProjectActions(savedRoot);
 
       const configurationSavedMessage = {
         type: 'configurationSaved',
@@ -824,7 +898,12 @@ export class DashboardPanel {
           analysisPermission,
           scannerMode,
           buildCommand: message.buildCommand ?? '',
+          testCommand: message.testCommand ?? '',
+          detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
+          detectedTestCommand: detectedProjectActions.testCommand ?? '',
           customScannerCommand: message.customScannerCommand ?? '',
+          preAnalysisCommands: message.preAnalysisCommands ?? '',
+          postAnalysisCommands: message.postAnalysisCommands ?? '',
           sonarCompatibility,
           notificationsEnabled: message.notificationsEnabled !== false,
           significantIncreasePercent: Math.max(1, Number(message.significantIncreasePercent) || 20),
@@ -854,7 +933,10 @@ export class DashboardPanel {
     }
   }
 
-  private async analyzeRepository(folderUri?: string): Promise<void> {
+  private async analyzeRepository(
+    folderUri?: string,
+    requestedActions?: Partial<AnalysisExecutionOptions>
+  ): Promise<void> {
     if (this.analysisService.isRunning()) {
       this.postMessage({ type: 'showAnalysisDialog' });
       return;
@@ -870,7 +952,7 @@ export class DashboardPanel {
       return;
     }
 
-    const analysisContext = await this.prepareAnalysis(folder);
+    const analysisContext = await this.prepareAnalysis(folder, requestedActions);
     if (!analysisContext) {
       return;
     }
@@ -916,9 +998,85 @@ export class DashboardPanel {
     return false;
   }
 
+  private normalizeRequestedAnalysisSteps(
+    steps: AnalysisExecutionStep[] | undefined
+  ): AnalysisExecutionStep[] {
+    if (!Array.isArray(steps)) {
+      return [];
+    }
+
+    return steps.slice(0, 50).map((step, index) => ({
+      id: String(step?.id || `step-${index + 1}`).slice(0, 120),
+      name: String(step?.name || `Paso ${index + 1}`).trim().slice(0, 160),
+      kind: ['build', 'test', 'custom', 'sonar'].includes(step?.kind)
+        ? step.kind
+        : 'custom',
+      command: typeof step?.command === 'string'
+        ? step.command.trim().slice(0, 8000)
+        : undefined,
+      failurePolicy: step?.kind === 'sonar'
+        ? 'stop'
+        : step?.failurePolicy === 'continue' ? 'continue' : 'stop',
+      enabled: step?.enabled !== false
+    }));
+  }
+
+  private defaultAnalysisSteps(
+    config: FolderSonarConfig,
+    buildCommand: string,
+    testCommand: string
+  ): AnalysisExecutionStep[] {
+    const before = parseAnalysisPipeline(
+      config.preAnalysisCommands,
+      'Acción previa'
+    );
+    const after = parseAnalysisPipeline(
+      config.postAnalysisCommands,
+      'Acción posterior'
+    );
+
+    return [
+      ...(buildCommand ? [{
+        id: 'build',
+        name: 'Compilar el proyecto',
+        kind: 'build' as const,
+        command: buildCommand,
+        failurePolicy: 'stop' as const,
+        enabled: true
+      }] : []),
+      ...(testCommand ? [{
+        id: 'tests',
+        name: 'Ejecutar tests',
+        kind: 'test' as const,
+        command: testCommand,
+        failurePolicy: 'stop' as const,
+        enabled: true
+      }] : []),
+      ...before.map(stage => ({
+        ...stage,
+        kind: 'custom' as const,
+        enabled: true
+      })),
+      {
+        id: 'sonarqube-analysis',
+        name: 'Análisis SonarQube',
+        kind: 'sonar' as const,
+        failurePolicy: 'stop' as const,
+        enabled: true
+      },
+      ...after.map(stage => ({
+        ...stage,
+        id: `post-${stage.id}`,
+        kind: 'custom' as const,
+        enabled: true
+      }))
+    ];
+  }
+
   private async prepareAnalysis(
-    folder: vscode.WorkspaceFolder
-  ): Promise<{ config: FolderSonarConfig; rootPath: string } | undefined> {
+    folder: vscode.WorkspaceFolder,
+    requestedActions?: Partial<AnalysisExecutionOptions>
+  ): Promise<AnalysisRequest | undefined> {
     const config = await getFolderConfig(this.context, folder);
     if (!config) {
       this.postStatus('error', 'Configura primero el servidor, el token y el proyecto.');
@@ -943,11 +1101,21 @@ export class DashboardPanel {
       return undefined;
     }
 
-    return { config, rootPath };
+    const detectedActions = await detectProjectActions(rootPath);
+    const buildCommand = config.buildCommand?.trim() ||
+      detectedActions.buildCommand || '';
+    const testCommand = config.testCommand?.trim() ||
+      detectedActions.testCommand || '';
+    const requestedSteps = requestedActions?.steps ?? [];
+    const steps = requestedSteps.length > 0
+      ? requestedSteps
+      : this.defaultAnalysisSteps(config, buildCommand, testCommand);
+
+    return { config, rootPath, actions: { steps } };
   }
 
   private async runAnalysis(
-    analysisContext: { config: FolderSonarConfig; rootPath: string }
+    analysisContext: AnalysisRequest
   ): Promise<void> {
     await this.analysisService.analyze(analysisContext);
     this.analysisService.setRefreshing();
@@ -962,13 +1130,11 @@ export class DashboardPanel {
     if (summary.errors.length > 0) {
       const message = summary.errors.join(' | ');
       this.analysisService.setRefreshError(message);
-      this.postStatus('error', message);
       return;
     }
 
     const message = `Análisis finalizado. ${summary.published} issues encontrados.`;
     this.analysisService.setRefreshCompleted(message);
-    this.postStatus('success', message);
   }
 
   private handleAnalysisFailure(error: unknown): void {
@@ -981,7 +1147,6 @@ export class DashboardPanel {
     if (analysisState.phase === 'refreshing') {
       this.analysisService.setRefreshError(message);
     }
-    this.postStatus('error', message);
   }
 
   private analysisRoot(folder: vscode.WorkspaceFolder, baseDir?: string): string | undefined {
@@ -1140,7 +1305,7 @@ export class DashboardPanel {
       folders.map(folder => getFolderConfig(this.context, folder))
     );
     const configuredFolders = configs.filter(
-      (config, index) =>
+      (config: FolderSonarConfig | undefined, index: number) =>
         Boolean(config) &&
         !this.dirtyConnectionFolders.has(folders[index].uri.toString())
     ).length;

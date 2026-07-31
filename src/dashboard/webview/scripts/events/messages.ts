@@ -19,6 +19,27 @@ export const MESSAGE_EVENTS_SCRIPT = `
           renderConfigurationSaved(message.config || {});
           break;
 
+        case 'pipelineSaved':
+          currentConfig = {
+            ...currentConfig,
+            ...(message.config || {})
+          };
+          elements.buildCommand.value = currentConfig.buildCommand || '';
+          elements.testCommand.value = currentConfig.testCommand || '';
+          elements.preAnalysisCommands.value = currentConfig.preAnalysisCommands || '';
+          elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
+          renderPipelineConfigurationFromFields();
+          renderDetectedProjectActions(currentConfig);
+          setPipelineSaveStatus('success', 'Pipeline guardado.');
+          break;
+
+        case 'pipelineSaveError':
+          setPipelineSaveStatus(
+            'error',
+            message.message || 'No se pudo guardar el pipeline.'
+          );
+          break;
+
         case 'projectsLoading':
           elements.sonarCompatibility.hidden = true;
           setConnectionBusy(true);

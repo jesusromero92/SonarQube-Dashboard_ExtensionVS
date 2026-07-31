@@ -174,6 +174,10 @@ export const DIALOG_EVENTS_SCRIPT = `
       'click',
       confirmRepositoryAnalysis
     );
+    elements.analysisAddStep.addEventListener(
+      'click',
+      event => addSelectedAnalysisStep(event)
+    );
 
     bindDialogDismiss(
       elements.createComponentDialog,

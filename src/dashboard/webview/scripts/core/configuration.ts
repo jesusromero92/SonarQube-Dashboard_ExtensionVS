@@ -16,11 +16,35 @@ export const CONFIGURATION_CORE_SCRIPT = `
         baseDir: elements.baseDir.value.trim(),
         scannerMode: elements.scannerMode.value,
         buildCommand: elements.buildCommand.value.trim(),
+        testCommand: elements.testCommand.value.trim(),
         customScannerCommand: elements.customScannerCommand.value.trim(),
+        preAnalysisCommands: elements.preAnalysisCommands.value.trim(),
+        postAnalysisCommands: elements.postAnalysisCommands.value.trim(),
         notificationsEnabled: elements.notificationsEnabled.checked,
         significantIncreasePercent: Number(elements.significantIncreasePercent.value) || 20,
         significantIncreaseMinimum: Number(elements.significantIncreaseMinimum.value) || 5
       };
+    }
+
+
+    function effectiveProjectCommand(manualCommand, detectedCommand) {
+      return String(manualCommand || detectedCommand || '').trim();
+    }
+
+    function renderDetectedProjectActions(config) {
+      const detectedBuild = String(config.detectedBuildCommand || '').trim();
+      const detectedTests = String(config.detectedTestCommand || '').trim();
+
+      elements.buildCommand.placeholder = detectedBuild || 'npm run build';
+      elements.testCommand.placeholder = detectedTests || 'npm test';
+      const detectedPrefix = translateLocalizationValue('Detectado automáticamente: ');
+      const detectedSuffix = translateLocalizationValue(' Déjalo vacío para usarlo.');
+      elements.detectedBuildCommandHint.textContent = detectedBuild
+        ? detectedPrefix + detectedBuild + detectedSuffix
+        : 'No se detectó un comando de compilación. Puedes introducirlo manualmente.';
+      elements.detectedTestCommandHint.textContent = detectedTests
+        ? detectedPrefix + detectedTests + detectedSuffix
+        : 'No se detectó un comando de tests. Puedes introducirlo manualmente.';
     }
 
     function canSynchronizeConfiguration() {
@@ -35,6 +59,27 @@ export const CONFIGURATION_CORE_SCRIPT = `
     function updateSaveAvailability() {
       elements.save.disabled =
         configurationBusy || !canSynchronizeConfiguration();
+      elements.savePipeline.disabled = pipelineSaving || !hasWorkspace;
+    }
+
+    function clearPipelineSaveStatus() {
+      elements.pipelineSaveStatus.hidden = true;
+      elements.pipelineSaveStatus.textContent = '';
+      elements.pipelineSaveStatus.className = 'pipeline-save-status';
+    }
+
+    function setPipelineSaveStatus(kind, message = '') {
+      pipelineSaving = kind === 'loading';
+      elements.savePipeline.disabled = pipelineSaving || !hasWorkspace;
+      if (!message) {
+        clearPipelineSaveStatus();
+        return;
+      }
+
+      elements.pipelineSaveStatus.hidden = false;
+      elements.pipelineSaveStatus.textContent = translateLocalizationValue(message);
+      elements.pipelineSaveStatus.className =
+        'pipeline-save-status pipeline-save-status--' + kind;
     }
 
     function setBusy(busy) {
@@ -328,6 +373,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
         : '';
 
       elements.language.value = message.language || dashboardLanguage;
+      pipelineSaving = false;
+      clearPipelineSaveStatus();
       hasWorkspace = folders.length > 0;
       elements.emptyWorkspace.hidden = hasWorkspace;
       elements.configurationContent.hidden = !hasWorkspace;
@@ -342,7 +389,12 @@ export const CONFIGURATION_CORE_SCRIPT = `
           hasToken: false,
           scannerMode: 'auto',
           buildCommand: '',
-          customScannerCommand: ''
+          testCommand: '',
+          detectedBuildCommand: '',
+          detectedTestCommand: '',
+          customScannerCommand: '',
+          preAnalysisCommands: '',
+          postAnalysisCommands: ''
         };
         connectionDraftDirty = false;
         connectionDraftFolderUri = '';
@@ -405,7 +457,12 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.baseDir.value = currentConfig.baseDir || '';
       elements.scannerMode.value = currentConfig.scannerMode || 'auto';
       elements.buildCommand.value = currentConfig.buildCommand || '';
+      elements.testCommand.value = currentConfig.testCommand || '';
+      renderDetectedProjectActions(currentConfig);
       elements.customScannerCommand.value = currentConfig.customScannerCommand || '';
+      elements.preAnalysisCommands.value = currentConfig.preAnalysisCommands || '';
+      elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
+      renderPipelineConfigurationFromFields();
       elements.notificationsEnabled.checked = currentConfig.notificationsEnabled !== false;
       elements.significantIncreasePercent.value = String(
         currentConfig.significantIncreasePercent || 20
@@ -465,7 +522,12 @@ export const CONFIGURATION_CORE_SCRIPT = `
       }
       elements.scannerMode.value = config.scannerMode || 'auto';
       elements.buildCommand.value = config.buildCommand || '';
+      elements.testCommand.value = config.testCommand || '';
+      renderDetectedProjectActions(config);
       elements.customScannerCommand.value = config.customScannerCommand || '';
+      elements.preAnalysisCommands.value = config.preAnalysisCommands || '';
+      elements.postAnalysisCommands.value = config.postAnalysisCommands || '';
+      renderPipelineConfigurationFromFields();
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       refreshConfigurationDropdowns(true);
       renderSonarCompatibility(config.sonarCompatibility, false);

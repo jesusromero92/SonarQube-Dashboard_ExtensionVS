@@ -109,4 +109,19 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
         ...values()
       });
     });
+
+    elements.addPipelineStep.addEventListener('click', addConfigurationPipelineStep);
+
+    elements.savePipeline.addEventListener('click', () => {
+      syncConfigurationPipelineFields();
+      setPipelineSaveStatus('loading', 'Guardando pipeline…');
+      vscode.postMessage({
+        type: 'savePipeline',
+        folderUri: elements.folder.value,
+        buildCommand: elements.buildCommand.value.trim(),
+        testCommand: elements.testCommand.value.trim(),
+        preAnalysisCommands: elements.preAnalysisCommands.value.trim(),
+        postAnalysisCommands: elements.postAnalysisCommands.value.trim()
+      });
+    });
 `;

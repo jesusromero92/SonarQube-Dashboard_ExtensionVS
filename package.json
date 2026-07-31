@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
   "description": "%extension.description%",
-  "version": "0.19.0",
+  "version": "0.19.1",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -241,6 +241,18 @@
           "scope": "resource",
           "description": "%configuration.sonar_customScannerCommand.description%"
         },
+        "sonarQubeDashboard.sonar.preAnalysisCommands": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "%configuration.sonar_preAnalysisCommands.description%"
+        },
+        "sonarQubeDashboard.sonar.postAnalysisCommands": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "%configuration.sonar_postAnalysisCommands.description%"
+        },
         "sonarQubeDashboard.notifications.enabled": {
           "type": "boolean",
           "default": true,
@@ -331,7 +343,9 @@
       "description": "%capabilities.untrusted.description%",
       "restrictedConfigurations": [
         "sonarQubeDashboard.sonar.buildCommand",
-        "sonarQubeDashboard.sonar.customScannerCommand"
+        "sonarQubeDashboard.sonar.customScannerCommand",
+        "sonarQubeDashboard.sonar.preAnalysisCommands",
+        "sonarQubeDashboard.sonar.postAnalysisCommands"
       ]
     }
   }

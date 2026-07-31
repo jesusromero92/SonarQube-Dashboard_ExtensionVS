@@ -1,4 +1,5 @@
 import { DashboardLanguage } from '../i18n';
+import { AnalysisExecutionStep } from '../scanner/types';
 import {
   IssueMutationKind,
   RefreshSummary,
@@ -22,7 +23,15 @@ export interface DashboardWebviewMessage {
   baseDir?: string;
   scannerMode?: ScannerMode;
   buildCommand?: string;
+  testCommand?: string;
   customScannerCommand?: string;
+  preAnalysisCommands?: string;
+  postAnalysisCommands?: string;
+  runBuild?: boolean;
+  runTests?: boolean;
+  runPreAnalysisStages?: boolean;
+  runPostAnalysisStages?: boolean;
+  analysisSteps?: AnalysisExecutionStep[];
   language?: DashboardLanguage;
   fileUri?: string;
   line?: number;

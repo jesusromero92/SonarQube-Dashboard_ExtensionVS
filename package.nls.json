@@ -28,6 +28,8 @@
   "configuration.scannerMode.custom": "Runs the configured custom command.",
   "configuration.sonar_buildCommand.description": "Optional build command run before the generic scanner or instead of dotnet build.",
   "configuration.sonar_customScannerCommand.description": "Custom analysis command. The token is provided through SONAR_TOKEN.",
+  "configuration.sonar_preAnalysisCommands.description": "Pipeline commands run before the SonarQube analysis. Use one command per line and optionally prefix it with Name ::.",
+  "configuration.sonar_postAnalysisCommands.description": "Pipeline commands run after SonarQube successfully processes the analysis. Use one command per line and optionally prefix it with Name ::.",
   "capabilities.untrusted.description": "The dashboard can query SonarQube, but repository analysis requires a trusted workspace.",
   "views.issues.name": "Issue explorer",
   "command.nextIssue": "SonarQube Dashboard: Go to next issue",

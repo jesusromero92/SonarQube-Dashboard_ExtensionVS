@@ -2,8 +2,13 @@ import { Dirent, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { detectScanner } from './detector';
+import {
+  expandAnalysisPipelineCommand,
+  parseAnalysisPipeline
+} from './pipeline';
 import { ProcessRunner } from './processRunner';
 import {
+  AnalysisExecutionStep,
   AnalysisRequest,
   AnalysisState,
   DetectedScanner,
@@ -17,6 +22,8 @@ const CE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const DOCKER_SCAN_TIMEOUT_MS = 30 * 60 * 1000;
 const DOCKER_HEARTBEAT_MS = 15 * 1000;
 const DOCKER_CACHE_VOLUME = 'sonarqube-dashboard-scanner-cache';
+const PIPELINE_STEP_SEPARATOR = '*'.repeat(88);
+
 const DEFAULT_EXCLUSIONS = [
   '**/.git/**',
   '**/.scannerwork/**',
@@ -55,6 +62,7 @@ export class AnalysisService implements vscode.Disposable {
       throw new Error('Ya hay un análisis de SonarQube en ejecución.');
     }
 
+    const executionSteps = this.normalizeExecutionSteps(request.actions.steps);
     this.controller = new AbortController();
     this.token = request.config.token;
     this.state = {
@@ -64,7 +72,8 @@ export class AnalysisService implements vscode.Disposable {
       scanner: '',
       startedAt: new Date().toISOString(),
       canCancel: true,
-      log: []
+      log: [],
+      steps: executionSteps.map(step => ({ ...step, status: 'pending' }))
     };
     this.emit();
 
@@ -76,18 +85,38 @@ export class AnalysisService implements vscode.Disposable {
       this.update('detecting', `Scanner seleccionado: ${this.detectedScanner.label}`, this.detectedScanner.label);
       this.appendLog(`Proyecto detectado mediante ${this.detectedScanner.evidence}.`);
 
-      await this.runScanner(this.detectedScanner, request);
-      this.ensureNotCancelled();
+      let warnings = 0;
+      for (const [stepIndex, step] of executionSteps.entries()) {
+        this.ensureNotCancelled();
+        const position = `${stepIndex + 1}/${executionSteps.length}`;
+        this.updateStep(step.id, 'running');
+        this.appendLog('');
+        this.appendLog(PIPELINE_STEP_SEPARATOR);
+        this.appendLog(`[Pipeline ${position}] ▶ INICIO: ${step.name}`);
+        this.appendLog(PIPELINE_STEP_SEPARATOR);
 
-      this.update('processing', 'Esperando a que SonarQube procese el informe…');
-      const ceTaskUrl = await this.findCeTaskUrl(this.detectedScanner.rootPath);
-      if (ceTaskUrl) {
-        await this.waitForCeTask(ceTaskUrl, request.config.token, this.controller.signal);
-      } else {
-        this.appendLog(
-          'No se encontró report-task.txt; se comprobará la aparición del nuevo análisis en SonarQube.'
-        );
-        await this.waitForProjectAnalysis(request, this.controller.signal);
+        try {
+          await this.executeAnalysisStep(step, request, this.detectedScanner);
+          this.updateStep(step.id, 'success');
+          this.appendLog(PIPELINE_STEP_SEPARATOR);
+          this.appendLog(`[Pipeline ${position}] ✓ COMPLETADO: ${step.name}`);
+          this.appendLog(PIPELINE_STEP_SEPARATOR);
+        } catch (error) {
+          const message = errorMessage(error);
+          const mayContinue = step.kind !== 'sonar' && step.failurePolicy === 'continue';
+          this.updateStep(step.id, mayContinue ? 'warning' : 'failed', message);
+          this.appendLog(PIPELINE_STEP_SEPARATOR);
+          this.appendLog(
+            mayContinue
+              ? `[Pipeline ${position}] ! FALLÓ Y CONTINÚA: ${step.name}. ${message}`
+              : `[Pipeline ${position}] × FALLÓ Y SE DETIENE: ${step.name}. ${message}`
+          );
+          this.appendLog(PIPELINE_STEP_SEPARATOR);
+          if (!mayContinue) {
+            throw error;
+          }
+          warnings += 1;
+        }
       }
 
       this.ensureNotCancelled();
@@ -95,14 +124,28 @@ export class AnalysisService implements vscode.Disposable {
         ...this.state,
         running: false,
         phase: 'success',
-        message: 'Análisis completado y procesado por SonarQube.',
+        message: warnings > 0
+          ? `Pipeline completado con ${warnings} advertencia(s).`
+          : 'Análisis completado y procesado por SonarQube.',
         completedAt: new Date().toISOString(),
         canCancel: false
       };
-      this.appendLog('Análisis finalizado correctamente.');
+      this.appendLog(
+        warnings > 0
+          ? `Pipeline finalizado con ${warnings} advertencia(s).`
+          : 'Análisis finalizado correctamente.'
+      );
       this.emit();
     } catch (error) {
       const cancelled = this.controller?.signal.aborted;
+      const activeStep = this.state.steps.find(step => step.status === 'running');
+      if (activeStep) {
+        this.updateStep(
+          activeStep.id,
+          cancelled ? 'skipped' : 'failed',
+          cancelled ? 'Análisis cancelado.' : errorMessage(error)
+        );
+      }
       this.state = {
         ...this.state,
         running: false,
@@ -118,6 +161,110 @@ export class AnalysisService implements vscode.Disposable {
       this.controller = undefined;
       this.token = '';
     }
+  }
+
+  private normalizeExecutionSteps(steps: AnalysisExecutionStep[]): AnalysisExecutionStep[] {
+    const enabled = (steps ?? [])
+      .filter(step => step.enabled !== false)
+      .map((step, index) => ({
+        ...step,
+        id: step.id || `step-${index + 1}`,
+        name: step.name?.trim() || `Paso ${index + 1}`,
+        command: step.command?.trim(),
+        failurePolicy: step.kind === 'sonar' || step.failurePolicy !== 'continue'
+          ? 'stop' as const
+          : 'continue' as const
+      }));
+
+    if (!enabled.some(step => step.kind === 'sonar')) {
+      enabled.push({
+        id: 'sonarqube-analysis',
+        name: 'Análisis SonarQube',
+        kind: 'sonar',
+        command: undefined,
+        failurePolicy: 'stop',
+        enabled: true
+      });
+    }
+
+    let sonarSeen = false;
+    return enabled.filter(step => {
+      if (step.kind !== 'sonar') return true;
+      if (sonarSeen) return false;
+      sonarSeen = true;
+      return true;
+    });
+  }
+
+  private async executeAnalysisStep(
+    step: AnalysisExecutionStep,
+    request: AnalysisRequest,
+    scanner: DetectedScanner
+  ): Promise<void> {
+    if (step.kind === 'sonar') {
+      await this.runScanner(scanner, request);
+      this.ensureNotCancelled();
+      this.update('processing', 'Esperando a que SonarQube procese el informe…');
+      const ceTaskUrl = await this.findCeTaskUrl(scanner.rootPath);
+      if (ceTaskUrl) {
+        await this.waitForCeTask(ceTaskUrl, request.config.token, this.controller!.signal);
+      } else {
+        this.appendLog(
+          'No se encontró report-task.txt; se comprobará la aparición del nuevo análisis en SonarQube.'
+        );
+        await this.waitForProjectAnalysis(request, this.controller!.signal);
+      }
+      return;
+    }
+
+    const command = step.command?.trim();
+    if (!command) {
+      throw new Error(`El paso “${step.name}” no tiene comando.`);
+    }
+
+    const variables = {
+      workspaceFolder: scanner.rootPath,
+      projectKey: request.config.projectKey,
+      projectName: request.config.projectName || request.config.projectKey,
+      serverUrl: request.config.serverUrl,
+      branch: request.config.branch ?? ''
+    };
+    const expandedCommand = expandAnalysisPipelineCommand(command, variables);
+    const phase = step.kind === 'build'
+      ? 'building'
+      : step.kind === 'test'
+        ? 'preActions'
+        : 'preActions';
+    this.update(
+      phase,
+      step.kind === 'build'
+        ? 'Compilando el proyecto…'
+        : step.kind === 'test'
+          ? 'Ejecutando tests…'
+          : `Ejecutando ${step.name}…`
+    );
+    await this.execute({
+      command: '',
+      args: [],
+      cwd: scanner.rootPath,
+      env: this.sonarEnvironment(request),
+      shellCommand: expandedCommand,
+      displayCommand: expandedCommand
+    });
+  }
+
+  private updateStep(
+    id: string,
+    status: AnalysisState['steps'][number]['status'],
+    message?: string
+  ): void {
+    this.state = {
+      ...this.state,
+      steps: this.state.steps.map(step =>
+        step.id === id ? { ...step, status, message } : step
+      )
+    };
+    this.emit();
   }
 
   setRefreshing(): void {
@@ -164,6 +311,88 @@ export class AnalysisService implements vscode.Disposable {
 
   dispose(): void {
     this.cancel();
+  }
+
+  private async runSelectedProjectAction(
+    kind: 'build' | 'test',
+    enabled: boolean,
+    configuredCommand: string | undefined,
+    request: AnalysisRequest,
+    rootPath: string
+  ): Promise<void> {
+    const command = configuredCommand?.trim();
+    if (!enabled || !command) {
+      return;
+    }
+
+    const build = kind === 'build';
+    const label = build ? 'Compilación' : 'Tests';
+    this.ensureNotCancelled();
+    this.update(
+      build ? 'building' : 'preActions',
+      build ? 'Compilando el proyecto…' : 'Ejecutando tests…'
+    );
+    this.appendLog(`[Pipeline · ${label}] ${command}`);
+    await this.execute({
+      command: '',
+      args: [],
+      cwd: rootPath,
+      env: this.sonarEnvironment(request),
+      shellCommand: command,
+      displayCommand: command
+    });
+    this.appendLog(
+      build
+        ? 'Compilación completada correctamente.'
+        : 'Tests completados correctamente.'
+    );
+  }
+
+  private async runPipelineStages(
+    timing: 'before' | 'after',
+    configuredCommands: string | undefined,
+    request: AnalysisRequest,
+    rootPath: string
+  ): Promise<void> {
+    const before = timing === 'before';
+    const stages = parseAnalysisPipeline(
+      configuredCommands,
+      before ? 'Acción previa' : 'Acción posterior'
+    );
+    if (stages.length === 0) {
+      return;
+    }
+
+    const variables = {
+      workspaceFolder: rootPath,
+      projectKey: request.config.projectKey,
+      projectName: request.config.projectName || request.config.projectKey,
+      serverUrl: request.config.serverUrl,
+      branch: request.config.branch ?? ''
+    };
+
+    for (const [index, stage] of stages.entries()) {
+      this.ensureNotCancelled();
+      const position = `${index + 1}/${stages.length}`;
+      this.update(
+        before ? 'preActions' : 'postActions',
+        `${before ? 'Antes del análisis' : 'Después del análisis'} · ${position}: ${stage.name}`
+      );
+      this.appendLog(
+        `[Pipeline · ${before ? 'Antes del análisis' : 'Después del análisis'} · ${position}] ${stage.name}`
+      );
+
+      const command = expandAnalysisPipelineCommand(stage.command, variables);
+      await this.execute({
+        command: '',
+        args: [],
+        cwd: rootPath,
+        env: this.sonarEnvironment(request),
+        shellCommand: command,
+        displayCommand: command
+      });
+      this.appendLog(`Etapa completada: ${stage.name}.`);
+    }
   }
 
   private async runScanner(scanner: DetectedScanner, request: AnalysisRequest): Promise<void> {
@@ -276,25 +505,14 @@ export class AnalysisService implements vscode.Disposable {
       displayCommand: `dotnet-sonarscanner begin /k:${request.config.projectKey} /d:sonar.token=********`
     });
 
-    this.update('building', 'Compilando la solución .NET…');
-    if (request.config.buildCommand?.trim()) {
-      await this.execute({
-        command: '',
-        args: [],
-        cwd: scanner.rootPath,
-        env: this.sonarEnvironment(request),
-        shellCommand: request.config.buildCommand.trim(),
-        displayCommand: request.config.buildCommand.trim()
-      });
-    } else {
-      await this.execute({
-        command: 'dotnet',
-        args: ['build', scanner.buildTarget, '--no-incremental'],
-        cwd: scanner.rootPath,
-        env: this.sonarEnvironment(request),
-        displayCommand: `dotnet build ${path.basename(scanner.buildTarget)} --no-incremental`
-      });
-    }
+    this.update('building', 'Compilando la solución .NET para SonarQube…');
+    await this.execute({
+      command: 'dotnet',
+      args: ['build', scanner.buildTarget, '--no-incremental'],
+      cwd: scanner.rootPath,
+      env: this.sonarEnvironment(request),
+      displayCommand: `dotnet build ${path.basename(scanner.buildTarget)} --no-incremental`
+    });
 
     this.update('scanning', 'Publicando el análisis .NET en SonarQube…');
     await this.execute({
@@ -311,18 +529,6 @@ export class AnalysisService implements vscode.Disposable {
     request: AnalysisRequest,
     javaBinaryDirectories: string[] = []
   ): Promise<void> {
-    if (request.config.buildCommand?.trim()) {
-      this.update('building', 'Ejecutando el comando de compilación configurado…');
-      await this.execute({
-        command: '',
-        args: [],
-        cwd: scanner.rootPath,
-        env: this.sonarEnvironment(request),
-        shellCommand: request.config.buildCommand.trim(),
-        displayCommand: request.config.buildCommand.trim()
-      });
-    }
-
     const hasProperties = await exists(path.join(scanner.rootPath, 'sonar-project.properties'));
     const args = ['--yes', '@sonar/scan', ...this.sonarProperties(request, '-D')];
     if (!hasProperties) {
@@ -651,12 +857,13 @@ export function emptyAnalysisState(): AnalysisState {
     message: 'Listo para analizar el repositorio.',
     scanner: '',
     canCancel: false,
-    log: []
+    log: [],
+    steps: []
   };
 }
 
 function cloneState(state: AnalysisState): AnalysisState {
-  return { ...state, log: [...state.log] };
+  return { ...state, log: [...state.log], steps: state.steps.map(step => ({ ...step })) };
 }
 
 async function exists(value: string): Promise<boolean> {

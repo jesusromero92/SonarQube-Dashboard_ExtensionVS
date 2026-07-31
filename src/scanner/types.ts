@@ -4,13 +4,33 @@ export type { ScannerMode } from '../types';
 
 export type ScannerKind = Exclude<ScannerMode, 'auto'>;
 
+export type AnalysisStepKind = 'build' | 'test' | 'custom' | 'sonar';
+export type AnalysisFailurePolicy = 'stop' | 'continue';
+export type AnalysisStepStatus = 'pending' | 'running' | 'success' | 'warning' | 'failed' | 'skipped';
+
+export interface AnalysisExecutionStep {
+  id: string;
+  name: string;
+  kind: AnalysisStepKind;
+  command?: string;
+  failurePolicy: AnalysisFailurePolicy;
+  enabled: boolean;
+}
+
+export interface AnalysisStepProgress extends AnalysisExecutionStep {
+  status: AnalysisStepStatus;
+  message?: string;
+}
+
 export type AnalysisPhase =
   | 'idle'
   | 'detecting'
+  | 'preActions'
   | 'installing'
   | 'building'
   | 'scanning'
   | 'processing'
+  | 'postActions'
   | 'refreshing'
   | 'success'
   | 'error'
@@ -34,11 +54,17 @@ export interface AnalysisState {
   completedAt?: string;
   canCancel: boolean;
   log: string[];
+  steps: AnalysisStepProgress[];
+}
+
+export interface AnalysisExecutionOptions {
+  steps: AnalysisExecutionStep[];
 }
 
 export interface AnalysisRequest {
   rootPath: string;
   config: FolderSonarConfig;
+  actions: AnalysisExecutionOptions;
 }
 
 export interface ProcessSpec {

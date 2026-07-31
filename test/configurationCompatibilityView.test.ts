@@ -209,6 +209,7 @@ test('la configuración reutiliza el componente de desplegable del dashboard', (
   assert.match(CONFIGURATION_PAGE_MARKUP, /select-dropdown--fluid/);
   assert.match(SELECT_DROPDOWN_SCRIPT, /MutationObserver/);
   assert.match(SELECT_DROPDOWN_SCRIPT, /trigger\.disabled = select\.disabled/);
+  assert.match(SELECT_DROPDOWN_SCRIPT, /function createSelectDropdownControl/);
 });
 
 test('conserva el borrador de servidor y token al navegar entre páginas', () => {
@@ -233,10 +234,22 @@ test('los modales de análisis y creación usan una distribución compacta', () 
   assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="create-component-grid"/);
   assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="field field--wide"/);
   assert.match(ANALYSIS_STYLES, /\.confirmation-dialog \{/);
-  assert.match(ANALYSIS_STYLES, /\.create-component-grid \{/);
-  assert.match(ANALYSIS_STYLES, /display: flex;/);
-  assert.match(ANALYSIS_STYLES, /flex-wrap: wrap;/);
-  assert.match(ANALYSIS_STYLES, /flex: 1 1 calc\(50% - 8px\)/);
+  assert.match(
+    ANALYSIS_STYLES,
+    /\.create-component-grid \{[\s\S]*display: grid;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
+  );
+  assert.match(
+    ANALYSIS_STYLES,
+    /@media \(max-width: 760px\)[\s\S]*\.create-component-grid \{ grid-template-columns: 1fr; \}/
+  );
+  assert.match(
+    ANALYSIS_STYLES,
+    /\.pipeline-step-list \{[\s\S]*display: grid;/
+  );
+  assert.match(
+    ANALYSIS_STYLES,
+    /\.analysis-stepper \{[\s\S]*display: flex;/
+  );
 });
 
 test('las capacidades de creación se restauran al abrir una conexión guardada', () => {
@@ -256,4 +269,18 @@ test('las capacidades de creación se restauran al abrir una conexión guardada'
     CONFIGURATION_CORE_SCRIPT,
     /creationCapabilities\.canCreateApplications/
   );
+});
+
+
+test('el pipeline puede guardarse sin sincronizar la conexión', () => {
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="savePipeline"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="pipelineSaveStatus"/);
+  assert.match(ELEMENT_REGISTRY_SCRIPT, /"savePipeline"/);
+  assert.match(ELEMENT_REGISTRY_SCRIPT, /"pipelineSaveStatus"/);
+  assert.match(
+    CONFIGURATION_EVENTS_SCRIPT,
+    /elements\.savePipeline\.addEventListener\('click'[\s\S]*type: 'savePipeline'/
+  );
+  assert.match(MESSAGE_EVENTS_SCRIPT, /case 'pipelineSaved'/);
+  assert.match(MESSAGE_EVENTS_SCRIPT, /case 'pipelineSaveError'/);
 });

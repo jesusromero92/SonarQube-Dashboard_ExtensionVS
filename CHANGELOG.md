@@ -8,6 +8,9 @@ All notable changes to SonarQube Dashboard will be documented in this file.
 
 ### Añadido / Added
 
+- Pipeline configurable de etapas antes y después del análisis para ejecutar compilaciones, auditorías y otras herramientas de seguridad.
+- Configurable pre- and post-analysis pipeline stages for builds, audits, and other security tools.
+
 - La tabla de **Issues** permite ordenar por severidad, tipo, archivo, estado y regla.
 - The **Issues** table can be sorted by severity, type, file, status, and rule.
 

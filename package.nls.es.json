@@ -28,6 +28,8 @@
   "configuration.scannerMode.custom": "Ejecuta el comando personalizado configurado.",
   "configuration.sonar_buildCommand.description": "Comando de compilación opcional ejecutado antes del scanner genérico o en lugar de dotnet build.",
   "configuration.sonar_customScannerCommand.description": "Comando personalizado de análisis. El token se proporciona mediante SONAR_TOKEN.",
+  "configuration.sonar_preAnalysisCommands.description": "Comandos del pipeline ejecutados antes del análisis de SonarQube. Usa un comando por línea y, opcionalmente, el prefijo Nombre ::.",
+  "configuration.sonar_postAnalysisCommands.description": "Comandos del pipeline ejecutados después de que SonarQube procese correctamente el análisis. Usa un comando por línea y, opcionalmente, el prefijo Nombre ::.",
   "capabilities.untrusted.description": "El dashboard puede consultar SonarQube, pero analizar el repositorio requiere confiar en el workspace.",
   "views.issues.name": "Explorador de defectos",
   "command.nextIssue": "SonarQube Dashboard: Ir al siguiente defecto",

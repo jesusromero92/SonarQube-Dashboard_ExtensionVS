@@ -121,16 +121,44 @@ ${configurationDropdown('projectKey', 'Proyecto o aplicación visible', DISCONNE
 ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'auto')}
                     <div class="hint">Automático detecta Maven, Gradle y .NET; usa NPM si existe package.json o Docker para proyectos genéricos como Python.</div>
                   </div>
-                  <div class="field">
-                    <label for="buildCommand">Comando de compilación opcional</label>
-                    <input id="buildCommand" type="text" placeholder="npm run build" spellcheck="false">
-                    <div class="hint">Se ejecuta antes del scanner genérico y sustituye a <code>dotnet build</code> en proyectos .NET.</div>
-                  </div>
                   <div id="customScannerField" class="field full-width-field" hidden>
                     <label for="customScannerCommand">Comando personalizado</label>
                     <input id="customScannerCommand" type="text" placeholder="sonar-scanner -Dsonar.projectKey=\${projectKey}" spellcheck="false">
                     <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
                   </div>
+                </div>
+              </details>
+
+              <details class="configuration-disclosure">
+                <summary>Pipeline de análisis</summary>
+                <div class="form-grid advanced-grid">
+                  <div class="field">
+                    <label for="buildCommand">Comando de compilación</label>
+                    <input id="buildCommand" type="text" placeholder="npm run build" spellcheck="false">
+                    <div id="detectedBuildCommandHint" class="hint">Se detecta automáticamente según el proyecto. Déjalo vacío para usar el comando detectado.</div>
+                  </div>
+                  <div class="field">
+                    <label for="testCommand">Comando de tests</label>
+                    <input id="testCommand" type="text" placeholder="npm test" spellcheck="false">
+                    <div id="detectedTestCommandHint" class="hint">Se detecta automáticamente según el proyecto. Déjalo vacío para usar el comando detectado.</div>
+                  </div>
+                  <div class="field full-width-field">
+                    <div class="pipeline-editor-heading">
+                      <div>
+                        <label>Pasos personalizados</label>
+                        <div class="hint">Arrastra los pasos para cambiar su orden y elige qué ocurre si fallan.</div>
+                      </div>
+                      <button id="addPipelineStep" class="secondary" type="button">+ Añadir paso</button>
+                    </div>
+                    <div id="pipelineStepsEditor" class="pipeline-step-list" aria-label="Pasos configurados del pipeline"></div>
+                    <textarea id="preAnalysisCommands" hidden aria-hidden="true"></textarea>
+                    <textarea id="postAnalysisCommands" hidden aria-hidden="true"></textarea>
+                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>.</div>
+                  </div>
+                </div>
+                <div class="pipeline-save-row">
+                  <span id="pipelineSaveStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>
+                  <button id="savePipeline" type="button">Guardar pipeline</button>
                 </div>
               </details>
 

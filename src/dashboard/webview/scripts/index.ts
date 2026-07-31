@@ -9,6 +9,7 @@ import { RULE_DIALOG_SCRIPT } from './modals/ruleDialog';
 import { HOTSPOTS_TABLE_SCRIPT } from './tables/hotspotsTable';
 import { ISSUES_TABLE_SCRIPT } from './tables/issuesTable';
 import { RANKING_TABLES_SCRIPT } from './tables/rankingTables';
+import { PIPELINE_EDITOR_SCRIPT } from './pipelineEditor';
 import { ANALYSIS_SCRIPT } from './analysis';
 import { ISSUE_MANAGEMENT_SCRIPT } from './features/issues';
 import { COVERAGE_SCRIPT } from './coverage';
@@ -29,6 +30,7 @@ export function getDashboardScript(language: DashboardLanguage): string {
     RANKING_TABLES_SCRIPT,
     CHARTS_SCRIPT,
     COVERAGE_SCRIPT,
+    PIPELINE_EDITOR_SCRIPT,
     ANALYSIS_SCRIPT,
     RENDER_SCRIPT,
     EVENTS_SCRIPT
