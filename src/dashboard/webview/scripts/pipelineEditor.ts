@@ -439,9 +439,54 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
         }));
     }
 
+    function createAnalysisStepStatusIcon(status) {
+      const iconPaths = {
+        success: {
+          name: 'check',
+          path: 'M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z'
+        },
+        failed: {
+          name: 'close',
+          path: 'M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z'
+        },
+        warning: {
+          name: 'warning',
+          path: 'M7.25 2.5h1.5v7h-1.5v-7Zm0 9h1.5V13h-1.5v-1.5Z'
+        },
+        skipped: {
+          name: 'dash',
+          path: 'M3 7.25h10v1.5H3v-1.5Z'
+        }
+      };
+      const definition = iconPaths[status];
+      if (!definition) return null;
+
+      // Inline SVGs use the VS Code Codicons 16 × 16 icon convention without
+      // requiring the Codicon font to be bundled inside the webview.
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.classList.add('analysis-step-status-icon');
+      svg.setAttribute('viewBox', '0 0 16 16');
+      svg.setAttribute('focusable', 'false');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.dataset.codicon = definition.name;
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', definition.path);
+      svg.appendChild(path);
+      return svg;
+    }
+
+    function renderAnalysisStepStatusIcon(container, status) {
+      if (!container || container.dataset.status === status) return;
+      container.dataset.status = status;
+      container.replaceChildren();
+      const icon = createAnalysisStepStatusIcon(status);
+      if (icon) container.appendChild(icon);
+    }
+
     function renderAnalysisStepper(steps) {
       const nextSteps = Array.isArray(steps) ? steps : [];
-      elements.analysisStepper.hidden = nextSteps.length === 0;
+      elements.analysisStepper.hidden = nextSteps.length <= 1;
 
       const existingItems = new Map(
         [...elements.analysisStepper.children].map(item => [
@@ -466,11 +511,15 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
           item.append(icon, label);
         }
 
-        const nextClassName =
-          'analysis-step analysis-step--' + (step.status || 'pending');
+        const status = step.status || 'pending';
+        const nextClassName = 'analysis-step analysis-step--' + status;
         if (item.className !== nextClassName) {
           item.className = nextClassName;
         }
+        renderAnalysisStepStatusIcon(
+          item.querySelector('.analysis-step-icon'),
+          status
+        );
 
         const nextTitle = step.message || step.name || '';
         if (item.title !== nextTitle) {

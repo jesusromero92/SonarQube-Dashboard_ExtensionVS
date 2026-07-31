@@ -21,6 +21,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 ## Main features
 
 - Run repository analysis from VS Code with automatic scanner detection.
+- Configurable analysis pipeline with build, test, and custom steps ordered through drag & drop.
 - Support for Maven and Gradle projects using Java or Kotlin, SonarScanner for .NET for C#/VB.NET/F#, SonarScanner for NPM for projects containing `package.json`, and SonarScanner CLI through Docker for generic projects.
 - Manual selection of Maven, Gradle, .NET, NPM, Docker, or a custom command.
 - Automatic synchronization when opening an already linked project.
@@ -31,7 +32,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Summaries by severity and issue type.
 - Maintainability, Reliability, Security, and Security Review ratings.
 - Quality Gate status and full condition details.
-- Filterable issue table with direct navigation to source code.
+- Filterable issue table with sortable headers and direct navigation to source code.
 - Issue lifecycle management without leaving VS Code: accept, false positive, reopen, assignment, comments, history, and current assignee.
 - Security execution-flow navigation with source, intermediate steps, sink, secondary locations, CodeLens, and editor decorations.
 - Coverage and duplication view with current Overall/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and Overall historical trends grouped by day, week, or month.
@@ -39,7 +40,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Automatic regression notifications for critical issues, Quality Gate failures, issue increases, new hotspots, and completed analyses.
 - Dedicated Security Hotspots table.
 - File and rule rankings with sortable columns.
-- Overall historical evolution by issue type and severity, with independent day, week, or month grouping for every chart. New Code keeps its current metrics but intentionally hides non-comparable historical charts.
+- Overall historical evolution by issue type and severity, with independent day, week, or month grouping and **Day** selected by default. New Code keeps its current metrics but intentionally hides non-comparable historical charts.
 - Native diagnostics published in **Problems**.
 - Support for branches and local subfolders.
 
@@ -55,7 +56,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 8. Explicitly select the SonarQube project or application that analyzes the open folder. Connecting never links a project automatically.
 9. Optionally configure the branch and, when paths do not start at the workspace root, the local subfolder.
 10. Select **Synchronize** to save the link and load its data.
-11. On the **Data** page, select **Analyze repository** to create and submit a new analysis.
+11. On the **Data** page, select **Analyze repository**, add the optional steps for that run, and confirm the pipeline.
 
 After the first link is created, the extension synchronizes data automatically whenever the workspace is opened. The refresh icon in the side panel can be used to request a manual update.
 
@@ -115,7 +116,7 @@ The table contains:
 - **File:** final filename and affected line; the tooltip preserves the complete path.
 - **Rule:** descriptive SonarQube rule name.
 
-The search field filters by file, rule, or description. Selecting a row opens the local file at the affected line. Selecting the rule opens its description in a dialog.
+The search field filters by file, rule, or description. The **Severity**, **Type**, **File**, **Status**, and **Rule** headers sort the table; selecting the same header again reverses the direction. Selecting a row opens the local file at the affected line. Selecting the rule opens its details in a dialog.
 
 Only issues whose SonarQube component matches a file in the open folder are included, taking the configured local subfolder into account.
 
@@ -168,7 +169,7 @@ The lower section contains two charts:
 - **Issues by type:** Bugs, Code Smells, Vulnerabilities, and Security Hotspots.
 - **Issues by severity:** Blocker, Critical, Major, Minor, and Info.
 
-Each chart has its own **Day / Week / Month** selector in the upper-right corner. Selectors are independent, so changing one chart's grouping does not modify any other chart.
+Each chart has its own **Day / Week / Month** selector in the upper-right corner and starts grouped by **Day**. Selectors are independent, so changing one chart's grouping does not modify any other chart.
 
 Each point represents the latest analysis in the selected interval: the latest analysis of each day, week, or month. Moving the pointer over a chart displays a tooltip that follows the cursor and shows that analysis's actual date and the values for every visible series.
 
@@ -239,7 +240,7 @@ The **Coverage and duplication** data tab provides separate current Overall and 
 - files with the lowest coverage;
 - files with the highest duplication.
 
-Historical coverage and duplication charts are available in **Overall** only. They provide independent **Day / Week / Month** selectors and retain the latest analysis from each interval. In **New Code**, the current metrics and file rankings remain available, while the historical charts are replaced with a notice explaining why the series is unavailable.
+Historical coverage and duplication charts are available in **Overall** only. They provide independent **Day / Week / Month** selectors, start grouped by **Day**, and retain the latest analysis from each interval. In **New Code**, the current metrics and file rankings remain available, while the historical charts are replaced with a notice explaining why the series is unavailable.
 
 Selecting a file loads line-level data on demand. Covered, partially covered, and uncovered lines are marked in the gutter and overview ruler. Duplicated lines receive a dedicated decoration, and the detail dialog lists each duplicated block together with every matching local file and range.
 
@@ -311,6 +312,30 @@ Selecting a hotspot loads its details and opens a dialog containing:
 
 The extension loads hotspot details on demand so they do not delay the initial dashboard load.
 
+## Configurable analysis pipeline
+
+![Build, test, and custom-step configuration](docs/images/analysis-pipeline-configuration.png)
+
+The **Configuration → Analysis pipeline** section automatically detects common build and test commands for the current project. Both commands can be overridden manually. Custom steps can also run dependency audits, linters, SAST tools, report generators, or any other tool available in the workspace.
+
+Each custom step provides:
+
+- editable name and command;
+- drag & drop ordering from the `⋮⋮` handle;
+- **Stop on failure** or **Continue on failure** behavior;
+- `${workspaceFolder}`, `${projectKey}`, `${projectName}`, `${serverUrl}`, and `${branch}` variables;
+- independent persistence through **Save pipeline**.
+
+![Selecting and ordering steps before analysis](docs/images/analysis-pipeline-confirmation.png)
+
+When **Analyze repository** is opened, the run initially contains only the required SonarQube step. **Add step** can include the detected build command, tests, or any saved custom step. The command can be adjusted for that run, and its position relative to SonarQube is controlled by dragging the row from its handle.
+
+The **Analyze** button remains disabled while any step is incomplete. Optional steps can be removed before execution without changing the saved pipeline configuration.
+
+![Pipeline stepper and execution log](docs/images/analysis-pipeline-execution.png)
+
+While the pipeline runs, the dialog displays a stepper whenever more than one step is present. Each stage indicates whether it is running, succeeded, failed and stopped the pipeline, or failed with permission to continue. The log clearly separates the start and end of each step, displays the executed command, and preserves the complete tool output.
+
 ## Repository analysis
 
 ![Repository analysis and SonarScanner log](docs/images/analisis.png)
@@ -328,7 +353,7 @@ In **Automatic** mode, detection priority is **.NET → Maven → Gradle → NPM
 
 SonarScanner for NPM reads the project's `package.json`. The extension does not create an artificial file: when the workspace does not contain one, it selects Docker directly and avoids launching NPX with an incompatible configuration.
 
-The extension displays progress and the complete log, supports cancellation, waits for SonarQube to finish its background task, and then updates the dashboard and **Problems** automatically. The dialog can be closed while execution continues without stopping the analysis; **View log** opens it again. Only **Cancel analysis** terminates the scanner. The token is masked in the log.
+The extension runs the selected pipeline, displays progress and the complete log, supports cancellation, waits for SonarQube to finish its background task, and then updates the dashboard and **Problems** automatically. The dialog can be closed while execution continues without stopping the analysis; **View log** opens it again. Only **Cancel analysis** terminates the scanner. The token is masked in the log.
 
 Before enabling repository analysis, the extension queries the analysis-cache endpoint used by SonarScanner, which requires the **Execute Analysis** permission. If SonarQube rejects the request, analysis controls are hidden and the reason is shown in Configuration. A response indicating that no cache exists yet is considered valid. The backend repeats this validation before starting any scanner.
 
@@ -378,6 +403,7 @@ The configuration page manages:
 - **Analysis method:** Automatic, Maven, Gradle, .NET, NPM, Docker, or Custom.
 - **Build command:** optional command executed before the generic scanner or used instead of `dotnet build`.
 - **Custom command:** integrates custom tools or processes without storing the token in the command.
+- **Analysis pipeline:** detected build and test commands, custom steps, ordering, and failure policy.
 
 ### Token security
 

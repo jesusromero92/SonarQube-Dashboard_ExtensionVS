@@ -304,8 +304,6 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       border: 2px solid var(--vscode-panel-border);
       border-radius: 50%;
       background: var(--vscode-editorWidget-background);
-      font-size: 13px;
-      font-weight: 700;
     }
     .analysis-step--running .analysis-step-icon {
       border-color: var(--vscode-progressBar-background);
@@ -317,20 +315,26 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       color: var(--vscode-editor-background);
       background: var(--dashboard-quality-gate-ok);
     }
-    .analysis-step--success .analysis-step-icon::before { content: "✓"; }
     .analysis-step--failed .analysis-step-icon {
       border-color: var(--dashboard-quality-gate-error);
       color: var(--vscode-editor-background);
       background: var(--dashboard-quality-gate-error);
     }
-    .analysis-step--failed .analysis-step-icon::before { content: "×"; }
     .analysis-step--warning .analysis-step-icon {
       border-color: var(--vscode-editorWarning-foreground);
       color: var(--vscode-editor-background);
       background: var(--vscode-editorWarning-foreground);
     }
-    .analysis-step--warning .analysis-step-icon::before { content: "!"; }
-    .analysis-step--skipped .analysis-step-icon::before { content: "–"; }
+    .analysis-step-status-icon {
+      display: block;
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+      pointer-events: none;
+    }
+    .analysis-step--skipped .analysis-step-icon {
+      color: var(--vscode-descriptionForeground);
+    }
     .analysis-step-label {
       max-width: 130px;
       overflow: hidden;

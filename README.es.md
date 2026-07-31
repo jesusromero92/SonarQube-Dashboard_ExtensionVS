@@ -22,6 +22,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 ## Características principales
 
 - Análisis del repositorio desde VS Code con detección automática del scanner.
+- Pipeline de análisis configurable con compilación, tests y pasos personalizados ordenables mediante drag & drop.
 - Compatibilidad con Maven/Gradle para Java y Kotlin, SonarScanner for .NET para C#/VB.NET/F#, SonarScanner for NPM para proyectos con `package.json` y SonarScanner CLI en Docker para proyectos genéricos.
 - Selección manual de Maven, Gradle, .NET, NPM, Docker o un comando personalizado.
 - Sincronización automática al abrir un proyecto ya vinculado.
@@ -32,7 +33,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Resumen por severidad y tipo de defecto.
 - Ratings de Maintainability, Reliability, Security y Security Review.
 - Estado y detalle completo del Quality Gate.
-- Tabla de defectos con filtro y navegación al código.
+- Tabla de defectos con filtro, ordenación por cabeceras y navegación al código.
 - Gestión del ciclo de vida del defecto sin salir de VS Code: aceptar, falso positivo, reapertura, asignación, comentarios, historial y responsable actual.
 - Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias, CodeLens y decoraciones en el editor.
 - Vista de cobertura y duplicación con métricas actuales de Overall/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico de Overall agrupable por día, semana o mes.
@@ -40,7 +41,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Notificaciones automáticas de regresiones, fallos del Quality Gate, nuevos hotspots y análisis completados.
 - Tabla específica de Security Hotspots.
 - Rankings de archivos y reglas con ordenación por columnas.
-- Evolución histórica de Overall por tipo de issue y criticidad, con agrupación independiente por día, semana o mes en cada gráfica. New Code conserva sus métricas actuales, pero oculta las gráficas históricas no comparables.
+- Evolución histórica de Overall por tipo de issue y criticidad, con agrupación independiente por día, semana o mes y **Día** como valor predeterminado. New Code conserva sus métricas actuales, pero oculta las gráficas históricas no comparables.
 - Publicación de diagnósticos en **Problems**.
 - Compatibilidad con ramas y subcarpetas locales.
 
@@ -56,7 +57,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 8. Selecciona expresamente el proyecto o aplicación de SonarQube que analiza la carpeta abierta. Conectar nunca vincula un proyecto automáticamente.
 9. Configura opcionalmente la rama y, si las rutas no parten de la raíz del workspace, la subcarpeta local.
 10. Pulsa **Sincronizar** para guardar la vinculación y cargar sus datos.
-11. En la página **Datos**, pulsa **Analizar repositorio** para generar y enviar un nuevo análisis.
+11. En la página **Datos**, pulsa **Analizar repositorio**, añade los pasos opcionales de esta ejecución y confirma el pipeline.
 
 Después de la primera vinculación, la extensión sincroniza los datos automáticamente al abrir el workspace. El icono de recarga del panel lateral permite solicitar una actualización manual.
 
@@ -116,7 +117,7 @@ La tabla contiene:
 - **Archivo:** nombre final y línea afectada; el tooltip conserva la ruta completa.
 - **Regla:** nombre descriptivo de la regla de SonarQube.
 
-El campo de búsqueda filtra por archivo, regla o descripción. Al pulsar una fila se abre el archivo local en la línea afectada. Al pulsar la regla se muestra su descripción en un modal.
+El campo de búsqueda filtra por archivo, regla o descripción. Las cabeceras **Severidad**, **Tipo**, **Archivo**, **Estado** y **Regla** permiten ordenar la tabla; un segundo clic invierte la dirección. Al pulsar una fila se abre el archivo local en la línea afectada. Al pulsar la regla se muestra su detalle en un modal.
 
 Solo se incluyen los issues cuyo componente de SonarQube coincide con un archivo de la carpeta abierta, teniendo en cuenta la subcarpeta local configurada.
 
@@ -169,7 +170,7 @@ La sección inferior incluye dos gráficas:
 - **Issues por tipo:** Bugs, Code Smells, Vulnerabilidades y Security Hotspots.
 - **Issues por criticidad:** Blocker, Critical, Major, Minor e Info.
 
-Cada gráfica dispone de su propio selector **Día / Semana / Mes** en la esquina superior derecha. Los selectores son independientes: cambiar la agrupación de una gráfica no modifica ninguna otra.
+Cada gráfica dispone de su propio selector **Día / Semana / Mes** en la esquina superior derecha y comienza agrupada por **Día**. Los selectores son independientes: cambiar la agrupación de una gráfica no modifica ninguna otra.
 
 Cada punto representa el último análisis del intervalo seleccionado: el último análisis de cada día, de cada semana o de cada mes. Al mover el ratón sobre la gráfica aparece un tooltip que sigue el cursor e indica la fecha real de ese análisis y los valores de todas las series visibles.
 
@@ -240,7 +241,7 @@ La pestaña **Cobertura y duplicación** incluye vistas actuales independientes 
 - archivos con menor cobertura;
 - archivos con mayor duplicación.
 
-Las gráficas históricas de cobertura y duplicación están disponibles únicamente en **Overall**. Incluyen selectores **Día / Semana / Mes** independientes y conservan el último análisis de cada intervalo. En **New Code** se mantienen las métricas actuales y los rankings de archivos, mientras que las gráficas se sustituyen por un aviso que explica por qué no existe una serie comparable.
+Las gráficas históricas de cobertura y duplicación están disponibles únicamente en **Overall**. Incluyen selectores **Día / Semana / Mes** independientes, comienzan agrupadas por **Día** y conservan el último análisis de cada intervalo. En **New Code** se mantienen las métricas actuales y los rankings de archivos, mientras que las gráficas se sustituyen por un aviso que explica por qué no existe una serie comparable.
 
 Al seleccionar un archivo se cargan los datos por línea bajo demanda. Las líneas cubiertas, parcialmente cubiertas y no cubiertas se marcan en el gutter y el overview ruler. Las líneas duplicadas utilizan una decoración propia, y el modal de detalle enumera cada bloque duplicado junto con todos los archivos y rangos locales coincidentes.
 
@@ -312,6 +313,30 @@ Al pulsar un hotspot se consulta su detalle y se abre un modal con:
 
 La extensión obtiene el detalle bajo demanda para no retrasar la carga inicial del dashboard.
 
+## Pipeline de análisis configurable
+
+![Configuración de compilación, tests y pasos personalizados](docs/images/analysis-pipeline-configuration.png)
+
+La sección **Configuración → Pipeline de análisis** detecta automáticamente los comandos habituales de compilación y tests según el proyecto. Ambos pueden reemplazarse manualmente. También permite crear pasos personalizados para auditorías de dependencias, linters, SAST, generación de informes u otras herramientas disponibles en el workspace.
+
+Cada paso personalizado incluye:
+
+- nombre y comando editables;
+- ordenación mediante drag & drop desde el icono `⋮⋮`;
+- condición **Detener si falla** o **Continuar si falla**;
+- variables `${workspaceFolder}`, `${projectKey}`, `${projectName}`, `${serverUrl}` y `${branch}`;
+- guardado independiente mediante **Guardar pipeline**.
+
+![Selección y orden de los pasos antes de analizar](docs/images/analysis-pipeline-confirmation.png)
+
+Al abrir **Analizar repositorio**, la ejecución contiene inicialmente solo el paso obligatorio de SonarQube. **Añadir paso** permite incorporar la compilación detectada, los tests o cualquiera de los pasos personalizados guardados. El comando puede ajustarse para esa ejecución y el orden respecto a SonarQube se controla arrastrando cada fila desde su icono.
+
+El botón **Analizar** permanece deshabilitado mientras exista un paso incompleto. Los pasos opcionales pueden eliminarse antes de comenzar y no modifican la configuración guardada.
+
+![Stepper y registro de un pipeline en ejecución](docs/images/analysis-pipeline-execution.png)
+
+Durante la ejecución, el modal muestra un stepper cuando hay más de un paso. Cada etapa indica si está ejecutándose, ha finalizado correctamente, ha fallado deteniendo el pipeline o ha fallado con permiso para continuar. El registro separa claramente el inicio y el final de cada paso, muestra el comando ejecutado y conserva la salida completa de las herramientas.
+
 ## Análisis del repositorio
 
 ![Análisis del repositorio y registro de SonarScanner](docs/images/analisis.png)
@@ -329,7 +354,7 @@ En modo **Automático**, la prioridad de detección es **.NET → Maven → Grad
 
 SonarScanner for NPM lee el `package.json` del proyecto. La extensión no crea uno artificialmente: si el workspace no lo contiene, selecciona directamente Docker y evita iniciar NPX con una configuración incompatible.
 
-La extensión muestra el progreso y el registro completo, permite cancelar el proceso, espera a que SonarQube termine la tarea en segundo plano y después actualiza automáticamente el dashboard y **Problems**. El modal puede cerrarse durante la ejecución sin detener el análisis; **Ver registro** permite abrirlo de nuevo. Únicamente **Cancelar análisis** finaliza el scanner. El token se oculta en el registro.
+La extensión ejecuta el pipeline seleccionado, muestra el progreso y el registro completo, permite cancelar el proceso, espera a que SonarQube termine la tarea en segundo plano y después actualiza automáticamente el dashboard y **Problems**. El modal puede cerrarse durante la ejecución sin detener el análisis; **Ver registro** permite abrirlo de nuevo. Únicamente **Cancelar análisis** finaliza el scanner. El token se oculta en el registro.
 
 Antes de habilitar esta sección, la extensión consulta el endpoint de caché de análisis que utiliza SonarScanner y que requiere el permiso **Execute Analysis / Ejecutar análisis**. Si SonarQube rechaza la petición, se ocultan los controles de análisis y se indica el motivo en Configuración. Una respuesta que simplemente indique que todavía no existe caché se considera válida. La comprobación se repite en el backend antes de iniciar cualquier scanner.
 
@@ -379,6 +404,7 @@ La página de configuración permite gestionar:
 - **Método de análisis:** automático, Maven, Gradle, .NET, NPM, Docker o personalizado.
 - **Comando de compilación:** comando opcional previo al scanner genérico o sustituto de `dotnet build`.
 - **Comando personalizado:** permite integrar herramientas o procesos propios sin guardar el token en el comando.
+- **Pipeline de análisis:** comandos de compilación y tests detectados, pasos personalizados, orden y política de fallo.
 
 ### Seguridad del token
 
