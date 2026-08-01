@@ -168,6 +168,14 @@ export async function collectExtensionDiagnostics(
 export function formatDiagnosticsReport(
   snapshot: ExtensionDiagnosticsSnapshot
 ): string {
+  const branch = firstNonEmpty(snapshot.branch, 'Rama principal');
+  const compatibilityProfile = firstNonEmpty(
+    snapshot.compatibilityProfiles?.join(' / '),
+    snapshot.compatibilityProfile
+  );
+  const responseTime = snapshot.responseTimeMs === undefined
+    ? '—'
+    : `${snapshot.responseTimeMs} ms`;
   const lines = [
     '# SonarQube Dashboard · Diagnóstico',
     '',
@@ -184,11 +192,11 @@ export function formatDiagnosticsReport(
     '## SonarQube y compatibilidad',
     `- Servidor: ${value(snapshot.sonarServer)}`,
     `- Proyecto: ${value(snapshot.projectKey)}`,
-    `- Rama: ${value(snapshot.branch || 'Rama principal')}`,
+    `- Rama: ${value(branch)}`,
     `- Versión: ${value(snapshot.sonarVersion)}`,
     `- Estado: ${value(snapshot.sonarStatus)}`,
-    `- Perfil: ${value(snapshot.compatibilityProfiles?.join(' / ') || snapshot.compatibilityProfile)}`,
-    `- Tiempo de respuesta: ${snapshot.responseTimeMs === undefined ? '—' : `${snapshot.responseTimeMs} ms`}`,
+    `- Perfil: ${value(compatibilityProfile)}`,
+    `- Tiempo de respuesta: ${responseTime}`,
     '',
     '## Scanner',
     `- Scanner: ${value(snapshot.scanner)}`,
@@ -242,16 +250,22 @@ function toDiagnosticTool(
 
 function formatCommands(commands: readonly ExtensionDiagnosticCommand[]): string[] {
   if (commands.length === 0) return ['- Ninguno'];
-  return commands.map(command =>
-    `- ${command.name}: \`${command.command}\`${command.evidence ? ` (${command.evidence})` : ''}`
-  );
+  return commands.map(command => {
+    const evidence = formatEvidence(command.evidence);
+    return `- ${command.name}: \`${command.command}\`${evidence}`;
+  });
 }
 
 function formatTools(tools: readonly ExtensionDiagnosticTool[]): string[] {
   if (tools.length === 0) return ['- Ninguna'];
-  return tools.map(tool =>
-    `- ${tool.name} [${tool.category}]: \`${tool.command}\`${tool.evidence ? ` (${tool.evidence})` : ''}`
-  );
+  return tools.map(tool => {
+    const evidence = formatEvidence(tool.evidence);
+    return `- ${tool.name} [${tool.category}]: \`${tool.command}\`${evidence}`;
+  });
+}
+
+function formatEvidence(evidence?: string): string {
+  return evidence ? ` (${evidence})` : '';
 }
 
 function formatFailure(failure?: ExtensionFailedRequest): string[] {
@@ -268,7 +282,34 @@ function formatFailure(failure?: ExtensionFailedRequest): string[] {
 
 function value(input: unknown): string {
   if (input === undefined || input === null || input === '') return '—';
-  return String(input);
+  if (
+    typeof input === 'string' ||
+    typeof input === 'number' ||
+    typeof input === 'bigint' ||
+    typeof input === 'boolean'
+  ) {
+    return String(input);
+  }
+  if (typeof input === 'symbol') {
+    return input.description ?? 'Symbol';
+  }
+  if (typeof input === 'function') {
+    return input.name ? `[Function ${input.name}]` : '[Function]';
+  }
+  try {
+    return JSON.stringify(input) ?? '—';
+  } catch {
+    return '—';
+  }
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const current of values) {
+    if (current) {
+      return current;
+    }
+  }
+  return '';
 }
 
 function errorMessage(error: unknown): string {

@@ -84,6 +84,15 @@ import {
   SonarCreatableComponentKind
 } from './types';
 
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    if (value) {
+      return value;
+    }
+  }
+  return '';
+}
+
 export class DashboardPanel {
   private panel: vscode.WebviewPanel | undefined;
   private selectedFolderUri: string | undefined;
@@ -542,7 +551,8 @@ export class DashboardPanel {
 
     const selectedFolder =
       this.getWorkspaceFolder(this.selectedFolderUri) ?? activeFolder ?? folders[0];
-    this.selectedFolderUri = selectedFolder.uri.toString();
+    const selectedFolderUri = selectedFolder.uri.toString();
+    this.selectedFolderUri = selectedFolderUri;
 
     const config = await getFolderFormConfig(this.context, selectedFolder);
     const configuredRoot = this.analysisRoot(selectedFolder, config.baseDir) ?? selectedFolder.uri.fsPath;
@@ -553,13 +563,13 @@ export class DashboardPanel {
     const pipelineTemplates = mergePipelineTemplates(
       createBuiltinPipelineTemplates(
         detectedProjectActions,
-        config.buildCommand || detectedProjectActions.buildCommand || '',
-        config.testCommand || detectedProjectActions.testCommand || ''
+        firstNonEmpty(config.buildCommand, detectedProjectActions.buildCommand),
+        firstNonEmpty(config.testCommand, detectedProjectActions.testCommand)
       ),
       customPipelineTemplates
     );
     const connectionDraftDirty = this.dirtyConnectionFolders.has(
-      this.selectedFolderUri!
+      selectedFolderUri
     );
     let analysisPermission: AnalysisPermissionStatus = 'unknown';
     let creationCapabilities = this.emptyCreationCapabilities();
@@ -903,8 +913,8 @@ export class DashboardPanel {
     const actions = await detectProjectActions(rootPath);
     const builtinTemplates = createBuiltinPipelineTemplates(
       actions,
-      config.buildCommand || actions.buildCommand || '',
-      config.testCommand || actions.testCommand || ''
+      firstNonEmpty(config.buildCommand, actions.buildCommand),
+      firstNonEmpty(config.testCommand, actions.testCommand)
     );
     const savedTemplates = await this.pipelineTemplateStore.list(
       folder.uri.toString()
@@ -923,16 +933,21 @@ export class DashboardPanel {
       return;
     }
     try {
-      const templateId = message.templateId?.trim() ||
-        `custom-${Date.now().toString(36)}`;
+      const templateId = firstNonEmpty(
+        message.templateId?.trim(),
+        `custom-${Date.now().toString(36)}`
+      );
       const builtin = templateId.startsWith('builtin-');
+      const defaultDescription = builtin
+        ? 'Plantilla integrada personalizada para este workspace.'
+        : 'Plantilla personalizada del workspace.';
       await this.pipelineTemplateStore.save(folder.uri.toString(), {
         id: templateId,
         name,
-        description: message.templateDescription?.trim() ||
-          (builtin
-            ? 'Plantilla integrada personalizada para este workspace.'
-            : 'Plantilla personalizada del workspace.'),
+        description: firstNonEmpty(
+          message.templateDescription?.trim(),
+          defaultDescription
+        ),
         builtin,
         steps: message.analysisSteps
       });
@@ -1174,7 +1189,7 @@ ${selected.name}`,
       return;
     }
 
-    const effectiveToken = token || existingToken || '';
+    const effectiveToken = firstNonEmpty(token, existingToken);
     const requiresValidation = connectionNeedsValidation(
       savedConnection.serverUrl,
       existingToken,
@@ -1362,20 +1377,28 @@ ${selected.name}`,
       return [];
     }
 
-    return steps.slice(0, 50).map((step, index) => ({
-      id: String(step?.id || `step-${index + 1}`).slice(0, 120),
-      name: String(step?.name || `Paso ${index + 1}`).trim().slice(0, 160),
-      kind: ['build', 'test', 'custom', 'sonar'].includes(step?.kind)
+    return steps.slice(0, 50).map((step, index) => {
+      const kind = ['build', 'test', 'custom', 'sonar'].includes(step?.kind)
         ? step.kind
-        : 'custom',
-      command: typeof step?.command === 'string'
-        ? step.command.trim().slice(0, 8000)
-        : undefined,
-      failurePolicy: step?.kind === 'sonar'
+        : 'custom';
+      const failurePolicy = step?.kind === 'sonar' ||
+        step?.failurePolicy !== 'continue'
         ? 'stop'
-        : step?.failurePolicy === 'continue' ? 'continue' : 'stop',
-      enabled: step?.enabled !== false
-    }));
+        : 'continue';
+
+      return {
+        id: firstNonEmpty(step?.id, `step-${index + 1}`).slice(0, 120),
+        name: firstNonEmpty(step?.name, `Paso ${index + 1}`)
+          .trim()
+          .slice(0, 160),
+        kind,
+        command: typeof step?.command === 'string'
+          ? step.command.trim().slice(0, 8000)
+          : undefined,
+        failurePolicy,
+        enabled: step?.enabled !== false
+      };
+    });
   }
 
   private defaultAnalysisSteps(
@@ -1459,10 +1482,14 @@ ${selected.name}`,
     }
 
     const detectedActions = await detectProjectActions(rootPath);
-    const buildCommand = config.buildCommand?.trim() ||
-      detectedActions.buildCommand || '';
-    const testCommand = config.testCommand?.trim() ||
-      detectedActions.testCommand || '';
+    const buildCommand = firstNonEmpty(
+      config.buildCommand?.trim(),
+      detectedActions.buildCommand
+    );
+    const testCommand = firstNonEmpty(
+      config.testCommand?.trim(),
+      detectedActions.testCommand
+    );
     const requestedSteps = requestedActions?.steps ?? [];
     const steps = requestedSteps.length > 0
       ? requestedSteps

@@ -105,10 +105,11 @@ implements vscode.TreeDataProvider<PipelineExecutionTreeNode>, vscode.Disposable
   private executionTreeItem(element: ExecutionNode): vscode.TreeItem {
     const { entry, running } = element;
     const spanish = getDashboardLanguage() === 'es';
+    const title = running
+      ? runningExecutionTitle(spanish)
+      : executionProjectTitle(entry);
     const item = new vscode.TreeItem(
-      running
-        ? (spanish ? 'Ejecución en curso' : 'Execution in progress')
-        : entry.projectName || entry.projectKey || 'SonarQube',
+      title,
       entry.steps.length > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None
@@ -147,13 +148,20 @@ implements vscode.TreeDataProvider<PipelineExecutionTreeNode>, vscode.Disposable
     item.iconPath = stepIcon(step.status);
     item.id = `pipeline-step:${element.executionId}:${step.id}`;
     item.contextValue = 'sonarPipelineExecutionStep';
-    item.tooltip = new vscode.MarkdownString([
+    const tooltipLines = [
       `**${step.name}**`,
       '',
-      `${spanish ? 'Estado' : 'Status'}: ${stepStatusLabel(step.status, spanish)}`,
-      step.command ? `${spanish ? 'Comando' : 'Command'}: \`${step.command}\`` : '',
-      step.message ? `${spanish ? 'Mensaje' : 'Message'}: ${step.message}` : ''
-    ].filter(Boolean).join('\n\n'));
+      `${spanish ? 'Estado' : 'Status'}: ${stepStatusLabel(step.status, spanish)}`
+    ];
+    if (step.command) {
+      const commandLabel = spanish ? 'Comando' : 'Command';
+      tooltipLines.push(`${commandLabel}: \`${step.command}\``);
+    }
+    if (step.message) {
+      const messageLabel = spanish ? 'Mensaje' : 'Message';
+      tooltipLines.push(`${messageLabel}: ${step.message}`);
+    }
+    item.tooltip = new vscode.MarkdownString(tooltipLines.join('\n\n'));
     return item;
   }
 
@@ -275,16 +283,51 @@ function executionTooltip(
   entry: PipelineRunHistoryEntry,
   spanish: boolean
 ): vscode.MarkdownString {
-  return new vscode.MarkdownString([
-    `**${entry.projectName || entry.projectKey || (spanish ? 'Ejecución del pipeline' : 'Pipeline execution')}**`,
+  const title = executionProjectTitle(entry, spanish);
+  const statusTitle = spanish ? 'Estado' : 'Status';
+  const branchTitle = spanish ? 'Rama' : 'Branch';
+  const startedTitle = spanish ? 'Inicio' : 'Started';
+  const durationTitle = spanish ? 'Duración' : 'Duration';
+  const messageTitle = spanish ? 'Mensaje' : 'Message';
+  const lines = [
+    `**${title}**`,
     '',
-    `${spanish ? 'Estado' : 'Status'}: ${statusLabel(entry.status, spanish)}`,
-    entry.scanner ? `${spanish ? 'Scanner' : 'Scanner'}: ${entry.scanner}` : '',
-    entry.branch ? `${spanish ? 'Rama' : 'Branch'}: ${entry.branch}` : '',
-    `${spanish ? 'Inicio' : 'Started'}: ${formatDate(entry.startedAt)}`,
-    `${spanish ? 'Duración' : 'Duration'}: ${formatDuration(entry.durationMs)}`,
-    entry.message ? `${spanish ? 'Mensaje' : 'Message'}: ${entry.message}` : ''
-  ].filter(Boolean).join('\n\n'));
+    `${statusTitle}: ${statusLabel(entry.status, spanish)}`
+  ];
+
+  if (entry.scanner) {
+    lines.push(`Scanner: ${entry.scanner}`);
+  }
+  if (entry.branch) {
+    lines.push(`${branchTitle}: ${entry.branch}`);
+  }
+  lines.push(`${startedTitle}: ${formatDate(entry.startedAt)}`);
+  lines.push(`${durationTitle}: ${formatDuration(entry.durationMs)}`);
+  if (entry.message) {
+    lines.push(`${messageTitle}: ${entry.message}`);
+  }
+
+  return new vscode.MarkdownString(lines.join('\n\n'));
+}
+
+function runningExecutionTitle(spanish: boolean): string {
+  return spanish ? 'Ejecución en curso' : 'Execution in progress';
+}
+
+function executionProjectTitle(
+  entry: PipelineRunHistoryEntry,
+  spanish?: boolean
+): string {
+  if (entry.projectName) {
+    return entry.projectName;
+  }
+  if (entry.projectKey) {
+    return entry.projectKey;
+  }
+  if (spanish === undefined) {
+    return 'SonarQube';
+  }
+  return spanish ? 'Ejecución del pipeline' : 'Pipeline execution';
 }
 
 export { PIPELINE_EXECUTION_TREE_VIEW_ID };

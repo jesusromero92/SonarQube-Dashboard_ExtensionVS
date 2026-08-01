@@ -75,6 +75,29 @@ export class AnalysisService implements vscode.Disposable {
     }
 
     const executionSteps = this.normalizeExecutionSteps(request.actions.steps);
+    this.startAnalysis(request, executionSteps);
+
+    try {
+      const scanner = await this.detectAnalysisScanner(request);
+      const warnings = await this.runExecutionSteps(
+        executionSteps,
+        request,
+        scanner
+      );
+      await this.completeAnalysis(request, warnings);
+    } catch (error) {
+      await this.failAnalysis(request, error);
+      throw error;
+    } finally {
+      this.controller = undefined;
+      this.token = '';
+    }
+  }
+
+  private startAnalysis(
+    request: AnalysisRequest,
+    executionSteps: AnalysisExecutionStep[]
+  ): void {
     this.controller = new AbortController();
     this.token = request.config.token;
     this.state = {
@@ -88,93 +111,158 @@ export class AnalysisService implements vscode.Disposable {
       steps: executionSteps.map(step => ({ ...step, status: 'pending' }))
     };
     this.emit();
+  }
+
+  private async detectAnalysisScanner(
+    request: AnalysisRequest
+  ): Promise<DetectedScanner> {
+    const scanner = await detectScanner(
+      request.rootPath,
+      request.config.scannerMode ?? 'auto'
+    );
+    this.detectedScanner = scanner;
+    this.update(
+      'detecting',
+      `Scanner seleccionado: ${scanner.label}`,
+      scanner.label
+    );
+    this.appendLog(`Proyecto detectado mediante ${scanner.evidence}.`);
+    return scanner;
+  }
+
+  private async runExecutionSteps(
+    executionSteps: AnalysisExecutionStep[],
+    request: AnalysisRequest,
+    scanner: DetectedScanner
+  ): Promise<number> {
+    let warnings = 0;
+    for (const [stepIndex, step] of executionSteps.entries()) {
+      const continuedAfterFailure = await this.runExecutionStep(
+        step,
+        stepIndex,
+        executionSteps.length,
+        request,
+        scanner
+      );
+      if (continuedAfterFailure) {
+        warnings += 1;
+      }
+    }
+    return warnings;
+  }
+
+  private async runExecutionStep(
+    step: AnalysisExecutionStep,
+    stepIndex: number,
+    stepCount: number,
+    request: AnalysisRequest,
+    scanner: DetectedScanner
+  ): Promise<boolean> {
+    this.ensureNotCancelled();
+    const position = `${stepIndex + 1}/${stepCount}`;
+    this.updateStep(step.id, 'running');
+    this.appendStepHeader(position, step.name);
 
     try {
-      this.detectedScanner = await detectScanner(
-        request.rootPath,
-        request.config.scannerMode ?? 'auto'
-      );
-      this.update('detecting', `Scanner seleccionado: ${this.detectedScanner.label}`, this.detectedScanner.label);
-      this.appendLog(`Proyecto detectado mediante ${this.detectedScanner.evidence}.`);
-
-      let warnings = 0;
-      for (const [stepIndex, step] of executionSteps.entries()) {
-        this.ensureNotCancelled();
-        const position = `${stepIndex + 1}/${executionSteps.length}`;
-        this.updateStep(step.id, 'running');
-        this.appendLog('');
-        this.appendLog(PIPELINE_STEP_SEPARATOR);
-        this.appendLog(`[Pipeline ${position}] ▶ INICIO: ${step.name}`);
-        this.appendLog(PIPELINE_STEP_SEPARATOR);
-
-        try {
-          await this.executeAnalysisStep(step, request, this.detectedScanner);
-          this.updateStep(step.id, 'success');
-          this.appendLog(PIPELINE_STEP_SEPARATOR);
-          this.appendLog(`[Pipeline ${position}] ✓ COMPLETADO: ${step.name}`);
-          this.appendLog(PIPELINE_STEP_SEPARATOR);
-        } catch (error) {
-          const message = errorMessage(error);
-          const mayContinue = step.kind !== 'sonar' && step.failurePolicy === 'continue';
-          this.updateStep(step.id, mayContinue ? 'warning' : 'failed', message);
-          this.appendLog(PIPELINE_STEP_SEPARATOR);
-          this.appendLog(
-            mayContinue
-              ? `[Pipeline ${position}] ! FALLÓ Y CONTINÚA: ${step.name}. ${message}`
-              : `[Pipeline ${position}] × FALLÓ Y SE DETIENE: ${step.name}. ${message}`
-          );
-          this.appendLog(PIPELINE_STEP_SEPARATOR);
-          if (!mayContinue) {
-            throw error;
-          }
-          warnings += 1;
-        }
-      }
-
-      this.ensureNotCancelled();
-      this.state = {
-        ...this.state,
-        running: false,
-        phase: 'success',
-        message: warnings > 0
-          ? `Pipeline completado con ${warnings} advertencia(s).`
-          : 'Análisis completado y procesado por SonarQube.',
-        completedAt: new Date().toISOString(),
-        canCancel: false
-      };
-      this.appendLog(
-        warnings > 0
-          ? `Pipeline finalizado con ${warnings} advertencia(s).`
-          : 'Análisis finalizado correctamente.'
-      );
-      this.emit();
-      await this.recordHistorySafely(request);
+      await this.executeAnalysisStep(step, request, scanner);
+      this.updateStep(step.id, 'success');
+      this.appendStepSuccess(position, step.name);
+      return false;
     } catch (error) {
-      const cancelled = this.controller?.signal.aborted;
-      const activeStep = this.state.steps.find(step => step.status === 'running');
-      if (activeStep) {
-        this.updateStep(
-          activeStep.id,
-          cancelled ? 'skipped' : 'failed',
-          cancelled ? 'Análisis cancelado.' : errorMessage(error)
-        );
-      }
-      this.state = {
-        ...this.state,
-        running: false,
-        phase: cancelled ? 'cancelled' : 'error',
-        message: cancelled ? 'Análisis cancelado.' : errorMessage(error),
-        completedAt: new Date().toISOString(),
-        canCancel: false
-      };
-      this.appendLog(cancelled ? 'El análisis fue cancelado por el usuario.' : `ERROR: ${errorMessage(error)}`);
-      this.emit();
-      await this.recordHistorySafely(request);
-      throw error;
-    } finally {
-      this.controller = undefined;
-      this.token = '';
+      return this.handleStepFailure(step, position, error);
     }
+  }
+
+  private appendStepHeader(position: string, stepName: string): void {
+    this.appendLog('');
+    this.appendLog(PIPELINE_STEP_SEPARATOR);
+    this.appendLog(`[Pipeline ${position}] ▶ INICIO: ${stepName}`);
+    this.appendLog(PIPELINE_STEP_SEPARATOR);
+  }
+
+  private appendStepSuccess(position: string, stepName: string): void {
+    this.appendLog(PIPELINE_STEP_SEPARATOR);
+    this.appendLog(`[Pipeline ${position}] ✓ COMPLETADO: ${stepName}`);
+    this.appendLog(PIPELINE_STEP_SEPARATOR);
+  }
+
+  private handleStepFailure(
+    step: AnalysisExecutionStep,
+    position: string,
+    error: unknown
+  ): boolean {
+    const message = errorMessage(error);
+    const mayContinue = step.kind !== 'sonar' && step.failurePolicy === 'continue';
+    this.updateStep(step.id, mayContinue ? 'warning' : 'failed', message);
+    this.appendLog(PIPELINE_STEP_SEPARATOR);
+    const outcome = mayContinue
+      ? 'FALLÓ Y CONTINÚA'
+      : 'FALLÓ Y SE DETIENE';
+    const icon = mayContinue ? '!' : '×';
+    this.appendLog(
+      `[Pipeline ${position}] ${icon} ${outcome}: ${step.name}. ${message}`
+    );
+    this.appendLog(PIPELINE_STEP_SEPARATOR);
+    if (!mayContinue) {
+      throw error;
+    }
+    return true;
+  }
+
+  private async completeAnalysis(
+    request: AnalysisRequest,
+    warnings: number
+  ): Promise<void> {
+    this.ensureNotCancelled();
+    const hasWarnings = warnings > 0;
+    this.state = {
+      ...this.state,
+      running: false,
+      phase: 'success',
+      message: hasWarnings
+        ? `Pipeline completado con ${warnings} advertencia(s).`
+        : 'Análisis completado y procesado por SonarQube.',
+      completedAt: new Date().toISOString(),
+      canCancel: false
+    };
+    this.appendLog(
+      hasWarnings
+        ? `Pipeline finalizado con ${warnings} advertencia(s).`
+        : 'Análisis finalizado correctamente.'
+    );
+    this.emit();
+    await this.recordHistorySafely(request);
+  }
+
+  private async failAnalysis(
+    request: AnalysisRequest,
+    error: unknown
+  ): Promise<void> {
+    const cancelled = this.controller?.signal.aborted === true;
+    const message = cancelled ? 'Análisis cancelado.' : errorMessage(error);
+    const activeStep = this.state.steps.find(step => step.status === 'running');
+    if (activeStep) {
+      this.updateStep(
+        activeStep.id,
+        cancelled ? 'skipped' : 'failed',
+        message
+      );
+    }
+    this.state = {
+      ...this.state,
+      running: false,
+      phase: cancelled ? 'cancelled' : 'error',
+      message,
+      completedAt: new Date().toISOString(),
+      canCancel: false
+    };
+    this.appendLog(
+      cancelled
+        ? 'El análisis fue cancelado por el usuario.'
+        : `ERROR: ${message}`
+    );
+    this.emit();
+    await this.recordHistorySafely(request);
   }
 
   private normalizeExecutionSteps(steps: AnalysisExecutionStep[]): AnalysisExecutionStep[] {
@@ -244,19 +332,8 @@ export class AnalysisService implements vscode.Disposable {
       branch: request.config.branch ?? ''
     };
     const expandedCommand = expandAnalysisPipelineCommand(command, variables);
-    const phase = step.kind === 'build'
-      ? 'building'
-      : step.kind === 'test'
-        ? 'preActions'
-        : 'preActions';
-    this.update(
-      phase,
-      step.kind === 'build'
-        ? 'Compilando el proyecto…'
-        : step.kind === 'test'
-          ? 'Ejecutando tests…'
-          : `Ejecutando ${step.name}…`
-    );
+    const phase = step.kind === 'build' ? 'building' : 'preActions';
+    this.update(phase, executionStepMessage(step));
     await this.execute({
       command: '',
       args: [],
@@ -473,7 +550,7 @@ export class AnalysisService implements vscode.Disposable {
       : path.join(scanner.rootPath, 'mvnw');
     const command = await exists(wrapper)
       ? wrapper
-      : process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
+      : platformExecutable('mvn.cmd', 'mvn');
     const args = [
       'clean',
       'verify',
@@ -498,7 +575,7 @@ export class AnalysisService implements vscode.Disposable {
       : path.join(scanner.rootPath, 'gradlew');
     const command = await exists(wrapper)
       ? wrapper
-      : process.platform === 'win32' ? 'gradle.bat' : 'gradle';
+      : platformExecutable('gradle.bat', 'gradle');
     const launchCommand = process.platform !== 'win32' && command === wrapper ? '/bin/sh' : command;
     const prefixArgs = process.platform !== 'win32' && command === wrapper ? [wrapper] : [];
 
@@ -819,7 +896,10 @@ export class AnalysisService implements vscode.Disposable {
         return;
       }
       if (status === 'FAILED' || status === 'CANCELED') {
-        throw new Error(payload.task?.errorMessage || `La tarea de SonarQube terminó en estado ${status}.`);
+        throw new Error(
+          payload.task?.errorMessage ??
+          `La tarea de SonarQube terminó en estado ${status}.`
+        );
       }
       await delay(CE_POLL_INTERVAL_MS, signal);
     }
@@ -897,6 +977,21 @@ export class AnalysisService implements vscode.Disposable {
       throw new Error('Análisis cancelado.');
     }
   }
+}
+
+
+function executionStepMessage(step: AnalysisExecutionStep): string {
+  if (step.kind === 'build') {
+    return 'Compilando el proyecto…';
+  }
+  if (step.kind === 'test') {
+    return 'Ejecutando tests…';
+  }
+  return `Ejecutando ${step.name}…`;
+}
+
+function platformExecutable(windowsName: string, unixName: string): string {
+  return process.platform === 'win32' ? windowsName : unixName;
 }
 
 export function emptyAnalysisState(): AnalysisState {
