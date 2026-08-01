@@ -35,7 +35,8 @@ import {
 } from './diagnostics';
 import {
   IssueDecorationManager,
-  SonarIssueCodeActionProvider
+  SonarIssueCodeActionProvider,
+  SonarIssueCodeLensProvider
 } from './issueDecorations';
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
@@ -705,13 +706,15 @@ export function activate(context: vscode.ExtensionContext): void {
   issueNavigation = new IssueNavigationManager();
   issueTree = new IssueTreeProvider(issueNavigation);
   notifications = new NotificationManager(context);
+  const issueCodeLensProvider = new SonarIssueCodeLensProvider(issueDecorations);
   context.subscriptions.push(
     diagnostics,
     issueDecorations,
     coverageDecorations,
     flowController,
     issueNavigation,
-    issueTree
+    issueTree,
+    issueCodeLensProvider
   );
 
   dashboardPanel = new DashboardPanel(
@@ -740,6 +743,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(ISSUE_TREE_VIEW_ID, issueTree),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, flowController),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, issueCodeLensProvider),
     vscode.window.registerWebviewViewProvider(
       DASHBOARD_VIEW_ID,
       launcherProvider,

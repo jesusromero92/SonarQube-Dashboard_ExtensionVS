@@ -62,3 +62,59 @@ test('la configuración permite ordenar pasos y elegir la condición de fallo al
   assert.match(ANALYSIS_SCRIPT, /analysisSteps: steps/);
   assert.match(ANALYSIS_SCRIPT, /renderAnalysisStepper/);
 });
+
+test('detecta integraciones predefinidas de seguridad y calidad en proyectos Node', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-integrations-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        scripts: {
+          lint: 'eslint .'
+        },
+        devDependencies: {
+          eslint: '^9.0.0'
+        }
+      })
+    );
+    await fs.writeFile(path.join(root, 'package-lock.json'), '{}');
+    await fs.writeFile(path.join(root, 'Dockerfile'), 'FROM node:20');
+
+    const actions = await detectProjectActions(root);
+    assert.deepEqual(
+      actions.integrations.map(integration => integration.id).sort(),
+      ['dependency-audit', 'eslint', 'trivy']
+    );
+    assert.equal(
+      actions.integrations.find(integration => integration.id === 'eslint')?.command,
+      'npm run lint'
+    );
+    assert.equal(
+      actions.integrations.find(integration => integration.id === 'dependency-audit')?.command,
+      'npm audit --audit-level=high'
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('muestra cada integración detectada una sola vez y la mueve al pipeline', () => {
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="detectedIntegrations"/);
+  assert.ok(
+    CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineStepsEditor"') <
+      CONFIGURATION_PAGE_MARKUP.indexOf('id="detectedIntegrations"')
+  );
+  assert.match(CONFIGURATION_CORE_SCRIPT, /availableDetectedIntegrations\(integrations\)/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /addDetectedIntegrationToPipeline/);
+  assert.match(PIPELINE_EDITOR_SCRIPT, /function normalizedPipelineCommand/);
+  assert.match(PIPELINE_EDITOR_SCRIPT, /function configuredPipelineCommandKeys/);
+  assert.match(PIPELINE_EDITOR_SCRIPT, /function availableDetectedIntegrations/);
+  assert.match(
+    PIPELINE_EDITOR_SCRIPT,
+    /syncConfigurationPipelineFields[\s\S]*renderDetectedIntegrations\(currentConfig\.detectedIntegrations\)/
+  );
+  assert.match(
+    PIPELINE_EDITOR_SCRIPT,
+    /availableDetectedIntegrations\(currentConfig\.detectedIntegrations\)[\s\S]*integration-.*integration\.id/
+  );
+});

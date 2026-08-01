@@ -455,6 +455,7 @@ export class DashboardPanel {
           testCommand: '',
           detectedBuildCommand: '',
           detectedTestCommand: '',
+          detectedIntegrations: [],
           customScannerCommand: '',
           preAnalysisCommands: '',
           postAnalysisCommands: '',
@@ -504,6 +505,7 @@ export class DashboardPanel {
         ...config,
         detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
         detectedTestCommand: detectedProjectActions.testCommand ?? '',
+          detectedIntegrations: detectedProjectActions.integrations,
         projectKey: connectionDraftDirty ? '' : config.projectKey,
         projectName: connectionDraftDirty ? '' : config.projectName,
         hasToken: connectionDraftDirty ? false : config.hasToken,
@@ -789,6 +791,7 @@ export class DashboardPanel {
           testCommand: message.testCommand ?? '',
           detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
           detectedTestCommand: detectedProjectActions.testCommand ?? '',
+          detectedIntegrations: detectedProjectActions.integrations,
           preAnalysisCommands: message.preAnalysisCommands ?? '',
           postAnalysisCommands: message.postAnalysisCommands ?? ''
         }
@@ -901,6 +904,7 @@ export class DashboardPanel {
           testCommand: message.testCommand ?? '',
           detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
           detectedTestCommand: detectedProjectActions.testCommand ?? '',
+          detectedIntegrations: detectedProjectActions.integrations,
           customScannerCommand: message.customScannerCommand ?? '',
           preAnalysisCommands: message.preAnalysisCommands ?? '',
           postAnalysisCommands: message.postAnalysisCommands ?? '',

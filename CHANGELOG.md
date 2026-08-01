@@ -4,6 +4,15 @@ Todos los cambios relevantes de SonarQube Dashboard se documentarán en este arc
 
 All notable changes to SonarQube Dashboard will be documented in this file.
 
+## [0.20.1] - 2026-08-01
+
+### Añadido / Added
+
+- Información de SonarQube dentro del editor mediante CodeLens por defecto y Security Hotspot, manteniendo los hovers y acciones rápidas existentes.
+- SonarQube information inside the editor through CodeLens for issues and Security Hotspots, alongside the existing hovers and quick actions.
+- Integraciones predefinidas detectadas para **npm/pnpm/yarn audit**, **ESLint**, **Semgrep**, **Trivy**, **Snyk** y **OWASP Dependency-Check**, disponibles como pasos del pipeline.
+- Detected predefined integrations for **npm/pnpm/yarn audit**, **ESLint**, **Semgrep**, **Trivy**, **Snyk**, and **OWASP Dependency-Check**, available as pipeline steps.
+
 ## [0.20.0] - 2026-07-31
 
 - Pipeline configurable de etapas antes y después del análisis para ejecutar compilaciones, auditorías y otras herramientas de seguridad.

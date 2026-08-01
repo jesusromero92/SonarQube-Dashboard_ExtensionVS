@@ -184,6 +184,45 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       flex: 0 0 auto;
       white-space: nowrap;
     }
+    .detected-integrations {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .detected-integration-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editor-background);
+    }
+    .detected-integration-content {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .detected-integration-content > span {
+      color: var(--vscode-descriptionForeground);
+    }
+    .detected-integration-content > code {
+      overflow: hidden;
+      color: var(--vscode-textLink-foreground);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .detected-integration-card > button {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .detected-integration-empty {
+      padding: 10px 12px;
+      border: 1px dashed var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+    }
+
     .pipeline-step-list {
       display: grid;
       gap: 8px;
@@ -401,6 +440,8 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       }
     }
     @media (max-width: 760px) {
+      .detected-integration-card { align-items: stretch; flex-direction: column; }
+      .detected-integration-card > button { width: 100%; }
       .create-component-grid { grid-template-columns: 1fr; }
       .confirmation-details dt { width: 78px; flex-basis: 78px; }
       .analysis-panel { align-items: flex-start; flex-direction: column; }

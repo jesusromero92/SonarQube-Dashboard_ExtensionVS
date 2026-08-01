@@ -52,6 +52,30 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       ];
     }
 
+    function normalizedPipelineCommand(command) {
+      return String(command || '')
+        .trim()
+        .replace(/\\s+/g, ' ')
+        .toLocaleLowerCase();
+    }
+
+    function configuredPipelineCommandKeys() {
+      return new Set(
+        configuredPipelineSteps()
+          .map(step => normalizedPipelineCommand(step.command))
+          .filter(Boolean)
+      );
+    }
+
+    function availableDetectedIntegrations(integrations) {
+      const configuredCommands = configuredPipelineCommandKeys();
+      return (Array.isArray(integrations) ? integrations : []).filter(
+        integration => !configuredCommands.has(
+          normalizedPipelineCommand(integration?.command)
+        )
+      );
+    }
+
     function pipelineSelect(className, ariaLabel, options, value, disabled = false) {
       const control = createSelectDropdownControl({
         ariaLabel,
@@ -134,6 +158,7 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       const steps = readConfigurationPipelineRows();
       elements.preAnalysisCommands.value = serializePipelineSteps(steps);
       elements.postAnalysisCommands.value = '';
+      renderDetectedIntegrations(currentConfig.detectedIntegrations);
     }
 
     function createConfigurationPipelineRow(step) {
@@ -219,6 +244,23 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       syncConfigurationPipelineFields();
     }
 
+    function addDetectedIntegrationToPipeline(integration) {
+      if (!integration?.command) return;
+      elements.pipelineStepsEditor.classList.remove('is-empty');
+      const row = createConfigurationPipelineRow({
+        id: nextPipelineStepId('integration'),
+        name: integration.name || translateLocalizationValue('Integración predefinida'),
+        command: integration.command,
+        kind: 'custom',
+        failurePolicy: integration.failurePolicy === 'stop' ? 'stop' : 'continue',
+        enabled: true
+      });
+      elements.pipelineStepsEditor.appendChild(row);
+      syncConfigurationPipelineFields();
+      row.scrollIntoView({ block: 'nearest' });
+      row.querySelector('.pipeline-step-command')?.focus();
+    }
+
     function sonarAnalysisRunStep() {
       return {
         id: 'sonarqube-analysis',
@@ -265,7 +307,18 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
         ...configured.map((step, index) => ({
           ...step,
           templateId: 'custom-' + index
-        }))
+        })),
+        ...availableDetectedIntegrations(currentConfig.detectedIntegrations)
+          .map(integration => ({
+            id: 'integration-' + integration.id,
+            templateId: 'integration-' + integration.id,
+            name: integration.name,
+            kind: 'custom',
+            command: integration.command,
+            failurePolicy: integration.failurePolicy === 'stop' ? 'stop' : 'continue',
+            enabled: true,
+            unavailable: false
+          }))
       ];
     }
 

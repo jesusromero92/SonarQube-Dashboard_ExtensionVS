@@ -21,7 +21,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 ## Main features
 
 - Run repository analysis from VS Code with automatic scanner detection.
-- Configurable analysis pipeline with build, test, and custom steps ordered through drag & drop.
+- Configurable analysis pipeline with build, test, predefined integration, and custom steps ordered through drag & drop.
 - Support for Maven and Gradle projects using Java or Kotlin, SonarScanner for .NET for C#/VB.NET/F#, SonarScanner for NPM for projects containing `package.json`, and SonarScanner CLI through Docker for generic projects.
 - Manual selection of Maven, Gradle, .NET, NPM, Docker, or a custom command.
 - Automatic synchronization when opening an already linked project.
@@ -34,7 +34,8 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Quality Gate status and full condition details.
 - Filterable issue table with sortable headers and direct navigation to source code.
 - Issue lifecycle management without leaving VS Code: accept, false positive, reopen, assignment, comments, history, and current assignee.
-- Security execution-flow navigation with source, intermediate steps, sink, secondary locations, CodeLens, and editor decorations.
+- In-editor information through decorations, hovers, quick actions, and CodeLens for issues and Security Hotspots.
+- Security execution-flow navigation with source, intermediate steps, sink, secondary locations, and CodeLens.
 - Coverage and duplication view with current Overall/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and Overall historical trends grouped by day, week, or month.
 - Keyboard navigation, status-bar counter, and an issue explorer grouped by file, rule, or severity.
 - Automatic regression notifications for critical issues, Quality Gate failures, issue increases, new hotspots, and completed analyses.
@@ -122,7 +123,7 @@ Only issues whose SonarQube component matches a file in the open folder are incl
 
 The header remains fixed while only the table body scrolls vertically.
 
-### In-editor indicators and issue details
+### In-editor indicators, CodeLens, and issue details
 
 ![Finding icons and details inside the editor](docs/images/details.png)
 
@@ -130,6 +131,7 @@ When a file containing findings is opened, the extension marks the affected line
 
 - the gutter, to the left of the line number, displays the same icon and color used in the summary for **Bug**, **Code Smell**, **Vulnerability**, and **Security Hotspot**;
 - the affected line is highlighted with the corresponding finding-type color and a marker is added to the editor overview ruler;
+- a CodeLens above the affected line shows severity, rule, and direct access to the details;
 - hovering over the icon displays the description, rule, type, severity or priority, status, resolution, file, line, project, component, identifier, and available impacts;
 - the tooltip link opens the complete issue or Security Hotspot details in **SonarQube Dashboard**.
 
@@ -311,6 +313,19 @@ Selecting a hotspot loads its details and opens a dialog containing:
 - direct access to the file.
 
 The extension loads hotspot details on demand so they do not delay the initial dashboard load.
+
+## Predefined integrations
+
+Version 0.20.1 detects known project tools and offers them as reusable pipeline steps. Depending on the available files, scripts, and dependencies, it can propose:
+
+- dependency auditing with `npm audit`, `pnpm audit`, or `yarn audit`;
+- ESLint;
+- Semgrep;
+- Trivy;
+- Snyk;
+- OWASP Dependency-Check for Maven or Gradle.
+
+Detected integrations appear under **Configuration → Analysis pipeline**. They can be added to the persistent pipeline or selected directly while preparing a run. Their command and failure policy remain editable.
 
 ## Configurable analysis pipeline
 

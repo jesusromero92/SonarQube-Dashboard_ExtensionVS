@@ -45,6 +45,56 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.detectedTestCommandHint.textContent = detectedTests
         ? detectedPrefix + detectedTests + detectedSuffix
         : 'No se detectó un comando de tests. Puedes introducirlo manualmente.';
+      renderDetectedIntegrations(config.detectedIntegrations);
+    }
+
+    function renderDetectedIntegrations(integrations) {
+      elements.detectedIntegrations.textContent = '';
+      const detected = availableDetectedIntegrations(integrations);
+      elements.detectedIntegrations.classList.toggle('is-empty', detected.length === 0);
+
+      if (detected.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'detected-integration-empty';
+        empty.textContent = translateLocalizationValue(
+          'No se han detectado integraciones predefinidas para este proyecto.'
+        );
+        elements.detectedIntegrations.appendChild(empty);
+        return;
+      }
+
+      for (const integration of detected) {
+        const card = document.createElement('article');
+        card.className = 'detected-integration-card';
+
+        const content = document.createElement('div');
+        content.className = 'detected-integration-content';
+
+        const title = document.createElement('strong');
+        title.textContent = integration.name || integration.id;
+
+        const description = document.createElement('span');
+        description.textContent = translateLocalizationValue(
+          integration.description || ''
+        );
+
+        const metadata = document.createElement('code');
+        metadata.textContent = integration.command || '';
+        metadata.title = integration.evidence || '';
+
+        content.append(title, description, metadata);
+
+        const add = document.createElement('button');
+        add.className = 'secondary';
+        add.type = 'button';
+        add.textContent = translateLocalizationValue('Añadir al pipeline');
+        add.addEventListener('click', () => {
+          addDetectedIntegrationToPipeline(integration);
+        });
+
+        card.append(content, add);
+        elements.detectedIntegrations.appendChild(card);
+      }
     }
 
     function canSynchronizeConfiguration() {

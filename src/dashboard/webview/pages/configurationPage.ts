@@ -155,6 +155,15 @@ ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'a
                     <textarea id="postAnalysisCommands" hidden aria-hidden="true"></textarea>
                     <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>.</div>
                   </div>
+                  <div class="field full-width-field">
+                    <div class="detected-integrations-heading">
+                      <div>
+                        <label>Integraciones predefinidas detectadas</label>
+                        <div class="hint">Añade al pipeline herramientas compatibles detectadas en el proyecto.</div>
+                      </div>
+                    </div>
+                    <div id="detectedIntegrations" class="detected-integrations" aria-label="Integraciones predefinidas detectadas"></div>
+                  </div>
                 </div>
                 <div class="pipeline-save-row">
                   <span id="pipelineSaveStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>

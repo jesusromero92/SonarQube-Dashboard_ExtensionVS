@@ -22,7 +22,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 ## Características principales
 
 - Análisis del repositorio desde VS Code con detección automática del scanner.
-- Pipeline de análisis configurable con compilación, tests y pasos personalizados ordenables mediante drag & drop.
+- Pipeline de análisis configurable con compilación, tests, integraciones predefinidas y pasos personalizados ordenables mediante drag & drop.
 - Compatibilidad con Maven/Gradle para Java y Kotlin, SonarScanner for .NET para C#/VB.NET/F#, SonarScanner for NPM para proyectos con `package.json` y SonarScanner CLI en Docker para proyectos genéricos.
 - Selección manual de Maven, Gradle, .NET, NPM, Docker o un comando personalizado.
 - Sincronización automática al abrir un proyecto ya vinculado.
@@ -35,7 +35,8 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Estado y detalle completo del Quality Gate.
 - Tabla de defectos con filtro, ordenación por cabeceras y navegación al código.
 - Gestión del ciclo de vida del defecto sin salir de VS Code: aceptar, falso positivo, reapertura, asignación, comentarios, historial y responsable actual.
-- Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias, CodeLens y decoraciones en el editor.
+- Información dentro del editor mediante decoraciones, hovers, acciones rápidas y CodeLens para defectos y Security Hotspots.
+- Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias y CodeLens.
 - Vista de cobertura y duplicación con métricas actuales de Overall/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico de Overall agrupable por día, semana o mes.
 - Navegación mediante atajos, contador en la barra de estado y explorador agrupado por archivo, regla o severidad.
 - Notificaciones automáticas de regresiones, fallos del Quality Gate, nuevos hotspots y análisis completados.
@@ -123,7 +124,7 @@ Solo se incluyen los issues cuyo componente de SonarQube coincide con un archivo
 
 El encabezado permanece fijo y únicamente el cuerpo de la tabla tiene desplazamiento vertical.
 
-### Indicadores y detalle dentro del editor
+### Indicadores, CodeLens y detalle dentro del editor
 
 ![Iconos y detalle de los hallazgos dentro del editor](docs/images/details.png)
 
@@ -131,6 +132,7 @@ Al abrir un archivo con hallazgos, la extensión marca directamente las líneas 
 
 - muestra en el gutter, a la izquierda del número de línea, el mismo icono y color utilizados en el resumen para **Bug**, **Code Smell**, **Vulnerability** y **Security Hotspot**;
 - resalta la línea con el color correspondiente al tipo de hallazgo y añade una marca en la regla de visión general del editor;
+- muestra un CodeLens sobre la línea afectada con severidad, regla y acceso directo al detalle;
 - al situar el puntero sobre el icono muestra la descripción, regla, tipo, severidad o prioridad, estado, resolución, archivo, línea, proyecto, componente, identificador e impactos disponibles;
 - el enlace del tooltip abre el detalle completo del defecto o Security Hotspot en **SonarQube Dashboard**.
 
@@ -312,6 +314,19 @@ Al pulsar un hotspot se consulta su detalle y se abre un modal con:
 - acceso directo al archivo.
 
 La extensión obtiene el detalle bajo demanda para no retrasar la carga inicial del dashboard.
+
+## Integraciones predefinidas
+
+La versión 0.20.1 detecta herramientas conocidas del proyecto y las ofrece como pasos reutilizables del pipeline. Según los archivos, scripts y dependencias disponibles, puede proponer:
+
+- auditoría de dependencias con `npm audit`, `pnpm audit` o `yarn audit`;
+- ESLint;
+- Semgrep;
+- Trivy;
+- Snyk;
+- OWASP Dependency-Check para Maven o Gradle.
+
+Las integraciones detectadas aparecen en **Configuración → Pipeline de análisis**. Desde allí pueden añadirse al pipeline persistente o seleccionarse directamente al preparar una ejecución. El comando y la política de fallo siguen siendo editables.
 
 ## Pipeline de análisis configurable
 

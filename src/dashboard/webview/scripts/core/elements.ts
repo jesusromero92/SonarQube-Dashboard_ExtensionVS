@@ -49,6 +49,7 @@ const DASHBOARD_ELEMENT_IDS = [
   'testCommand',
   'detectedBuildCommandHint',
   'detectedTestCommandHint',
+  'detectedIntegrations',
   'customScannerField',
   'customScannerCommand',
   'preAnalysisCommands',

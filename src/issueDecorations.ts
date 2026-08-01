@@ -131,6 +131,8 @@ export class IssueDecorationManager implements vscode.Disposable {
   private readonly hotspotsByUri = new Map<string, DashboardHotspot[]>();
   private readonly hotspotsByKey = new Map<string, DashboardHotspot>();
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly dataChangedEmitter = new vscode.EventEmitter<void>();
+  readonly onDidChangeData = this.dataChangedEmitter.event;
 
   constructor(extensionUri: vscode.Uri) {
     for (const type of DECORATED_ISSUE_TYPES) {
@@ -188,6 +190,7 @@ export class IssueDecorationManager implements vscode.Disposable {
     }
 
     this.refreshVisibleEditors();
+    this.dataChangedEmitter.fire();
   }
 
   getIssue(key: string): DashboardIssue | undefined {
@@ -196,6 +199,14 @@ export class IssueDecorationManager implements vscode.Disposable {
 
   getHotspot(key: string): DashboardHotspot | undefined {
     return this.hotspotsByKey.get(key);
+  }
+
+  getIssuesForUri(uri: vscode.Uri): readonly DashboardIssue[] {
+    return this.issuesByUri.get(uri.toString()) ?? [];
+  }
+
+  getHotspotsForUri(uri: vscode.Uri): readonly DashboardHotspot[] {
+    return this.hotspotsByUri.get(uri.toString()) ?? [];
   }
 
   getHotspotsAt(
@@ -214,10 +225,12 @@ export class IssueDecorationManager implements vscode.Disposable {
     this.hotspotsByUri.clear();
     this.hotspotsByKey.clear();
     this.refreshVisibleEditors();
+    this.dataChangedEmitter.fire();
   }
 
   refreshLanguage(): void {
     this.refreshVisibleEditors();
+    this.dataChangedEmitter.fire();
   }
 
   dispose(): void {
@@ -228,6 +241,7 @@ export class IssueDecorationManager implements vscode.Disposable {
     for (const decorationType of this.decorationTypes.values()) {
       decorationType.dispose();
     }
+    this.dataChangedEmitter.dispose();
   }
 
   private refreshVisibleEditors(): void {
@@ -277,6 +291,83 @@ export class IssueDecorationManager implements vscode.Disposable {
         editor.setDecorations(decorationType, grouped.get(type) ?? []);
       }
     }
+  }
+}
+
+
+export class SonarIssueCodeLensProvider
+implements vscode.CodeLensProvider, vscode.Disposable {
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+  private readonly subscription: vscode.Disposable;
+  readonly onDidChangeCodeLenses = this.changeEmitter.event;
+
+  constructor(private readonly decorations: IssueDecorationManager) {
+    this.subscription = decorations.onDidChangeData(() => {
+      this.changeEmitter.fire();
+    });
+  }
+
+  provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+    const lenses: vscode.CodeLens[] = [];
+    for (const issue of this.decorations.getIssuesForUri(document.uri)) {
+      const line = clampLine(document, issue.line);
+      const title = `${severityCodicon(issue.severity)} ${issue.severity} · ${issue.ruleName || issue.rule}`;
+      const lens = new vscode.CodeLens(
+        new vscode.Range(line, 0, line, 0),
+        {
+          command: DASHBOARD_COMMANDS.showIssueDetail,
+          title,
+          tooltip: issue.message,
+          arguments: [issue.key]
+        }
+      );
+      lenses.push(lens);
+    }
+
+    for (const hotspot of this.decorations.getHotspotsForUri(document.uri)) {
+      const line = clampLine(document, hotspot.line);
+      const priority = hotspot.priority || 'UNKNOWN';
+      lenses.push(new vscode.CodeLens(
+        new vscode.Range(line, 0, line, 0),
+        {
+          command: DASHBOARD_COMMANDS.showHotspotDetail,
+          title: `$(flame) ${priority} · Security Hotspot`,
+          tooltip: hotspot.message,
+          arguments: [hotspot.key]
+        }
+      ));
+    }
+
+    return lenses.sort((left, right) =>
+      left.range.start.line - right.range.start.line
+    );
+  }
+
+  dispose(): void {
+    this.subscription.dispose();
+    this.changeEmitter.dispose();
+  }
+}
+
+function clampLine(document: vscode.TextDocument, oneBasedLine: number): number {
+  return Math.min(
+    Math.max(0, oneBasedLine - 1),
+    Math.max(0, document.lineCount - 1)
+  );
+}
+
+function severityCodicon(severity: string): string {
+  switch (severity.trim().toUpperCase()) {
+    case 'BLOCKER':
+    case 'CRITICAL':
+      return '$(error)';
+    case 'MAJOR':
+      return '$(warning)';
+    case 'MINOR':
+    case 'INFO':
+      return '$(info)';
+    default:
+      return '$(circle-outline)';
   }
 }
 
