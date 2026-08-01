@@ -10,7 +10,7 @@ import {
 
 export type RefreshCallback = (source?: 'sync' | 'analysis') => Promise<RefreshSummary>;
 export type ClearCallback = () => void;
-export type DashboardPage = 'data' | 'configuration';
+export type DashboardPage = 'data' | 'configuration' | 'history' | 'diagnostics';
 
 export interface DashboardWebviewMessage {
   type?: string;
@@ -32,6 +32,10 @@ export interface DashboardWebviewMessage {
   runPreAnalysisStages?: boolean;
   runPostAnalysisStages?: boolean;
   analysisSteps?: AnalysisExecutionStep[];
+  templateName?: string;
+  templateDescription?: string;
+  templateId?: string;
+  executionId?: string;
   language?: DashboardLanguage;
   fileUri?: string;
   line?: number;

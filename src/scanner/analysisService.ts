@@ -6,6 +6,7 @@ import {
   expandAnalysisPipelineCommand,
   parseAnalysisPipeline
 } from './pipeline';
+import { PipelineHistoryStore } from './history';
 import { ProcessRunner } from './processRunner';
 import {
   AnalysisExecutionStep,
@@ -39,6 +40,7 @@ const DEFAULT_EXCLUSIONS = [
 
 export class AnalysisService implements vscode.Disposable {
   private readonly runner = new ProcessRunner();
+  private readonly history: PipelineHistoryStore;
   private controller: AbortController | undefined;
   private state: AnalysisState = emptyAnalysisState();
   private detectedScanner: DetectedScanner | undefined;
@@ -47,7 +49,9 @@ export class AnalysisService implements vscode.Disposable {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly onStateChanged: (state: AnalysisState) => void
-  ) {}
+  ) {
+    this.history = new PipelineHistoryStore(context);
+  }
 
   getState(): AnalysisState {
     return cloneState(this.state);
@@ -55,6 +59,14 @@ export class AnalysisService implements vscode.Disposable {
 
   isRunning(): boolean {
     return this.state.running;
+  }
+
+  listHistory(rootPath: string) {
+    return this.history.list(rootPath);
+  }
+
+  clearHistory(rootPath: string) {
+    return this.history.clear(rootPath);
   }
 
   async analyze(request: AnalysisRequest): Promise<void> {
@@ -136,6 +148,7 @@ export class AnalysisService implements vscode.Disposable {
           : 'Análisis finalizado correctamente.'
       );
       this.emit();
+      await this.recordHistorySafely(request);
     } catch (error) {
       const cancelled = this.controller?.signal.aborted;
       const activeStep = this.state.steps.find(step => step.status === 'running');
@@ -156,6 +169,7 @@ export class AnalysisService implements vscode.Disposable {
       };
       this.appendLog(cancelled ? 'El análisis fue cancelado por el usuario.' : `ERROR: ${errorMessage(error)}`);
       this.emit();
+      await this.recordHistorySafely(request);
       throw error;
     } finally {
       this.controller = undefined;
@@ -253,16 +267,51 @@ export class AnalysisService implements vscode.Disposable {
     });
   }
 
+
+  private async recordHistorySafely(request: AnalysisRequest): Promise<void> {
+    try {
+      await this.history.record(request, this.state);
+    } catch (error) {
+      console.error('[SonarQube Dashboard] pipeline history could not be saved', error);
+    }
+  }
+
   private updateStep(
     id: string,
     status: AnalysisState['steps'][number]['status'],
     message?: string
   ): void {
+    const timestamp = new Date().toISOString();
     this.state = {
       ...this.state,
-      steps: this.state.steps.map(step =>
-        step.id === id ? { ...step, status, message } : step
-      )
+      steps: this.state.steps.map(step => {
+        if (step.id !== id) return step;
+        if (status === 'running') {
+          return {
+            ...step,
+            status,
+            message,
+            startedAt: step.startedAt ?? timestamp,
+            completedAt: undefined,
+            durationMs: undefined
+          };
+        }
+        if (status === 'success' || status === 'warning' || status === 'failed' || status === 'skipped') {
+          const startedAt = step.startedAt ?? timestamp;
+          return {
+            ...step,
+            status,
+            message,
+            startedAt,
+            completedAt: timestamp,
+            durationMs: Math.max(
+              0,
+              new Date(timestamp).getTime() - new Date(startedAt).getTime()
+            )
+          };
+        }
+        return { ...step, status, message };
+      })
     };
     this.emit();
   }

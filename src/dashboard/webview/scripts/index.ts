@@ -15,6 +15,8 @@ import { ISSUE_MANAGEMENT_SCRIPT } from './features/issues';
 import { COVERAGE_SCRIPT } from './coverage';
 import { SELECT_DROPDOWN_SCRIPT } from './ui/selectDropdown';
 import { CREATE_COMPONENT_DIALOG_SCRIPT } from './modals/createComponentDialog';
+import { DIAGNOSTICS_SCRIPT } from './diagnostics';
+import { HISTORY_SCRIPT } from './history';
 
 export function getDashboardScript(language: DashboardLanguage): string {
   return [
@@ -30,6 +32,8 @@ export function getDashboardScript(language: DashboardLanguage): string {
     RANKING_TABLES_SCRIPT,
     CHARTS_SCRIPT,
     COVERAGE_SCRIPT,
+    HISTORY_SCRIPT,
+    DIAGNOSTICS_SCRIPT,
     PIPELINE_EDITOR_SCRIPT,
     ANALYSIS_SCRIPT,
     RENDER_SCRIPT,

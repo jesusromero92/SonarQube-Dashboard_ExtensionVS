@@ -72,6 +72,40 @@ import {
   SonarUsersResponse
 } from './types';
 
+export interface SonarRequestFailure {
+  method: 'GET' | 'POST';
+  endpoint: string;
+  occurredAt: string;
+  status?: number;
+  message: string;
+}
+
+export interface SonarServerProbe {
+  durationMs: number;
+  status: string;
+}
+
+let lastSonarRequestFailure: SonarRequestFailure | undefined;
+
+export function getLastSonarRequestFailure(): SonarRequestFailure | undefined {
+  return lastSonarRequestFailure ? { ...lastSonarRequestFailure } : undefined;
+}
+
+function rememberSonarRequestFailure(
+  method: 'GET' | 'POST',
+  url: URL,
+  error: unknown,
+  status?: number
+): void {
+  lastSonarRequestFailure = {
+    method,
+    endpoint: url.pathname,
+    occurredAt: new Date().toISOString(),
+    status,
+    message: error instanceof Error ? error.message : String(error)
+  };
+}
+
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.trim().replace(/\/+$/, '');
 }
@@ -85,24 +119,32 @@ async function requestJson<T>(
   token: string,
   signal?: AbortSignal
 ): Promise<T> {
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    signal
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      signal
+    });
+  } catch (error) {
+    rememberSonarRequestFailure('GET', url, error);
+    throw error;
+  }
 
   if (!response.ok) {
     const body = await response.text();
     const detail = body.trim().slice(0, 500);
-    throw new SonarHttpError(
+    const error = new SonarHttpError(
       response.status,
       `SonarQube respondió ${response.status} ${response.statusText}` +
         (detail ? `: ${detail}` : ''),
       detail
     );
+    rememberSonarRequestFailure('GET', url, error, response.status);
+    throw error;
   }
 
   return (await response.json()) as T;
@@ -120,24 +162,32 @@ async function requestForm<T>(
       body.set(key, value);
     }
   }
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body,
-    signal
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body,
+      signal
+    });
+  } catch (error) {
+    rememberSonarRequestFailure('POST', url, error);
+    throw error;
+  }
   if (!response.ok) {
     const detail = (await response.text()).trim().slice(0, 500);
-    throw new SonarHttpError(
+    const error = new SonarHttpError(
       response.status,
       `SonarQube respondió ${response.status} ${response.statusText}` +
         (detail ? `: ${detail}` : ''),
       detail
     );
+    rememberSonarRequestFailure('POST', url, error, response.status);
+    throw error;
   }
   const text = await response.text();
   return (text ? JSON.parse(text) : {}) as T;
@@ -216,6 +266,21 @@ export async function fetchSonarCompatibilityInfo(
     fallbackApplied: appliedProfiles.some(profile => profile !== info.profile)
   };
 }
+
+export async function probeSonarServer(
+  serverUrl: string,
+  token: string,
+  signal?: AbortSignal
+): Promise<SonarServerProbe> {
+  const url = new URL(`${normalizeServerUrl(serverUrl)}/api/system/status`);
+  const startedAt = Date.now();
+  const payload = await requestJson<{ status?: string }>(url, token, signal);
+  return {
+    durationMs: Math.max(0, Date.now() - startedAt),
+    status: payload.status ?? 'UP'
+  };
+}
+
 
 async function requestCompatibleSearch<T>(
   config: FolderSonarConfig,
@@ -298,12 +363,6 @@ export async function checkAnalysisPermission(
     }
 
     const detail = (await response.text()).trim();
-    if (response.status === 401 || response.status === 403) {
-      return 'denied';
-    }
-    if (/not authorized|not authorised|unauthorized|forbidden|insufficient privileges/i.test(detail)) {
-      return 'denied';
-    }
     if (
       response.status === 404 &&
       /no cache|cache (?:data )?is (?:empty|not available)|no cached data/i.test(detail)
@@ -312,10 +371,25 @@ export async function checkAnalysisPermission(
       // confirma que SonarQube aceptó el permiso Execute Analysis.
       return 'allowed';
     }
+
+    const error = new SonarHttpError(
+      response.status,
+      `SonarQube respondió ${response.status} ${response.statusText}` +
+        (detail ? `: ${detail.slice(0, 500)}` : ''),
+      detail.slice(0, 500)
+    );
+    rememberSonarRequestFailure('GET', url, error, response.status);
+    if (response.status === 401 || response.status === 403) {
+      return 'denied';
+    }
+    if (/not authorized|not authorised|unauthorized|forbidden|insufficient privileges/i.test(detail)) {
+      return 'denied';
+    }
   } catch (error) {
     if (signal?.aborted) {
       throw error;
     }
+    rememberSonarRequestFailure('GET', url, error);
   }
 
   // SonarQube anterior a 9.4, proxies o endpoints deshabilitados no deben

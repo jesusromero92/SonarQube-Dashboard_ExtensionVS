@@ -20,6 +20,40 @@ export interface AnalysisExecutionStep {
 export interface AnalysisStepProgress extends AnalysisExecutionStep {
   status: AnalysisStepStatus;
   message?: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+}
+
+export type PipelineRunHistoryStatus = 'running' | 'success' | 'warning' | 'failed' | 'cancelled';
+
+export interface PipelineRunHistoryStep {
+  id: string;
+  name: string;
+  kind: AnalysisStepKind;
+  command?: string;
+  failurePolicy: AnalysisFailurePolicy;
+  status: AnalysisStepStatus;
+  message?: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+}
+
+export interface PipelineRunHistoryEntry {
+  id: string;
+  rootPath: string;
+  projectKey: string;
+  projectName: string;
+  branch: string;
+  scanner: string;
+  status: PipelineRunHistoryStatus;
+  message: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  steps: PipelineRunHistoryStep[];
+  log: string[];
 }
 
 export type AnalysisPhase =

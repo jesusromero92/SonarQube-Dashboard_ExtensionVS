@@ -1,4 +1,17 @@
 export const DASHBOARD_EVENTS_SCRIPT = `
+
+    elements.refreshHistory.addEventListener('click', () => {
+      elements.historyLoading.hidden = false;
+      vscode.postMessage({ type: 'loadPipelineHistory', folderUri: currentFolderUri });
+    });
+    elements.refreshDiagnostics.addEventListener('click', () => {
+      elements.diagnosticsLoading.hidden = false;
+      elements.diagnosticsContent.hidden = true;
+      vscode.postMessage({ type: 'loadDiagnostics', folderUri: currentFolderUri });
+    });
+    elements.copyDiagnostics.addEventListener('click', () => {
+      vscode.postMessage({ type: 'copyDiagnostics', folderUri: currentFolderUri });
+    });
     elements.refresh.addEventListener('click', requestRefresh);
     elements.retryUnavailable.addEventListener('click', requestRefresh);
     elements.retryStaleSync.addEventListener('click', requestRefresh);

@@ -44,5 +44,6 @@
   "command.showCoverage": "SonarQube Dashboard: Show coverage and duplications",
   "configuration.notifications.enabled": "Shows notifications when critical issues appear, the Quality Gate fails, issue count increases, hotspots appear, or an analysis finishes.",
   "configuration.notifications.significantIncreasePercent": "Percentage increase required to consider issue growth significant.",
-  "configuration.notifications.significantIncreaseMinimum": "Minimum number of new issues required before showing the increase notification."
+  "configuration.notifications.significantIncreaseMinimum": "Minimum number of new issues required before showing the increase notification.",
+  "views.pipelineExecutions.name": "Pipeline executions"
 }

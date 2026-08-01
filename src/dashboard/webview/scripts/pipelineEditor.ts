@@ -261,6 +261,301 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       row.querySelector('.pipeline-step-command')?.focus();
     }
 
+    function pipelineTemplateStepSources() {
+      const sources = [];
+      const buildCommand = effectiveProjectCommand(
+        elements.buildCommand.value,
+        currentConfig.detectedBuildCommand
+      );
+      const testCommand = effectiveProjectCommand(
+        elements.testCommand.value,
+        currentConfig.detectedTestCommand
+      );
+
+      if (buildCommand) {
+        sources.push({
+          sourceId: 'build',
+          id: 'build',
+          name: translateLocalizationValue('Compilar el proyecto'),
+          kind: 'build',
+          command: buildCommand,
+          failurePolicy: 'stop',
+          enabled: true
+        });
+      }
+      if (testCommand) {
+        sources.push({
+          sourceId: 'tests',
+          id: 'tests',
+          name: translateLocalizationValue('Ejecutar tests'),
+          kind: 'test',
+          command: testCommand,
+          failurePolicy: 'stop',
+          enabled: true
+        });
+      }
+
+      for (const [index, step] of readConfigurationPipelineRows().entries()) {
+        if (!step.command) continue;
+        sources.push({
+          ...step,
+          sourceId: 'custom-' + index
+        });
+      }
+      return sources;
+    }
+
+    function matchingPipelineTemplateSource(step, sources) {
+      if (step.kind === 'build') {
+        return sources.find(source => source.kind === 'build');
+      }
+      if (step.kind === 'test') {
+        return sources.find(source => source.kind === 'test');
+      }
+      return sources.find(source =>
+        source.kind === 'custom' &&
+        normalizedPipelineCommand(source.command) ===
+          normalizedPipelineCommand(step.command)
+      );
+    }
+
+    function pipelineTemplateSourceOptions(step) {
+      const sources = pipelineTemplateStepSources();
+      let selected = step ? matchingPipelineTemplateSource(step, sources) : undefined;
+      if (step && step.kind !== 'sonar' && !selected && step.command) {
+        selected = {
+          ...step,
+          sourceId: 'embedded-' + nextPipelineStepId('template-source')
+        };
+        sources.push(selected);
+      }
+      return {
+        sources,
+        selectedId: selected?.sourceId || ''
+      };
+    }
+
+    function applyPipelineTemplateStepSource(row, source, policy) {
+      const command = row.querySelector('.pipeline-step-command');
+      row.dataset.stepKind = source?.kind || '';
+      row.dataset.stepName = source?.name || '';
+      row.dataset.sourceId = source?.sourceId || '';
+      command.value = source?.command || '';
+      policy.select.value = source?.failurePolicy === 'continue' ? 'continue' : 'stop';
+      policy.select.disabled = !source;
+      refreshSelectDropdown(policy.select);
+      updatePipelineTemplateActions();
+    }
+
+    function createPipelineTemplateStepRow(step) {
+      const isSonar = step?.kind === 'sonar';
+      const row = document.createElement('article');
+      row.className = 'pipeline-step-row pipeline-template-config-step';
+      row.draggable = false;
+      row.dataset.stepId = step?.id || nextPipelineStepId('template-step');
+      row.dataset.stepKind = step?.kind || '';
+      row.dataset.stepName = step?.name || '';
+
+      const command = document.createElement('input');
+      command.className = 'pipeline-step-command';
+      command.type = 'text';
+      command.value = step?.command || '';
+      command.placeholder = isSonar
+        ? translateLocalizationValue('Scanner configurado')
+        : translateLocalizationValue('Comando');
+      command.readOnly = true;
+      command.spellcheck = false;
+
+      let sourceControl;
+      let sourceMap = new Map();
+      if (isSonar) {
+        sourceControl = pipelineSelect(
+          'pipeline-template-step-source',
+          translateLocalizationValue('Paso de la plantilla'),
+          [['sonarqube-analysis', translateLocalizationValue('Análisis SonarQube')]],
+          'sonarqube-analysis',
+          true
+        );
+        row.dataset.sourceId = 'sonarqube-analysis';
+      } else {
+        const sourceOptions = pipelineTemplateSourceOptions(step);
+        sourceMap = new Map(sourceOptions.sources.map(source => [source.sourceId, source]));
+        sourceControl = pipelineSelect(
+          'pipeline-template-step-source',
+          translateLocalizationValue('Selecciona un paso'),
+          [
+            ['', translateLocalizationValue('Selecciona un paso')],
+            ...sourceOptions.sources.map(source => [source.sourceId, source.name])
+          ],
+          sourceOptions.selectedId
+        );
+        row.dataset.sourceId = sourceOptions.selectedId;
+      }
+
+      const policy = pipelineSelect(
+        'pipeline-step-policy',
+        translateLocalizationValue('Condición de fallo'),
+        [
+          ['stop', translateLocalizationValue('Detener si falla')],
+          ['continue', translateLocalizationValue('Continuar si falla')]
+        ],
+        isSonar ? 'stop' : step?.failurePolicy || 'stop',
+        isSonar
+      );
+
+      const remove = document.createElement('button');
+      remove.className = 'pipeline-step-remove secondary';
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = translateLocalizationValue('Eliminar paso de la plantilla');
+      remove.disabled = isSonar;
+      remove.addEventListener('click', () => {
+        row.remove();
+        updatePipelineTemplateActions();
+        elements.pipelineTemplateStepsEditor.classList.toggle(
+          'is-empty',
+          !elements.pipelineTemplateStepsEditor.querySelector('.pipeline-template-config-step')
+        );
+      });
+
+      sourceControl.select.addEventListener('change', () => {
+        applyPipelineTemplateStepSource(
+          row,
+          sourceMap.get(sourceControl.select.value),
+          policy
+        );
+      });
+      policy.select.addEventListener('change', updatePipelineTemplateActions);
+
+      row.append(
+        dragHandle(false),
+        sourceControl.root,
+        command,
+        policy.root,
+        remove
+      );
+      if (!isSonar && sourceControl.select.value) {
+        applyPipelineTemplateStepSource(
+          row,
+          sourceMap.get(sourceControl.select.value),
+          policy
+        );
+      }
+      return row;
+    }
+
+    function readPipelineTemplateRows() {
+      return [...elements.pipelineTemplateStepsEditor
+        .querySelectorAll('.pipeline-template-config-step')]
+        .map(row => ({
+          id: row.dataset.stepId || nextPipelineStepId('template-step'),
+          name: row.dataset.stepName || '',
+          kind: row.dataset.stepKind || 'custom',
+          command: row.dataset.stepKind === 'sonar'
+            ? undefined
+            : row.querySelector('.pipeline-step-command').value.trim() || undefined,
+          failurePolicy: row.dataset.stepKind === 'sonar'
+            ? 'stop'
+            : row.querySelector('.pipeline-step-policy').value,
+          enabled: true
+        }));
+    }
+
+    function pipelineTemplateDraft() {
+      return {
+        id: elements.pipelineTemplateEditor.dataset.templateId || '',
+        name: elements.pipelineTemplateName.value.trim(),
+        description: elements.pipelineTemplateDescriptionInput.value.trim(),
+        builtin: elements.pipelineTemplateEditor.dataset.builtin === 'true',
+        steps: readPipelineTemplateRows()
+      };
+    }
+
+    function pipelineTemplateDraftIsValid() {
+      const rows = [...elements.pipelineTemplateStepsEditor
+        .querySelectorAll('.pipeline-template-config-step')];
+      return Boolean(
+        elements.pipelineTemplateName.value.trim() &&
+        rows.length > 0 &&
+        rows.every(row =>
+          row.dataset.stepKind === 'sonar' ||
+          Boolean(row.dataset.sourceId && row.querySelector('.pipeline-step-command').value.trim())
+        ) &&
+        rows.some(row => row.dataset.stepKind === 'sonar')
+      );
+    }
+
+    function renderPipelineTemplateEditor(template) {
+      clearPipelineTemplateStatus();
+      if (!template) {
+        elements.pipelineTemplateEditor.hidden = true;
+        elements.pipelineTemplateEditor.dataset.templateId = '';
+        elements.pipelineTemplateEditor.dataset.builtin = 'false';
+        elements.pipelineTemplateName.value = '';
+        elements.pipelineTemplateDescriptionInput.value = '';
+        elements.pipelineTemplateStepsEditor.textContent = '';
+        updatePipelineTemplateActions();
+        return;
+      }
+
+      elements.pipelineTemplateEditor.hidden = false;
+      elements.pipelineTemplateEditor.dataset.templateId = template.id || '';
+      elements.pipelineTemplateEditor.dataset.builtin = String(Boolean(template.builtin));
+      elements.pipelineTemplateName.value = translateLocalizationValue(template.name || '');
+      elements.pipelineTemplateDescriptionInput.value = translateLocalizationValue(
+        template.description || ''
+      );
+      elements.pipelineTemplateStepsEditor.textContent = '';
+      for (const step of template.steps || []) {
+        elements.pipelineTemplateStepsEditor.appendChild(
+          createPipelineTemplateStepRow({
+            ...step,
+            id: nextPipelineStepId(step.kind || 'template')
+          })
+        );
+      }
+      if (!elements.pipelineTemplateStepsEditor.querySelector('[data-step-kind="sonar"]')) {
+        elements.pipelineTemplateStepsEditor.appendChild(
+          createPipelineTemplateStepRow(sonarAnalysisRunStep())
+        );
+      }
+      elements.pipelineTemplateStepsEditor.classList.toggle(
+        'is-empty',
+        !elements.pipelineTemplateStepsEditor.children.length
+      );
+      updatePipelineTemplateActions();
+    }
+
+    function createNewPipelineTemplateDraft() {
+      elements.pipelineTemplate.value = '';
+      refreshSelectDropdown(elements.pipelineTemplate);
+      renderPipelineTemplateEditor({
+        id: '',
+        name: '',
+        description: '',
+        builtin: false,
+        steps: [sonarAnalysisRunStep()]
+      });
+      elements.pipelineTemplateName.focus();
+    }
+
+    function addPipelineTemplateStep() {
+      const row = createPipelineTemplateStepRow({
+        id: nextPipelineStepId('template-step'),
+        name: '',
+        kind: 'custom',
+        command: '',
+        failurePolicy: 'stop',
+        enabled: true
+      });
+      const sonar = elements.pipelineTemplateStepsEditor
+        .querySelector('[data-step-kind="sonar"]');
+      elements.pipelineTemplateStepsEditor.insertBefore(row, sonar || null);
+      elements.pipelineTemplateStepsEditor.classList.remove('is-empty');
+      updatePipelineTemplateActions();
+      row.querySelector('.pipeline-template-step-source-dropdown .select-dropdown__trigger')?.focus();
+    }
+
     function sonarAnalysisRunStep() {
       return {
         id: 'sonarqube-analysis',
@@ -450,7 +745,11 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       elements.analysisRunSteps.appendChild(
         createAnalysisRunStepRow(sonarAnalysisRunStep())
       );
+      populatePipelineTemplateSelect(elements.analysisPipelineTemplate, 'Sin plantilla');
+      elements.analysisPipelineTemplate.value = '';
+      refreshSelectDropdown(elements.analysisPipelineTemplate);
       elements.analysisAddStep.disabled = false;
+      updatePipelineTemplateActions();
       updateAnalysisConfirmAvailability();
     }
 
@@ -597,6 +896,140 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       }
     }
 
+    function pipelineTemplateById(templateId) {
+      return (currentConfig.pipelineTemplates || []).find(
+        template => template.id === templateId
+      );
+    }
+
+    function populatePipelineTemplateSelect(select, emptyLabel) {
+      const selected = select.value;
+      select.textContent = '';
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = translateLocalizationValue(emptyLabel);
+      select.appendChild(empty);
+      for (const template of currentConfig.pipelineTemplates || []) {
+        const option = document.createElement('option');
+        option.value = template.id;
+        option.textContent = (template.builtin ? '★ ' : '') +
+          translateLocalizationValue(template.name || template.id);
+        select.appendChild(option);
+      }
+      select.value = [...select.options].some(option => option.value === selected)
+        ? selected
+        : '';
+      refreshSelectDropdown(select, true);
+    }
+
+    function renderPipelineTemplates(templates, selectedTemplateId) {
+      const explicitSelection = selectedTemplateId !== undefined;
+      const previousSelection = explicitSelection
+        ? selectedTemplateId
+        : elements.pipelineTemplate.value;
+      currentConfig.pipelineTemplates = Array.isArray(templates) ? templates : [];
+      populatePipelineTemplateSelect(elements.pipelineTemplate, 'Selecciona una plantilla');
+      populatePipelineTemplateSelect(elements.analysisPipelineTemplate, 'Sin plantilla');
+      const selected = previousSelection
+        ? pipelineTemplateById(previousSelection)
+        : undefined;
+      if (selected) {
+        elements.pipelineTemplate.value = previousSelection;
+        refreshSelectDropdown(elements.pipelineTemplate);
+        renderPipelineTemplateEditor(selected);
+      } else if (explicitSelection || !elements.pipelineTemplateEditor.dataset.templateId) {
+        renderPipelineTemplateEditor(undefined);
+      }
+      updatePipelineTemplateActions();
+    }
+
+    function updatePipelineTemplateActions() {
+      const selected = pipelineTemplateById(elements.pipelineTemplate.value);
+      const editorVisible = !elements.pipelineTemplateEditor.hidden;
+      const validDraft = editorVisible && pipelineTemplateDraftIsValid();
+      elements.savePipelineTemplate.disabled = !validDraft;
+      elements.exportPipelineTemplate.disabled = !selected;
+      elements.deletePipelineTemplate.disabled = !selected ||
+        (selected.builtin && selected.customized !== true);
+      elements.deletePipelineTemplate.textContent = selected?.builtin
+        ? translateLocalizationValue('Restablecer')
+        : translateLocalizationValue('Eliminar');
+      elements.pipelineTemplateDescription.textContent = selected
+        ? translateLocalizationValue(selected.description || '')
+        : editorVisible
+          ? translateLocalizationValue('Plantilla nueva sin guardar.')
+          : translateLocalizationValue('Selecciona una plantilla o crea una nueva.');
+      elements.savePipelineTemplate.textContent = selected
+        ? translateLocalizationValue('Guardar cambios')
+        : translateLocalizationValue('Guardar plantilla');
+      elements.applyAnalysisPipelineTemplate.disabled =
+        !pipelineTemplateById(elements.analysisPipelineTemplate.value);
+    }
+
+    function applyTemplateToConfiguration(template) {
+      if (!template) return;
+      const steps = Array.isArray(template.steps) ? template.steps : [];
+      const build = steps.find(step => step.kind === 'build');
+      const tests = steps.find(step => step.kind === 'test');
+      elements.buildCommand.value = build?.command || '';
+      elements.testCommand.value = tests?.command || '';
+      elements.pipelineStepsEditor.textContent = '';
+      for (const step of steps.filter(step => step.kind === 'custom')) {
+        elements.pipelineStepsEditor.appendChild(createConfigurationPipelineRow({
+          ...step,
+          id: nextPipelineStepId('template')
+        }));
+      }
+      elements.pipelineStepsEditor.classList.toggle(
+        'is-empty',
+        !elements.pipelineStepsEditor.children.length
+      );
+      syncConfigurationPipelineFields();
+    }
+
+    function configuredTemplateSteps() {
+      return readPipelineTemplateRows();
+    }
+
+    function applyTemplateToAnalysis(template) {
+      if (!template) return;
+      elements.analysisRunSteps.textContent = '';
+      analysisStepTemplates = new Map(
+        availableAnalysisStepTemplates().map(step => [step.templateId, step])
+      );
+      for (const templateStep of template.steps || []) {
+        const step = {
+          ...templateStep,
+          id: nextPipelineStepId(templateStep.kind || 'run'),
+          templateId: templateStep.kind === 'build'
+            ? 'build'
+            : templateStep.kind === 'test'
+              ? 'tests'
+              : templateStep.kind === 'sonar'
+                ? 'sonarqube-analysis'
+                : ''
+        };
+        if (step.kind === 'custom') {
+          const matching = [...analysisStepTemplates.values()].find(
+            item => normalizedPipelineCommand(item.command) ===
+              normalizedPipelineCommand(step.command)
+          );
+          if (matching) step.templateId = matching.templateId;
+          else {
+            const temporaryId = 'template-custom-' + nextPipelineStepId('option');
+            step.templateId = temporaryId;
+            analysisStepTemplates.set(temporaryId, { ...step, templateId: temporaryId });
+          }
+        }
+        elements.analysisRunSteps.appendChild(createAnalysisRunStepRow(step));
+      }
+      if (!elements.analysisRunSteps.querySelector('[data-step-kind="sonar"]')) {
+        elements.analysisRunSteps.appendChild(createAnalysisRunStepRow(sonarAnalysisRunStep()));
+      }
+      updateAnalysisConfirmAvailability();
+    }
+
     enablePipelineDrag(elements.pipelineStepsEditor, syncConfigurationPipelineFields);
+    enablePipelineDrag(elements.pipelineTemplateStepsEditor, updatePipelineTemplateActions);
     enablePipelineDrag(elements.analysisRunSteps, () => undefined);
 `;

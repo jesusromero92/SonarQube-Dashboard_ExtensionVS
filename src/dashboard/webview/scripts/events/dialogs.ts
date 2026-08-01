@@ -178,6 +178,15 @@ export const DIALOG_EVENTS_SCRIPT = `
       'click',
       event => addSelectedAnalysisStep(event)
     );
+    elements.analysisPipelineTemplate.addEventListener(
+      'change',
+      updatePipelineTemplateActions
+    );
+    elements.applyAnalysisPipelineTemplate.addEventListener('click', () => {
+      applyTemplateToAnalysis(
+        pipelineTemplateById(elements.analysisPipelineTemplate.value)
+      );
+    });
 
     bindDialogDismiss(
       elements.createComponentDialog,

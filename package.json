@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard",
   "displayName": "SonarQube Dashboard",
   "description": "%extension.description%",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -24,6 +24,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onView:sonarQubeDashboard.launcher",
+    "onView:sonarQubeDashboard.pipelineExecutions",
     "onWebviewPanel:sonarQubeDashboard.panel",
     "onCommand:sonarQubeDashboard.open",
     "onCommand:sonarQubeDashboard.refresh",
@@ -60,6 +61,11 @@
           "name": "%views.panel.name%",
           "visibility": "visible",
           "contextualTitle": "%views.container.title%"
+        },
+        {
+          "id": "sonarQubeDashboard.pipelineExecutions",
+          "name": "%views.pipelineExecutions.name%",
+          "when": "workspaceFolderCount > 0"
         },
         {
           "id": "sonarQubeDashboard.issueTree",

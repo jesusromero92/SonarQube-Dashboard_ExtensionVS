@@ -132,6 +132,26 @@ export const CONFIGURATION_CORE_SCRIPT = `
         'pipeline-save-status pipeline-save-status--' + kind;
     }
 
+    function clearPipelineTemplateStatus() {
+      elements.pipelineTemplateStatus.hidden = true;
+      elements.pipelineTemplateStatus.textContent = '';
+      elements.pipelineTemplateStatus.className =
+        'pipeline-save-status pipeline-template-status';
+    }
+
+    function setPipelineTemplateStatus(kind, message = '') {
+      if (!message) {
+        clearPipelineTemplateStatus();
+        return;
+      }
+
+      elements.pipelineTemplateStatus.hidden = false;
+      elements.pipelineTemplateStatus.textContent =
+        translateLocalizationValue(message);
+      elements.pipelineTemplateStatus.className =
+        'pipeline-save-status pipeline-template-status pipeline-save-status--' + kind;
+    }
+
     function setBusy(busy) {
       configurationBusy = Boolean(busy);
       elements.loadProjects.disabled = configurationBusy;
@@ -178,6 +198,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
       refreshSelectDropdown(elements.folder, rebuild);
       refreshSelectDropdown(elements.projectKey, rebuild);
       refreshSelectDropdown(elements.scannerMode, rebuild);
+      refreshSelectDropdown(elements.pipelineTemplate, rebuild);
+      refreshSelectDropdown(elements.analysisPipelineTemplate, rebuild);
     }
 
     function renderSonarCompatibility(compatibility, loading) {
@@ -442,6 +464,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
           testCommand: '',
           detectedBuildCommand: '',
           detectedTestCommand: '',
+          detectedIntegrations: [],
+          pipelineTemplates: [],
           customScannerCommand: '',
           preAnalysisCommands: '',
           postAnalysisCommands: ''
@@ -513,6 +537,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.preAnalysisCommands.value = currentConfig.preAnalysisCommands || '';
       elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
       renderPipelineConfigurationFromFields();
+      renderPipelineTemplates(currentConfig.pipelineTemplates || []);
       elements.notificationsEnabled.checked = currentConfig.notificationsEnabled !== false;
       elements.significantIncreasePercent.value = String(
         currentConfig.significantIncreasePercent || 20
@@ -578,6 +603,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.preAnalysisCommands.value = config.preAnalysisCommands || '';
       elements.postAnalysisCommands.value = config.postAnalysisCommands || '';
       renderPipelineConfigurationFromFields();
+      renderPipelineTemplates(config.pipelineTemplates || currentConfig.pipelineTemplates || []);
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       refreshConfigurationDropdowns(true);
       renderSonarCompatibility(config.sonarCompatibility, false);

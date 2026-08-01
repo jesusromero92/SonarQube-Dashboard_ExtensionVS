@@ -22,6 +22,9 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 
 - Run repository analysis from VS Code with automatic scanner detection.
 - Configurable analysis pipeline with build, test, predefined integration, and custom steps ordered through drag & drop.
+- Reusable pipeline templates: **Quick**, **Complete**, **Security**, **Release**, and custom templates that can be imported or exported as versioned YAML.
+- Native **Pipeline executions** view for recent runs, including live or historical status, duration, steps, and log output.
+- Internal diagnostics page with environment, server, compatibility, scanner, tools, commands, last failed request, and server response time.
 - Support for Maven and Gradle projects using Java or Kotlin, SonarScanner for .NET for C#/VB.NET/F#, SonarScanner for NPM for projects containing `package.json`, and SonarScanner CLI through Docker for generic projects.
 - Manual selection of Maven, Gradle, .NET, NPM, Docker, or a custom command.
 - Automatic synchronization when opening an already linked project.
@@ -67,7 +70,8 @@ After the first link is created, the extension synchronizes data automatically w
 
 The side panel provides a quick overview without leaving the VS Code explorer:
 
-- **Data / Configuration:** switch between the summary and project connection.
+- **Data / Configuration / Diagnostics:** open the summary, area-based configuration, or the extension's technical report.
+- **Pipeline executions:** native VS Code view below the side-panel summary; lists active and completed runs and opens their detail page.
 - **Refresh:** query SonarQube again and update both the dashboard and Problems.
 - **Issues found:** total number of issues matched to files that exist in the linked folder.
 - **Severities:** distribution of Blocker, Critical, Major, Minor, and Info among those local issues.
@@ -325,13 +329,17 @@ Version 0.20.1 detects known project tools and offers them as reusable pipeline 
 - Snyk;
 - OWASP Dependency-Check for Maven or Gradle.
 
-Detected integrations appear under **Configuration → Analysis pipeline**. They can be added to the persistent pipeline or selected directly while preparing a run. Their command and failure policy remain editable.
+Detected integrations appear under **Configuration → Pipeline**, inside the **Detected predefined integrations** accordion below the template editor. Adding an integration removes it from the available list; removing it from custom steps makes it available again. Its command and failure policy remain editable.
 
 ## Configurable analysis pipeline
 
 ![Build, test, and custom-step configuration](docs/images/analysis-pipeline-configuration.png)
 
-The **Configuration → Analysis pipeline** section automatically detects common build and test commands for the current project. Both commands can be overridden manually. Custom steps can also run dependency audits, linters, SAST tools, report generators, or any other tool available in the workspace.
+<!-- Pending screenshot for the current Pipeline tab layout:
+![Pipeline tab with steps, templates, and integrations](docs/images/pipeline-configuration-v021.png)
+-->
+
+The **Configuration → Pipeline** tab automatically detects common build and test commands for the current project. Both commands can be overridden manually. Custom steps can also run dependency audits, linters, SAST tools, report generators, or any other tool available in the workspace.
 
 Each custom step provides:
 
@@ -350,6 +358,87 @@ The **Analyze** button remains disabled while any step is incomplete. Optional s
 ![Pipeline stepper and execution log](docs/images/analysis-pipeline-execution.png)
 
 While the pipeline runs, the dialog displays a stepper whenever more than one step is present. Each stage indicates whether it is running, succeeded, failed and stopped the pipeline, or failed with permission to continue. The log clearly separates the start and end of each step, displays the executed command, and preserves the complete tool output.
+
+## Pipeline templates
+
+<!-- Pending screenshot for the template editor:
+![Pipeline template editor](docs/images/pipeline-templates-v021.png)
+-->
+
+Version 0.21.0 adds a reusable template accordion under **Configuration → Pipeline**:
+
+- **Quick:** build and SonarQube.
+- **Complete:** build, tests, dependency audit, and SonarQube.
+- **Security:** detected security tools and SonarQube.
+- **Release:** every available step with a strict stop-on-failure policy.
+
+Reusable steps are created first under **Pipeline steps**. The template editor then lets you select a template, inspect its steps, add other available steps, remove them, and reorder them through drag & drop without changing the project's main step list.
+
+Built-in templates adapt to the commands and tools detected in the folder. **Save changes** updates the selected template for the workspace, including built-in templates, without creating duplicates. Custom templates are deleted with confirmation; deleting a workspace override for a built-in template restores its default definition. Templates can also be imported and exported as `.sonarqube-dashboard.yml` or another YAML file.
+
+The exported format uses `version: 1` and preserves step order, including steps placed after SonarQube:
+
+```yaml
+version: 1
+name: "Local release"
+description: "Versioned workspace pipeline"
+steps:
+  - id: "build"
+    name: "Build"
+    kind: build
+    command: "npm run compile"
+    failurePolicy: stop
+    enabled: true
+  - id: "sonarqube-analysis"
+    name: "SonarQube analysis"
+    kind: sonar
+    command: ""
+    failurePolicy: stop
+    enabled: true
+  - id: "report"
+    name: "Publish report"
+    kind: custom
+    command: "npm run security-report"
+    failurePolicy: continue
+    enabled: true
+```
+
+## Pipeline run history
+
+![Native Pipeline executions view](docs/images/pipeline-executions-native.png)
+
+
+The native **Pipeline executions** view, located in the side bar next to the **Issue explorer**, keeps the latest 30 runs for each analysis folder. Active runs display a loading state, while completed runs show their result and duration.
+
+Selecting any active or completed run opens a dedicated page that displays only that execution:
+
+![Pipeline run detail](docs/images/pipeline-run-detail.png)
+
+- project, branch, date, result, and total duration;
+- the scanner used;
+- status and duration for each step;
+- allowed warnings, failures, and cancellations;
+- animated accordions for steps and console output;
+- live log updates while the run is active;
+- capped historical logs to prevent unbounded workspace-state growth.
+
+The page keeps the current execution visible while another one loads to avoid loading flashes. History is stored in workspace state, never includes the token, and can be cleared from the page.
+
+## Internal diagnostics
+
+![Extension internal diagnostics](docs/images/diagnostics.png)
+
+The **Diagnostics** tab collects information for investigating connection, compatibility, and project-detection problems:
+
+- extension, VS Code, and Node.js versions;
+- operating system, architecture, and workspace trust state;
+- detected SonarQube version, status, compatibility profile, and server latency;
+- selected scanner and the evidence used to detect it;
+- only automatically detected build and test commands;
+- available predefined integrations and their detection evidence;
+- the last failed request and any diagnostics collection errors.
+
+The page uses compact monochrome cards without category colors. **Copy report** produces text ready to attach to an issue. Credentials, authorization headers, and recognizable token, password, secret, or API-key values are redacted before copying.
 
 ## Repository analysis
 
@@ -406,7 +495,10 @@ The **Clear Problems** command removes only diagnostics published by this extens
 
 ![SonarQube connection configuration](docs/images/configuration.png)
 
+
 The connection workflow is explicit: **Connect** validates the URL and token and loads the visible components without selecting one. The project dropdown remains empty and disabled when validation fails. A project is linked only after the user selects it and presses **Synchronize**. Unsaved server and token drafts are preserved when moving between Data and Configuration.
+
+The configuration page is split into **SonarQube**, **Pipeline**, and **Notifications** tabs, each with its own accordions. **SonarQube** contains connection, project, and advanced scanner settings; **Pipeline** contains steps, templates, and integrations; and **Notifications** groups automatic alerts.
 
 The configuration page manages:
 

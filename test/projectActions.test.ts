@@ -7,6 +7,7 @@ import { detectProjectActions } from '../src/scanner/projectActions';
 import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisConfirmationDialog';
 import { ANALYSIS_SCRIPT } from '../src/dashboard/webview/scripts/analysis';
 import { PIPELINE_EDITOR_SCRIPT } from '../src/dashboard/webview/scripts/pipelineEditor';
+import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
 import { ANALYSIS_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisDialog';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
@@ -63,6 +64,22 @@ test('la configuración permite ordenar pasos y elegir la condición de fallo al
   assert.match(ANALYSIS_SCRIPT, /renderAnalysisStepper/);
 });
 
+
+test('separa los pasos disponibles del editor de plantillas', () => {
+  const stepsIndex = CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineStepsEditor"');
+  const templatesIndex = CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineTemplate"');
+
+  assert.ok(stepsIndex >= 0);
+  assert.ok(templatesIndex > stepsIndex);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="pipelineTemplateEditor"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="pipelineTemplateStepsEditor"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="newPipelineTemplate"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="addPipelineTemplateStep"/);
+  assert.match(PIPELINE_EDITOR_SCRIPT, /function renderPipelineTemplateEditor/);
+  assert.match(PIPELINE_EDITOR_SCRIPT, /function readPipelineTemplateRows/);
+  assert.match(PIPELINE_EDITOR_SCRIPT, /enablePipelineDrag\(elements\.pipelineTemplateStepsEditor/);
+});
+
 test('detecta integraciones predefinidas de seguridad y calidad en proyectos Node', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-integrations-'));
   try {
@@ -101,7 +118,7 @@ test('detecta integraciones predefinidas de seguridad y calidad en proyectos Nod
 test('muestra cada integración detectada una sola vez y la mueve al pipeline', () => {
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="detectedIntegrations"/);
   assert.ok(
-    CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineStepsEditor"') <
+    CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineTemplateStepsEditor"') <
       CONFIGURATION_PAGE_MARKUP.indexOf('id="detectedIntegrations"')
   );
   assert.match(CONFIGURATION_CORE_SCRIPT, /availableDetectedIntegrations\(integrations\)/);
@@ -117,4 +134,15 @@ test('muestra cada integración detectada una sola vez y la mueve al pipeline', 
     PIPELINE_EDITOR_SCRIPT,
     /availableDetectedIntegrations\(currentConfig\.detectedIntegrations\)[\s\S]*integration-.*integration\.id/
   );
+});
+
+
+test('las acciones y mensajes de plantillas permanecen dentro de su acordeón', () => {
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="pipelineTemplateStatus"/);
+  assert.doesNotMatch(CONFIGURATION_PAGE_MARKUP, /id="applyPipelineTemplate"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="deletePipelineTemplate"/);
+  assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /window\.confirm/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /type: 'deletePipelineTemplate'/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /Restableciendo plantilla…/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /Eliminando plantilla…/);
 });

@@ -34,13 +34,28 @@ import {
   normalizeConnectionServerUrl
 } from './dashboard/connectionValidation';
 import { getDashboardHtml } from './dashboard/webview';
+import {
+  collectExtensionDiagnostics,
+  ExtensionDiagnosticsSnapshot,
+  formatDiagnosticsReport
+} from './dashboard/diagnostics';
 import { AnalysisService } from './scanner/analysisService';
 import { detectProjectActions } from './scanner/projectActions';
 import { parseAnalysisPipeline } from './scanner/pipeline';
 import {
+  createBuiltinPipelineTemplates,
+  mergePipelineTemplates,
+  parsePipelineTemplateYaml,
+  PipelineTemplate,
+  PipelineTemplateStore,
+  serializePipelineTemplateYaml
+} from './scanner/pipelineTemplates';
+import {
   AnalysisExecutionOptions,
   AnalysisExecutionStep,
-  AnalysisRequest
+  AnalysisRequest,
+  AnalysisState,
+  PipelineRunHistoryEntry
 } from './scanner/types';
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
@@ -97,13 +112,18 @@ export class DashboardPanel {
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
   private readonly languageEmitter = new vscode.EventEmitter<DashboardLanguage>();
+  private readonly analysisEmitter = new vscode.EventEmitter<AnalysisState>();
   private readonly analysisService: AnalysisService;
+  private pendingHistoryEntryId = '';
+  private readonly pipelineTemplateStore: PipelineTemplateStore;
+  private readonly latestDiagnostics = new Map<string, ExtensionDiagnosticsSnapshot>();
   private readonly duplicationComparison: DuplicationComparisonPanel;
 
   readonly onDidChangeSummary = this.summaryEmitter.event;
   readonly onDidChangeLoading = this.loadingEmitter.event;
   readonly onDidChangePage = this.pageEmitter.event;
   readonly onDidChangeLanguage = this.languageEmitter.event;
+  readonly onDidChangeAnalysis = this.analysisEmitter.event;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -114,11 +134,14 @@ export class DashboardPanel {
     private readonly scopeCallback: (scope: 'overall' | 'newCode') => void
   ) {
     this.duplicationComparison = new DuplicationComparisonPanel(coverageDecorations);
+    this.pipelineTemplateStore = new PipelineTemplateStore(context);
     this.analysisService = new AnalysisService(context, state => {
+      const localizedState = localizeAnalysisState(state, this.language);
       this.postMessage({
         type: 'analysisState',
-        state: localizeAnalysisState(state, this.language)
+        state: localizedState
       });
+      this.analysisEmitter.fire(localizedState);
     });
   }
 
@@ -196,6 +219,26 @@ export class DashboardPanel {
     return this.currentPage;
   }
 
+  getAnalysisState(): AnalysisState {
+    return localizeAnalysisState(this.analysisService.getState(), this.language);
+  }
+
+  async getPipelineExecutions(): Promise<PipelineRunHistoryEntry[]> {
+    const folder = this.getWorkspaceFolder(this.selectedFolderUri) ??
+      vscode.workspace.workspaceFolders?.[0];
+    if (!folder) return [];
+    try {
+      return await this.pipelineHistoryEntries(folder);
+    } catch {
+      return [];
+    }
+  }
+
+  async showPipelineExecution(executionId: string): Promise<void> {
+    this.pendingHistoryEntryId = executionId;
+    await this.show('history');
+  }
+
   async showPage(page: DashboardPage): Promise<void> {
     await this.show(page);
   }
@@ -268,6 +311,7 @@ export class DashboardPanel {
     this.loadingEmitter.dispose();
     this.pageEmitter.dispose();
     this.languageEmitter.dispose();
+    this.analysisEmitter.dispose();
   }
 
   private attachPanel(panel: vscode.WebviewPanel): void {
@@ -394,6 +438,30 @@ export class DashboardPanel {
       case 'savePipeline':
         await this.savePipeline(message);
         break;
+      case 'savePipelineTemplate':
+        await this.savePipelineTemplate(message);
+        break;
+      case 'deletePipelineTemplate':
+        await this.deletePipelineTemplate(message);
+        break;
+      case 'exportPipelineTemplate':
+        await this.exportPipelineTemplate(message);
+        break;
+      case 'importPipelineTemplate':
+        await this.importPipelineTemplate(message);
+        break;
+      case 'loadPipelineHistory':
+        await this.sendPipelineHistory(message.folderUri);
+        break;
+      case 'clearPipelineHistory':
+        await this.clearPipelineHistory(message.folderUri);
+        break;
+      case 'loadDiagnostics':
+        await this.sendDiagnostics(message.folderUri);
+        break;
+      case 'copyDiagnostics':
+        await this.copyDiagnostics(message.folderUri);
+        break;
       case 'refresh':
         await this.refreshFromPanel();
         break;
@@ -456,6 +524,7 @@ export class DashboardPanel {
           detectedBuildCommand: '',
           detectedTestCommand: '',
           detectedIntegrations: [],
+          pipelineTemplates: [],
           customScannerCommand: '',
           preAnalysisCommands: '',
           postAnalysisCommands: '',
@@ -478,8 +547,19 @@ export class DashboardPanel {
     const config = await getFolderFormConfig(this.context, selectedFolder);
     const configuredRoot = this.analysisRoot(selectedFolder, config.baseDir) ?? selectedFolder.uri.fsPath;
     const detectedProjectActions = await detectProjectActions(configuredRoot);
+    const customPipelineTemplates = await this.pipelineTemplateStore.list(
+      selectedFolder.uri.toString()
+    );
+    const pipelineTemplates = mergePipelineTemplates(
+      createBuiltinPipelineTemplates(
+        detectedProjectActions,
+        config.buildCommand || detectedProjectActions.buildCommand || '',
+        config.testCommand || detectedProjectActions.testCommand || ''
+      ),
+      customPipelineTemplates
+    );
     const connectionDraftDirty = this.dirtyConnectionFolders.has(
-      this.selectedFolderUri
+      this.selectedFolderUri!
     );
     let analysisPermission: AnalysisPermissionStatus = 'unknown';
     let creationCapabilities = this.emptyCreationCapabilities();
@@ -505,7 +585,8 @@ export class DashboardPanel {
         ...config,
         detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
         detectedTestCommand: detectedProjectActions.testCommand ?? '',
-          detectedIntegrations: detectedProjectActions.integrations,
+        detectedIntegrations: detectedProjectActions.integrations,
+        pipelineTemplates,
         projectKey: connectionDraftDirty ? '' : config.projectKey,
         projectName: connectionDraftDirty ? '' : config.projectName,
         hasToken: connectionDraftDirty ? false : config.hasToken,
@@ -784,6 +865,15 @@ export class DashboardPanel {
       const configuredRoot = this.analysisRoot(folder, current.baseDir) ??
         folder.uri.fsPath;
       const detectedProjectActions = await detectProjectActions(configuredRoot);
+      const customTemplates = await this.pipelineTemplateStore.list(folder.uri.toString());
+      const pipelineTemplates = mergePipelineTemplates(
+        createBuiltinPipelineTemplates(
+          detectedProjectActions,
+          message.buildCommand ?? detectedProjectActions.buildCommand ?? '',
+          message.testCommand ?? detectedProjectActions.testCommand ?? ''
+        ),
+        customTemplates
+      );
       this.postMessage({
         type: 'pipelineSaved',
         config: {
@@ -792,6 +882,7 @@ export class DashboardPanel {
           detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
           detectedTestCommand: detectedProjectActions.testCommand ?? '',
           detectedIntegrations: detectedProjectActions.integrations,
+          pipelineTemplates,
           preAnalysisCommands: message.preAnalysisCommands ?? '',
           postAnalysisCommands: message.postAnalysisCommands ?? ''
         }
@@ -802,6 +893,256 @@ export class DashboardPanel {
         message: `No se pudo guardar el pipeline: ${this.errorMessage(error)}`
       });
     }
+  }
+
+  private async pipelineTemplatesForFolder(
+    folder: vscode.WorkspaceFolder
+  ): Promise<PipelineTemplate[]> {
+    const config = await getFolderFormConfig(this.context, folder);
+    const rootPath = this.analysisRoot(folder, config.baseDir) ?? folder.uri.fsPath;
+    const actions = await detectProjectActions(rootPath);
+    const builtinTemplates = createBuiltinPipelineTemplates(
+      actions,
+      config.buildCommand || actions.buildCommand || '',
+      config.testCommand || actions.testCommand || ''
+    );
+    const savedTemplates = await this.pipelineTemplateStore.list(
+      folder.uri.toString()
+    );
+    return mergePipelineTemplates(builtinTemplates, savedTemplates);
+  }
+
+  private async savePipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
+    const name = message.templateName?.trim() ?? '';
+    if (!folder || !name || !message.analysisSteps?.length) {
+      this.postMessage({
+        type: 'pipelineTemplateError',
+        message: 'Indica un nombre y al menos un paso para guardar la plantilla.'
+      });
+      return;
+    }
+    try {
+      const templateId = message.templateId?.trim() ||
+        `custom-${Date.now().toString(36)}`;
+      const builtin = templateId.startsWith('builtin-');
+      await this.pipelineTemplateStore.save(folder.uri.toString(), {
+        id: templateId,
+        name,
+        description: message.templateDescription?.trim() ||
+          (builtin
+            ? 'Plantilla integrada personalizada para este workspace.'
+            : 'Plantilla personalizada del workspace.'),
+        builtin,
+        steps: message.analysisSteps
+      });
+      this.postMessage({
+        type: 'pipelineTemplatesUpdated',
+        templates: await this.pipelineTemplatesForFolder(folder),
+        templateId,
+        message: 'Plantilla guardada.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineTemplateError',
+        message: `No se pudo guardar la plantilla: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async deletePipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
+    if (!folder || !message.templateId) return;
+
+    try {
+      const selected = (await this.pipelineTemplatesForFolder(folder))
+        .find(template => template.id === message.templateId);
+      if (!selected) return;
+
+      const resetBuiltin = selected.builtin === true;
+      const confirmationAction = localizeRuntimeText(
+        resetBuiltin ? 'Restablecer' : 'Eliminar',
+        this.language
+      );
+      const confirmationQuestion = localizeRuntimeText(
+        resetBuiltin
+          ? '¿Restablecer la plantilla seleccionada a su configuración integrada?'
+          : '¿Eliminar la plantilla seleccionada? Esta acción no se puede deshacer.',
+        this.language
+      );
+      const confirmation = await vscode.window.showWarningMessage(
+        `${confirmationQuestion}
+
+${selected.name}`,
+        { modal: true },
+        confirmationAction
+      );
+      if (confirmation !== confirmationAction) {
+        this.postMessage({
+          type: 'pipelineTemplateActionCancelled',
+          templateId: selected.id
+        });
+        return;
+      }
+
+      await this.pipelineTemplateStore.delete(folder.uri.toString(), message.templateId);
+      this.postMessage({
+        type: 'pipelineTemplatesUpdated',
+        templates: await this.pipelineTemplatesForFolder(folder),
+        templateId: resetBuiltin ? message.templateId : '',
+        message: resetBuiltin
+          ? 'Plantilla integrada restablecida.'
+          : 'Plantilla eliminada.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineTemplateError',
+        message: `No se pudo eliminar la plantilla: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async exportPipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
+    if (!folder || !message.templateId) return;
+    try {
+      const template = (await this.pipelineTemplatesForFolder(folder))
+        .find(item => item.id === message.templateId);
+      if (!template) throw new Error('No se encontró la plantilla seleccionada.');
+      const target = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.joinPath(folder.uri, '.sonarqube-dashboard.yml'),
+        filters: { 'SonarQube Dashboard pipeline': ['yml', 'yaml'] },
+        saveLabel: 'Exportar pipeline'
+      });
+      if (!target) return;
+      await vscode.workspace.fs.writeFile(
+        target,
+        Buffer.from(serializePipelineTemplateYaml(template), 'utf8')
+      );
+      this.postMessage({
+        type: 'pipelineTemplatesUpdated',
+        templates: await this.pipelineTemplatesForFolder(folder),
+        message: 'Plantilla exportada.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineTemplateError',
+        message: `No se pudo exportar la plantilla: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async importPipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
+    if (!folder) return;
+    try {
+      const selected = await vscode.window.showOpenDialog({
+        defaultUri: folder.uri,
+        canSelectMany: false,
+        filters: { 'SonarQube Dashboard pipeline': ['yml', 'yaml'] },
+        openLabel: 'Importar pipeline'
+      });
+      if (!selected?.[0]) return;
+      const bytes = await vscode.workspace.fs.readFile(selected[0]);
+      const template = parsePipelineTemplateYaml(Buffer.from(bytes).toString('utf8'));
+      await this.pipelineTemplateStore.save(folder.uri.toString(), template);
+      this.postMessage({
+        type: 'pipelineTemplatesUpdated',
+        templates: await this.pipelineTemplatesForFolder(folder),
+        templateId: template.id,
+        message: 'Plantilla importada.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineTemplateError',
+        message: `No se pudo importar la plantilla: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async pipelineHistoryEntries(
+    folder: vscode.WorkspaceFolder
+  ): Promise<PipelineRunHistoryEntry[]> {
+    const config = await getFolderFormConfig(this.context, folder);
+    const rootPath = this.analysisRoot(folder, config.baseDir) ?? folder.uri.fsPath;
+    const saved = await this.analysisService.listHistory(rootPath);
+    const state = this.analysisService.getState();
+    if (!state.running) return saved;
+
+    const startedAt = state.startedAt ?? new Date().toISOString();
+    const active: PipelineRunHistoryEntry = {
+      id: 'running-analysis',
+      rootPath,
+      projectKey: config.projectKey,
+      projectName: config.projectName || config.projectKey || folder.name,
+      branch: config.branch ?? '',
+      scanner: state.scanner,
+      status: 'running',
+      message: state.message,
+      startedAt,
+      completedAt: '',
+      durationMs: Math.max(0, Date.now() - new Date(startedAt).getTime()),
+      steps: state.steps.map(step => ({ ...step })),
+      log: [...state.log]
+    };
+    return [active, ...saved];
+  }
+
+  private async sendPipelineHistory(folderUri?: string): Promise<void> {
+    const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
+    if (!folder) {
+      this.postMessage({
+        type: 'pipelineHistory',
+        entries: [],
+        selectedEntryId: this.pendingHistoryEntryId
+      });
+      return;
+    }
+    try {
+      this.postMessage({
+        type: 'pipelineHistory',
+        entries: await this.pipelineHistoryEntries(folder),
+        selectedEntryId: this.pendingHistoryEntryId
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineHistoryError',
+        message: `No se pudo cargar el historial: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async clearPipelineHistory(folderUri?: string): Promise<void> {
+    const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
+    if (!folder) return;
+    const config = await getFolderFormConfig(this.context, folder);
+    const rootPath = this.analysisRoot(folder, config.baseDir) ?? folder.uri.fsPath;
+    await this.analysisService.clearHistory(rootPath);
+    await this.sendPipelineHistory(folder.uri.toString());
+  }
+
+  private async sendDiagnostics(folderUri?: string): Promise<void> {
+    const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
+    try {
+      const snapshot = await collectExtensionDiagnostics(this.context, folder);
+      this.latestDiagnostics.set(folder?.uri.toString() ?? '', snapshot);
+      this.postMessage({ type: 'diagnostics', snapshot });
+    } catch (error) {
+      this.postMessage({
+        type: 'diagnosticsError',
+        message: `No se pudo recopilar el diagnóstico: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async copyDiagnostics(folderUri?: string): Promise<void> {
+    const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
+    const key = folder?.uri.toString() ?? '';
+    const snapshot = this.latestDiagnostics.get(key) ??
+      await collectExtensionDiagnostics(this.context, folder);
+    this.latestDiagnostics.set(key, snapshot);
+    await vscode.env.clipboard.writeText(formatDiagnosticsReport(snapshot));
+    this.postMessage({ type: 'diagnosticsCopied' });
   }
 
   private async save(message: DashboardWebviewMessage): Promise<void> {
@@ -888,6 +1229,15 @@ export class DashboardPanel {
       this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
       const savedRoot = this.analysisRoot(folder, message.baseDir ?? '') ?? folder.uri.fsPath;
       const detectedProjectActions = await detectProjectActions(savedRoot);
+      const customTemplates = await this.pipelineTemplateStore.list(folder.uri.toString());
+      const pipelineTemplates = mergePipelineTemplates(
+        createBuiltinPipelineTemplates(
+          detectedProjectActions,
+          message.buildCommand ?? detectedProjectActions.buildCommand ?? '',
+          message.testCommand ?? detectedProjectActions.testCommand ?? ''
+        ),
+        customTemplates
+      );
 
       const configurationSavedMessage = {
         type: 'configurationSaved',
@@ -905,6 +1255,7 @@ export class DashboardPanel {
           detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
           detectedTestCommand: detectedProjectActions.testCommand ?? '',
           detectedIntegrations: detectedProjectActions.integrations,
+          pipelineTemplates,
           customScannerCommand: message.customScannerCommand ?? '',
           preAnalysisCommands: message.preAnalysisCommands ?? '',
           postAnalysisCommands: message.postAnalysisCommands ?? '',
@@ -968,6 +1319,8 @@ export class DashboardPanel {
       await this.runAnalysis(analysisContext);
     } catch (error) {
       this.handleAnalysisFailure(error);
+    } finally {
+      await this.sendPipelineHistory(folder.uri.toString());
     }
   }
 

@@ -40,6 +40,54 @@ export const MESSAGE_EVENTS_SCRIPT = `
           );
           break;
 
+        case 'pipelineTemplatesUpdated':
+          renderPipelineTemplates(
+            message.templates || [],
+            message.templateId
+          );
+          setPipelineTemplateStatus('success', message.message || 'Plantillas actualizadas.');
+          break;
+
+        case 'pipelineTemplateError':
+          setPipelineTemplateStatus('error', message.message || 'No se pudo actualizar la plantilla.');
+          break;
+
+        case 'pipelineTemplateActionCancelled':
+          setPipelineTemplateStatus('idle', '');
+          break;
+
+        case 'pipelineHistory':
+          currentPipelineHistory = message.entries || [];
+          renderPipelineHistory(
+            currentPipelineHistory,
+            message.selectedEntryId || ''
+          );
+          break;
+
+        case 'pipelineHistoryError':
+          elements.historyLoading.hidden = true;
+          elements.historyEmpty.hidden = false;
+          elements.historyEmpty.textContent = message.message || 'No se pudo cargar el historial.';
+          break;
+
+        case 'diagnostics':
+          renderDiagnostics(message.snapshot);
+          break;
+
+        case 'diagnosticsError':
+          elements.diagnosticsLoading.hidden = true;
+          elements.diagnosticsContent.hidden = true;
+          elements.copyDiagnostics.disabled = true;
+          elements.diagnosticsGeneratedAt.textContent = message.message || 'No se pudo recopilar el diagnóstico.';
+          break;
+
+        case 'diagnosticsCopied':
+          elements.copyDiagnostics.textContent = translateLocalizationValue('Copiado');
+          setTimeout(() => {
+            elements.copyDiagnostics.textContent = translateLocalizationValue('Copiar informe');
+          }, 1500);
+          break;
+
         case 'projectsLoading':
           elements.sonarCompatibility.hidden = true;
           setConnectionBusy(true);
@@ -287,6 +335,7 @@ export const MESSAGE_EVENTS_SCRIPT = `
 
         case 'analysisState':
           renderAnalysisState(message.state || {});
+          renderLivePipelineHistory(message.state || {});
           break;
 
         case 'showAnalysisDialog':

@@ -223,6 +223,49 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       color: var(--vscode-descriptionForeground);
     }
 
+    .configuration-section-intro {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 18px;
+    }
+    .configuration-section-intro p { margin: 0; }
+    .pipeline-commands-grid { margin: 0; }
+    .pipeline-subsection {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+    .pipeline-subsection h3 {
+      margin: 0 0 4px;
+      font-size: 13px;
+    }
+    .pipeline-editor-heading,
+    .detected-integrations-heading {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .pipeline-variables-hint { margin-top: 2px; }
+    .pipeline-steps-footer {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+      padding-top: 14px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+    .pipeline-save-controls {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+    .pipeline-save-controls .pipeline-save-status { margin-right: 0; }
     .pipeline-step-list {
       display: grid;
       gap: 8px;
@@ -246,8 +289,13 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       border-radius: 3px;
       background: var(--vscode-editor-background);
     }
-    .pipeline-config-step {
-      grid-template-columns: auto minmax(130px, .7fr) minmax(220px, 1.5fr) minmax(145px, auto) auto;
+    .pipeline-config-step,
+    .pipeline-template-config-step {
+      grid-template-columns: auto minmax(180px, .85fr) minmax(220px, 1.5fr) minmax(145px, auto) auto;
+    }
+    .pipeline-template-config-step input[readonly] {
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-input-background);
     }
     .pipeline-step-row.dragging {
       opacity: .5;

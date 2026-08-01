@@ -15,12 +15,17 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
     private readonly dashboardPanel: DashboardPanel
   ) {
     this.context.subscriptions.push(
-      dashboardPanel.onDidChangeSummary(() => this.postState()),
-      dashboardPanel.onDidChangeLoading(() => this.postState()),
-      dashboardPanel.onDidChangePage(() => this.postState()),
+      dashboardPanel.onDidChangeSummary(() => void this.postState()),
+      dashboardPanel.onDidChangeLoading(() => void this.postState()),
+      dashboardPanel.onDidChangePage(() => void this.postState()),
+      dashboardPanel.onDidChangeAnalysis(state => {
+        if (!state.running) {
+          setTimeout(() => void this.postState(), 250);
+        }
+      }),
       dashboardPanel.onDidChangeLanguage(() => {
         this.postLanguage();
-        this.postState();
+        void this.postState();
       })
     );
   }
@@ -41,9 +46,13 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
 
     webviewView.webview.onDidReceiveMessage(message => {
       if (message?.type === 'ready') {
-        this.postState();
+        void this.postState();
       } else if (message?.type === 'navigate') {
-        const page = message.page === 'configuration' ? 'configuration' : 'data';
+        const page = message.page === 'configuration' ||
+          message.page === 'history' ||
+          message.page === 'diagnostics'
+          ? message.page
+          : 'data';
         void this.dashboardPanel.showPage(page);
       } else if (message?.type === 'refresh') {
         void this.dashboardPanel.refresh();
@@ -55,7 +64,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
     webviewView.onDidChangeVisibility(() => {
       if (webviewView.visible) {
         void this.dashboardPanel.show();
-        this.postState();
+        void this.postState();
       }
     });
 
@@ -73,7 +82,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
     });
   }
 
-  private postState(): void {
+  private async postState(): Promise<void> {
     const summary = this.dashboardPanel.getRefreshSummary();
     const issueCount = summary.configuredFolders > 0
       ? Math.max(0, Math.trunc(summary.published))
@@ -91,11 +100,11 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
         : undefined;
     }
 
-    void this.view?.webview.postMessage({
+    await this.view?.webview.postMessage({
       type: 'state',
       loading: this.dashboardPanel.isLoading(),
       page: this.dashboardPanel.getCurrentPage(),
-      summary
+      summary,
     });
   }
 

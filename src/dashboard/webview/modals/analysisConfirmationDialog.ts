@@ -1,3 +1,9 @@
+import { getSelectDropdownMarkup } from '../components/ui/selectDropdown';
+
+const TEMPLATE_OPTIONS = [
+  { value: '', label: 'Sin plantilla' }
+] as const;
+
 export const ANALYSIS_CONFIRMATION_DIALOG_MARKUP = `  <dialog id="analysisConfirmationDialog" class="rule-dialog confirmation-dialog pipeline-confirmation-dialog">
     <div class="rule-dialog-header">
       <div>
@@ -13,6 +19,19 @@ export const ANALYSIS_CONFIRMATION_DIALOG_MARKUP = `  <dialog id="analysisConfir
         <div><dt>Carpeta</dt><dd id="analysisConfirmationFolder">—</dd></div>
         <div><dt>Método</dt><dd id="analysisConfirmationScanner">—</dd></div>
       </dl>
+      <div class="analysis-template-toolbar">
+        <div class="analysis-template-field">
+          <label for="analysisPipelineTemplate">Plantilla para esta ejecución</label>
+${getSelectDropdownMarkup({
+  ariaLabel: 'Plantilla para esta ejecución',
+  className: 'select-dropdown--fluid',
+  id: 'analysisPipelineTemplate',
+  options: TEMPLATE_OPTIONS,
+  selectedValue: ''
+})}
+        </div>
+        <button id="applyAnalysisPipelineTemplate" class="secondary" type="button" disabled>Aplicar plantilla</button>
+      </div>
       <div class="analysis-run-heading">
         <div>
           <strong>Pasos de esta ejecución</strong>

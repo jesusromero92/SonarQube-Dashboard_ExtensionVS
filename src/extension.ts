@@ -11,6 +11,7 @@ import {
   DASHBOARD_PANEL_VIEW_TYPE,
   ISSUE_TREE_GROUPS,
   ISSUE_TREE_VIEW_ID,
+  PIPELINE_EXECUTION_TREE_VIEW_ID,
   QUALITY_GATE_STATUS_RANKS,
   RATING_GRADE_RANKS,
   SONAR_CONFIGURATION_SECTION
@@ -42,6 +43,7 @@ import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { IssueNavigationManager } from './issueNavigation';
 import { IssueTreeProvider } from './issueTreeView';
+import { PipelineExecutionTreeProvider } from './pipelineExecutionTreeView';
 import {
   NotificationManager,
   NotificationScope
@@ -69,6 +71,7 @@ let coverageDecorations: CoverageDecorationManager;
 let flowController: IssueFlowController;
 let issueNavigation: IssueNavigationManager;
 let issueTree: IssueTreeProvider;
+let pipelineExecutionTree: PipelineExecutionTreeProvider;
 let notifications: NotificationManager;
 
 function worstRating(current: RatingGrade, candidate: RatingGrade): RatingGrade {
@@ -740,8 +743,15 @@ export function activate(context: vscode.ExtensionContext): void {
     dashboardPanel
   );
 
+  pipelineExecutionTree = new PipelineExecutionTreeProvider(dashboardPanel);
+  context.subscriptions.push(pipelineExecutionTree);
+
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(ISSUE_TREE_VIEW_ID, issueTree),
+    vscode.window.registerTreeDataProvider(
+      PIPELINE_EXECUTION_TREE_VIEW_ID,
+      pipelineExecutionTree
+    ),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, flowController),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, issueCodeLensProvider),
     vscode.window.registerWebviewViewProvider(
@@ -788,6 +798,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.cancelAnalysis,
       () => dashboardPanel?.cancelAnalysis()
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.openPipelineExecution,
+      async (executionId: string) => {
+        if (!dashboardPanel) return;
+        await dashboardPanel.showPipelineExecution(executionId);
+      }
     ),
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.showIssueDetail,

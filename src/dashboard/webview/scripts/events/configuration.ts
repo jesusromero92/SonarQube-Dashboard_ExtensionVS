@@ -1,4 +1,56 @@
 export const CONFIGURATION_EVENTS_SCRIPT = `
+    const configurationTabs = [
+      {
+        button: elements.configurationSonarTab,
+        panel: elements.configurationSonarPanel
+      },
+      {
+        button: elements.configurationPipelineTab,
+        panel: elements.configurationPipelinePanel
+      },
+      {
+        button: elements.configurationNotificationsTab,
+        panel: elements.configurationNotificationsPanel
+      }
+    ];
+
+    function activateConfigurationTab(button, focus = false) {
+      for (const entry of configurationTabs) {
+        const active = entry.button === button;
+        entry.button.classList.toggle('active', active);
+        entry.button.setAttribute('aria-selected', String(active));
+        entry.button.tabIndex = active ? 0 : -1;
+        entry.panel.hidden = !active;
+      }
+
+      if (focus) {
+        button.focus();
+      }
+    }
+
+    for (const [index, entry] of configurationTabs.entries()) {
+      entry.button.addEventListener('click', () => {
+        activateConfigurationTab(entry.button);
+      });
+      entry.button.addEventListener('keydown', event => {
+        let nextIndex = index;
+        if (event.key === 'ArrowRight') {
+          nextIndex = (index + 1) % configurationTabs.length;
+        } else if (event.key === 'ArrowLeft') {
+          nextIndex = (index - 1 + configurationTabs.length) % configurationTabs.length;
+        } else if (event.key === 'Home') {
+          nextIndex = 0;
+        } else if (event.key === 'End') {
+          nextIndex = configurationTabs.length - 1;
+        } else {
+          return;
+        }
+
+        event.preventDefault();
+        activateConfigurationTab(configurationTabs[nextIndex].button, true);
+      });
+    }
+
     elements.goConfiguration.addEventListener('click', () => {
       vscode.postMessage({
         type: 'navigate',
@@ -111,6 +163,66 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
     });
 
     elements.addPipelineStep.addEventListener('click', addConfigurationPipelineStep);
+
+    elements.pipelineTemplate.addEventListener('change', () => {
+      renderPipelineTemplateEditor(
+        pipelineTemplateById(elements.pipelineTemplate.value)
+      );
+    });
+    elements.newPipelineTemplate.addEventListener('click', createNewPipelineTemplateDraft);
+    elements.addPipelineTemplateStep.addEventListener('click', addPipelineTemplateStep);
+    elements.pipelineTemplateName.addEventListener('input', updatePipelineTemplateActions);
+    elements.pipelineTemplateDescriptionInput.addEventListener(
+      'input',
+      updatePipelineTemplateActions
+    );
+    elements.savePipelineTemplate.addEventListener('click', () => {
+      const draft = pipelineTemplateDraft();
+      if (!draft.name) {
+        setPipelineTemplateStatus('error', 'Introduce un nombre para la plantilla.');
+        elements.pipelineTemplateName.focus();
+        return;
+      }
+      if (!pipelineTemplateDraftIsValid()) {
+        setPipelineTemplateStatus('error', 'Selecciona todos los pasos de la plantilla.');
+        return;
+      }
+      setPipelineTemplateStatus('loading', 'Guardando plantilla…');
+      vscode.postMessage({
+        type: 'savePipelineTemplate',
+        folderUri: elements.folder.value,
+        templateId: draft.id || undefined,
+        templateName: draft.name,
+        templateDescription: draft.description,
+        analysisSteps: draft.steps
+      });
+    });
+    elements.deletePipelineTemplate.addEventListener('click', () => {
+      const selected = pipelineTemplateById(elements.pipelineTemplate.value);
+      if (!selected) return;
+      setPipelineTemplateStatus(
+        'loading',
+        selected.builtin ? 'Restableciendo plantilla…' : 'Eliminando plantilla…'
+      );
+      vscode.postMessage({
+        type: 'deletePipelineTemplate',
+        folderUri: elements.folder.value,
+        templateId: elements.pipelineTemplate.value
+      });
+    });
+    elements.exportPipelineTemplate.addEventListener('click', () => {
+      vscode.postMessage({
+        type: 'exportPipelineTemplate',
+        folderUri: elements.folder.value,
+        templateId: elements.pipelineTemplate.value
+      });
+    });
+    elements.importPipelineTemplate.addEventListener('click', () => {
+      vscode.postMessage({
+        type: 'importPipelineTemplate',
+        folderUri: elements.folder.value
+      });
+    });
 
     elements.savePipeline.addEventListener('click', () => {
       syncConfigurationPipelineFields();

@@ -85,11 +85,15 @@ export function getDashboardLauncherHtml(
     .toolbar { margin-bottom: 10px; }
     .tabs {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr)) 34px;
       padding: 2px;
+      overflow: hidden;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 3px;
       background: var(--vscode-editor-background);
+    }
+    .tabs > * + * {
+      border-left: 1px solid var(--vscode-panel-border);
     }
     .tab {
       min-height: 29px;
@@ -100,6 +104,17 @@ export function getDashboardLauncherHtml(
     .tab.active {
       color: var(--vscode-foreground);
       background: var(--vscode-list-activeSelectionBackground);
+    }
+    .tab-icon {
+      display: grid;
+      width: 34px;
+      min-width: 34px;
+      padding: 4px;
+      place-items: center;
+    }
+    .tab-icon svg {
+      width: 16px;
+      height: 16px;
     }
     .reload {
       display: grid;
@@ -294,6 +309,17 @@ export function getDashboardLauncherHtml(
     <nav class="tabs" aria-label="Secciones">
       <button id="dataTab" class="tab active" type="button">Datos</button>
       <button id="configurationTab" class="tab" type="button">Configuración</button>
+      <button
+        id="diagnosticsTab"
+        class="tab tab-icon"
+        type="button"
+        title="Diagnóstico"
+        aria-label="Diagnóstico"
+      >
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 1.25A6.75 6.75 0 1 0 8 14.75 6.75 6.75 0 0 0 8 1.25Zm0 1.5a5.25 5.25 0 1 1 0 10.5 5.25 5.25 0 0 1 0-10.5Zm-.75 2v1.5h1.5v-1.5h-1.5Zm0 2.5v4h1.5v-4h-1.5Z"/>
+        </svg>
+      </button>
     </nav>
   </div>
   <section class="summary">
@@ -380,6 +406,7 @@ export function getDashboardLauncherHtml(
     const dashboardConstants = ${JSON.stringify(DASHBOARD_WEBVIEW_CONSTANTS)};
     const dataTab = document.getElementById('dataTab');
     const configurationTab = document.getElementById('configurationTab');
+    const diagnosticsTab = document.getElementById('diagnosticsTab');
     const reload = document.getElementById('reload');
     const loading = document.getElementById('loading');
     const content = document.getElementById('content');
@@ -434,9 +461,12 @@ export function getDashboardLauncherHtml(
     }
 
     function render(state) {
-      const page = state.page === 'configuration' ? 'configuration' : 'data';
+      const page = ['data', 'configuration', 'history', 'diagnostics'].includes(state.page)
+        ? state.page
+        : 'data';
       dataTab.classList.toggle('active', page === 'data');
       configurationTab.classList.toggle('active', page === 'configuration');
+      diagnosticsTab.classList.toggle('active', page === 'diagnostics');
       reload.disabled = state.loading;
       reload.classList.toggle('busy', state.loading);
       loading.hidden = !state.loading;
@@ -501,6 +531,9 @@ export function getDashboardLauncherHtml(
     });
     configurationTab.addEventListener('click', () => {
       vscode.postMessage({ type: 'navigate', page: 'configuration' });
+    });
+    diagnosticsTab.addEventListener('click', () => {
+      vscode.postMessage({ type: 'navigate', page: 'diagnostics' });
     });
     reload.addEventListener('click', () => {
       vscode.postMessage({ type: 'refresh' });

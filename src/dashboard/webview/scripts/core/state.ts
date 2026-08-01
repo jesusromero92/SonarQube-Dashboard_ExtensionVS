@@ -1,5 +1,8 @@
 export const DASHBOARD_STATE_SCRIPT = `
     let currentPage = 'data';
+    let currentPipelineHistory = [];
+    let currentHistoryEntryId = '';
+    let currentDiagnostics = null;
     let currentConfig = { serverUrl: '', projectKey: '', projectName: '', hasToken: false };
     let currentSummary = { published: 0, issues: [], severity: [], evolution: [] };
     let summaryVisible = false;

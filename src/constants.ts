@@ -49,7 +49,8 @@ export const DASHBOARD_COMMANDS = {
   nextFlowLocation: 'sonarQubeDashboard.nextFlowLocation',
   openFlowLocation: 'sonarQubeDashboard.openFlowLocation',
   showCoverage: 'sonarQubeDashboard.showCoverage',
-  showDuplications: 'sonarQubeDashboard.showDuplications'
+  showDuplications: 'sonarQubeDashboard.showDuplications',
+  openPipelineExecution: 'sonarQubeDashboard.openPipelineExecution'
 } as const;
 
 
@@ -209,6 +210,7 @@ export const SONAR_COVERAGE_METRICS = [
 ] as const;
 
 export const ISSUE_TREE_VIEW_ID = 'sonarQubeDashboard.issueTree';
+export const PIPELINE_EXECUTION_TREE_VIEW_ID = 'sonarQubeDashboard.pipelineExecutions';
 export const ISSUE_TREE_GROUPS = ['file', 'rule', 'severity'] as const;
 export type IssueTreeGroup = typeof ISSUE_TREE_GROUPS[number];
 

@@ -4,6 +4,7 @@ import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/config
 import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisConfirmationDialog';
 import { CREATE_COMPONENT_DIALOG_MARKUP } from '../src/dashboard/webview/modals/createComponentDialog';
 import { ANALYSIS_STYLES } from '../src/dashboard/webview/styles/analysis';
+import { DISCLOSURE_STYLES } from '../src/dashboard/webview/design/components/disclosure';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
 import { ELEMENT_REGISTRY_SCRIPT } from '../src/dashboard/webview/scripts/core/elements';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
@@ -12,6 +13,55 @@ import { SELECT_DROPDOWN_SCRIPT } from '../src/dashboard/webview/scripts/ui/sele
 import { EN_MESSAGES } from '../src/i18n/en';
 import { ES_MESSAGES } from '../src/i18n/es';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
+
+test('la configuración se divide en pestañas accesibles por categoría', () => {
+  for (const id of [
+    'configurationSonarTab',
+    'configurationPipelineTab',
+    'configurationNotificationsTab',
+    'configurationSonarPanel',
+    'configurationPipelinePanel',
+    'configurationNotificationsPanel'
+  ]) {
+    assert.match(CONFIGURATION_PAGE_MARKUP, new RegExp(`id="${id}"`));
+    assert.match(ELEMENT_REGISTRY_SCRIPT, new RegExp(`"${id}"`));
+  }
+
+  assert.match(CONFIGURATION_PAGE_MARKUP, /class="configuration-tabs" role="tablist"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationSonarTab"[\s\S]*aria-selected="true"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationPipelinePanel"[\s\S]*hidden/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationNotificationsPanel"[\s\S]*hidden/);
+  assert.ok(
+    CONFIGURATION_PAGE_MARKUP.indexOf('id="serverUrl"') <
+      CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationPipelinePanel"')
+  );
+  assert.ok(
+    CONFIGURATION_PAGE_MARKUP.indexOf('id="scannerMode"') <
+      CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationPipelinePanel"')
+  );
+  assert.ok(
+    CONFIGURATION_PAGE_MARKUP.indexOf('id="buildCommand"') <
+      CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationNotificationsPanel"')
+  );
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /function activateConfigurationTab/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /ArrowRight/);
+  assert.match(CONFIGURATION_EVENTS_SCRIPT, /ArrowLeft/);
+  assert.match(DISCLOSURE_STYLES, /\.configuration-tabs button\.active/);
+  assert.match(DISCLOSURE_STYLES, /\.configuration-tab-panel\[hidden\]/);
+});
+
+test('las pestañas de configuración están traducidas en español e inglés', () => {
+  for (const key of [
+    'configurationSections',
+    'configurationSonarQubeTab',
+    'configurationPipelineTab',
+    'configurationNotificationsTab'
+  ] as const) {
+    assert.ok(SOURCE_MESSAGES[key]);
+    assert.ok(EN_MESSAGES[key]);
+    assert.ok(ES_MESSAGES[key]);
+  }
+});
 
 test('la configuración contiene todos los elementos de versión y perfil', () => {
   for (const id of [
@@ -199,12 +249,12 @@ test('los reintentos de conexión no reconstruyen controles ni bloquean acciones
 });
 
 test('la configuración reutiliza el componente de desplegable del dashboard', () => {
-  for (const id of ['language', 'folder', 'projectKey', 'scannerMode']) {
+  for (const id of ['language', 'folder', 'projectKey', 'scannerMode', 'pipelineTemplate']) {
     assert.match(CONFIGURATION_PAGE_MARKUP, new RegExp(`id="${id}"`));
   }
   assert.equal(
     CONFIGURATION_PAGE_MARKUP.match(/data-select-dropdown/g)?.length,
-    4
+    5
   );
   assert.match(CONFIGURATION_PAGE_MARKUP, /select-dropdown--fluid/);
   assert.match(SELECT_DROPDOWN_SCRIPT, /MutationObserver/);

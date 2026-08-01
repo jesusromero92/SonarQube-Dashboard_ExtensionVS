@@ -23,6 +23,9 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 
 - Análisis del repositorio desde VS Code con detección automática del scanner.
 - Pipeline de análisis configurable con compilación, tests, integraciones predefinidas y pasos personalizados ordenables mediante drag & drop.
+- Plantillas reutilizables de pipeline: **Rápido**, **Completo**, **Seguridad**, **Release** y plantillas propias importables/exportables en YAML versionado.
+- Vista nativa **Ejecuciones del pipeline** con las últimas ejecuciones, su estado, duración, pasos y registro en tiempo real o histórico.
+- Pantalla de diagnóstico interno con entorno, servidor, compatibilidad, scanner, herramientas, comandos, última petición fallida y tiempo de respuesta.
 - Compatibilidad con Maven/Gradle para Java y Kotlin, SonarScanner for .NET para C#/VB.NET/F#, SonarScanner for NPM para proyectos con `package.json` y SonarScanner CLI en Docker para proyectos genéricos.
 - Selección manual de Maven, Gradle, .NET, NPM, Docker o un comando personalizado.
 - Sincronización automática al abrir un proyecto ya vinculado.
@@ -68,7 +71,8 @@ Después de la primera vinculación, la extensión sincroniza los datos automát
 
 El panel lateral ofrece una lectura rápida sin abandonar el explorador de VS Code:
 
-- **Datos / Configuración:** cambia entre el resumen y la conexión del proyecto.
+- **Datos / Configuración / Diagnóstico:** abre el resumen, la configuración dividida por áreas o el informe técnico de la extensión.
+- **Ejecuciones del pipeline:** vista nativa de VS Code situada bajo el resumen lateral; muestra ejecuciones activas y finalizadas y abre su página de detalle.
 - **Recargar:** vuelve a consultar SonarQube y actualiza el dashboard y Problems.
 - **Issues encontrados:** total de issues que coinciden con archivos existentes en la carpeta vinculada.
 - **Severidades:** distribución de Blocker, Critical, Major, Minor e Info entre esos issues locales.
@@ -326,13 +330,17 @@ La versión 0.20.1 detecta herramientas conocidas del proyecto y las ofrece como
 - Snyk;
 - OWASP Dependency-Check para Maven o Gradle.
 
-Las integraciones detectadas aparecen en **Configuración → Pipeline de análisis**. Desde allí pueden añadirse al pipeline persistente o seleccionarse directamente al preparar una ejecución. El comando y la política de fallo siguen siendo editables.
+Las integraciones detectadas aparecen en **Configuración → Pipeline**, dentro del acordeón **Integraciones predefinidas detectadas**, situado debajo de las plantillas. Desde allí pueden añadirse a los pasos reutilizables; al añadir una integración deja de aparecer en la lista de disponibles y vuelve a mostrarse si se elimina de los pasos personalizados. El comando y la política de fallo siguen siendo editables.
 
 ## Pipeline de análisis configurable
 
 ![Configuración de compilación, tests y pasos personalizados](docs/images/analysis-pipeline-configuration.png)
 
-La sección **Configuración → Pipeline de análisis** detecta automáticamente los comandos habituales de compilación y tests según el proyecto. Ambos pueden reemplazarse manualmente. También permite crear pasos personalizados para auditorías de dependencias, linters, SAST, generación de informes u otras herramientas disponibles en el workspace.
+<!-- Captura pendiente de la organización actual de la pestaña Pipeline:
+![Pestaña Pipeline con pasos, plantillas e integraciones](docs/images/pipeline-configuration-v021.png)
+-->
+
+La pestaña **Configuración → Pipeline** detecta automáticamente los comandos habituales de compilación y tests según el proyecto. Ambos pueden reemplazarse manualmente. También permite crear pasos personalizados para auditorías de dependencias, linters, SAST, generación de informes u otras herramientas disponibles en el workspace.
 
 Cada paso personalizado incluye:
 
@@ -351,6 +359,86 @@ El botón **Analizar** permanece deshabilitado mientras exista un paso incomplet
 ![Stepper y registro de un pipeline en ejecución](docs/images/analysis-pipeline-execution.png)
 
 Durante la ejecución, el modal muestra un stepper cuando hay más de un paso. Cada etapa indica si está ejecutándose, ha finalizado correctamente, ha fallado deteniendo el pipeline o ha fallado con permiso para continuar. El registro separa claramente el inicio y el final de cada paso, muestra el comando ejecutado y conserva la salida completa de las herramientas.
+
+## Plantillas de pipeline
+
+![Editor de plantillas de pipeline](docs/images/pipeline-templates.png)
+
+La versión 0.21.0 incorpora un acordeón de plantillas reutilizables en **Configuración → Pipeline**:
+
+- **Rápido:** compilación y SonarQube.
+- **Completo:** compilación, tests, auditoría de dependencias y SonarQube.
+- **Seguridad:** herramientas de seguridad detectadas y SonarQube.
+- **Release:** todos los pasos disponibles con política estricta de parada ante fallos.
+
+Los pasos reutilizables se crean primero en **Pasos del pipeline**. Después, el editor de plantillas permite seleccionar una plantilla, revisar sus pasos, añadir otros disponibles, eliminarlos y reordenarlos mediante drag & drop sin modificar la lista general de pasos del proyecto.
+
+Las plantillas integradas se adaptan a los comandos y herramientas detectados en la carpeta. **Guardar cambios** actualiza la plantilla seleccionada para ese workspace, incluidas las plantillas predeterminadas, sin crear duplicados. Las plantillas personalizadas pueden eliminarse con confirmación; al eliminar una personalización de una plantilla integrada se recupera su definición predeterminada. También se pueden importar y exportar plantillas como `.sonarqube-dashboard.yml` o YAML equivalente.
+
+El archivo exportado utiliza `version: 1` y conserva el orden de los pasos, incluido cualquier paso situado después de SonarQube:
+
+```yaml
+version: 1
+name: "Release local"
+description: "Pipeline versionado del workspace"
+steps:
+  - id: "build"
+    name: "Compilar"
+    kind: build
+    command: "npm run compile"
+    failurePolicy: stop
+    enabled: true
+  - id: "sonarqube-analysis"
+    name: "Análisis SonarQube"
+    kind: sonar
+    command: ""
+    failurePolicy: stop
+    enabled: true
+  - id: "report"
+    name: "Publicar informe"
+    kind: custom
+    command: "npm run security-report"
+    failurePolicy: continue
+    enabled: true
+```
+
+## Historial de ejecuciones
+
+
+![Vista nativa Ejecuciones del pipeline](docs/images/pipeline-executions-native.png)
+
+La vista nativa **Ejecuciones del pipeline**, situada en la barra lateral junto al **Explorador de defectos**, conserva localmente las últimas 30 ejecuciones de cada carpeta de análisis. Las ejecuciones activas muestran estado de carga y las finalizadas indican su resultado y duración.
+
+Al seleccionar cualquier ejecución, activa o finalizada, se abre una página dedicada que muestra únicamente esa ejecución:
+
+![Detalle de una ejecución del pipeline](docs/images/pipeline-run-detail.png)
+
+
+- proyecto, rama, fecha, resultado y duración total;
+- scanner utilizado;
+- resultado y duración de cada paso;
+- advertencias permitidas, fallos y cancelaciones;
+- acordeones animados para los pasos y la consola;
+- registro en tiempo real mientras la ejecución continúa;
+- registro histórico limitado para evitar un crecimiento indefinido del almacenamiento.
+
+La página mantiene visible la ejecución actual mientras se cambia a otra para evitar parpadeos de carga. El historial se guarda en el estado del workspace, no contiene el token y puede limpiarse desde la propia pantalla.
+
+## Diagnóstico interno
+
+![Diagnóstico interno de la extensión](docs/images/diagnostics.png)
+
+La pestaña **Diagnóstico** recopila información útil para investigar problemas de conexión, compatibilidad o detección del proyecto:
+
+- versión de la extensión, VS Code y Node.js;
+- sistema operativo, arquitectura y estado de confianza del workspace;
+- SonarQube detectado, estado, perfil de compatibilidad y latencia del servidor;
+- scanner seleccionado y evidencia usada para detectarlo;
+- únicamente los comandos de compilación y tests detectados automáticamente;
+- integraciones disponibles y la evidencia utilizada para detectarlas;
+- última petición fallida y errores producidos durante la recopilación.
+
+La página utiliza tarjetas monocromas y compactas, sin colores por categoría. **Copiar informe** genera un texto listo para adjuntar a una incidencia. Las credenciales, cabeceras de autorización y valores reconocibles como token, contraseña, secreto o API key se ocultan antes de copiarse.
 
 ## Análisis del repositorio
 
@@ -409,7 +497,9 @@ El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados
 
 El flujo de conexión es explícito: **Conectar** valida la URL y el token y carga los componentes visibles sin seleccionar ninguno. Si la validación falla, el desplegable de proyectos permanece vacío y deshabilitado. El proyecto solo queda vinculado cuando el usuario lo selecciona y pulsa **Sincronizar**. Los borradores no guardados del servidor y del token se conservan al cambiar entre Datos y Configuración.
 
-La página de configuración permite gestionar:
+La página de configuración está dividida en las pestañas **SonarQube**, **Pipeline** y **Notificaciones**, cada una con sus propios acordeones. La pestaña **SonarQube** contiene la conexión, el proyecto y la configuración avanzada del scanner; **Pipeline** contiene pasos, plantillas e integraciones; y **Notificaciones** agrupa los avisos automáticos.
+
+La página permite gestionar:
 
 - **Servidor SonarQube:** URL base del servidor.
 - **Token:** credencial utilizada para consultar la API.
