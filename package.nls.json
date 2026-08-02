@@ -1,5 +1,5 @@
 {
-  "extension.description": "SonarQube dashboard for VS Code with repository analysis, Problems, Quality Gate, issues, hotspots, rankings, and evolution.",
+  "extension.description": "Run SonarQube analysis pipelines and inspect Quality Gates, issues, Security Hotspots, coverage, duplication, and execution history directly in VS Code.",
   "views.container.title": "SonarQube Dashboard & Pipeline",
   "views.panel.name": "Panel",
   "command.open": "SonarQube Dashboard & Pipeline: Open dashboard",

@@ -1,15 +1,52 @@
-# SonarQube Dashboard para Visual Studio Code
+# SonarQube Dashboard & Pipeline para Visual Studio Code
 
 [English](README.md) | **Español**
 
-SonarQube Dashboard conecta cada carpeta del workspace con un proyecto de SonarQube y acerca sus resultados al flujo de trabajo de Visual Studio Code.
+Guía técnica de usuario para configurar, sincronizar, analizar y operar proyectos de SonarQube y pipelines locales de calidad desde Visual Studio Code.
 
-La extensión permite ejecutar un nuevo análisis del repositorio, consultar el estado del proyecto, comparar **Overall** y **New Code**, revisar defectos y Security Hotspots, analizar la evolución entre análisis y publicar los hallazgos directamente en el panel **Problems**.
+![Vista general de SonarQube Dashboard & Pipeline](docs/images/marketplace-hero.png)
 
+> **Extensión comunitaria:** este proyecto es independiente y no está afiliado, respaldado ni mantenido por SonarSource. SonarQube es una marca registrada de SonarSource SA.
+
+## Alcance funcional
+
+| Área | Funcionamiento técnico |
+|---|---|
+| Conexión con SonarQube | Valida el servidor y el token configurados, carga los proyectos accesibles y guarda el proyecto seleccionado por carpeta del workspace. |
+| Sincronización | Obtiene issues, Security Hotspots, condiciones del Quality Gate, ratings, métricas, histórico, cobertura y duplicación. |
+| Asociación con archivos locales | Relaciona las rutas de componentes de SonarQube con archivos de la carpeta activa y de la subcarpeta local opcional. |
+| Análisis del repositorio | Detecta Maven, Gradle, .NET, NPM, Docker o un comando de scanner personalizado y lo ejecuta en el workspace. |
+| Pipeline de calidad | Ejecuta compilación, tests, auditorías, herramientas de seguridad, SonarQube y comandos personalizados en el orden seleccionado y con políticas de fallo por paso. |
+| Integración con el editor | Publica entradas en Problems, decoraciones, hovers, CodeLens, flujos de issues, cobertura e indicadores de duplicación. |
+| Historial de ejecuciones | Conserva las últimas 30 ejecuciones por carpeta de análisis, incluyendo estado, duración, pasos y log limitado. |
+| Diagnóstico | Informa del entorno, compatibilidad, scanner, comandos detectados, herramientas, latencia del servidor y última petición fallida, ocultando secretos. |
+
+## Modelo de funcionamiento
+
+1. La carpeta activa aporta la configuración de servidor, proyecto, rama, ruta local, scanner, pipeline y notificaciones.
+2. El token se obtiene desde `SecretStorage` de VS Code y no se guarda en `settings.json`.
+3. La sincronización consulta el servidor SonarQube configurado y asocia las rutas recibidas con archivos locales.
+4. Solo los hallazgos cuyos archivos pueden resolverse dentro de la carpeta activa se publican en el dashboard local, Problems, decoraciones y explorador de issues.
+5. El análisis del repositorio ejecuta el pipeline confirmado dentro del workspace de confianza y transmite la salida a la vista de ejecución.
+6. Los metadatos de las ejecuciones finalizadas se guardan en el estado del workspace, con un máximo de 30 entradas por carpeta de análisis.
+7. Al cambiar de carpeta activa, la extensión carga su configuración independiente y cancela las solicitudes obsoletas.
+
+## Instalación
+
+### Visual Studio Marketplace
+
+Abre **Extensiones** en Visual Studio Code, busca **SonarQube Dashboard & Pipeline**, selecciona la extensión y pulsa **Instalar**.
+
+### Paquete VSIX
+
+1. Abre la paleta de comandos con `Ctrl + Shift + P` o `Cmd + Shift + P`.
+2. Ejecuta **Extensions: Install from VSIX...**.
+3. Selecciona `vscode-sonarqube-dashboard-pipeline-<versión>.vsix`.
+4. Recarga la ventana cuando se solicite.
 
 ## Requisito para utilizar la extensión
 
-Para que SonarQube Dashboard funcione correctamente:
+Para que SonarQube Dashboard & Pipeline funcione correctamente:
 
 1. La aplicación debe haber sido analizada previamente en SonarQube.
 2. En Visual Studio Code debe abrirse la carpeta local de esa misma aplicación.
@@ -53,7 +90,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 
 1. Comprueba que la aplicación ya tenga al menos un análisis disponible en SonarQube.
 2. Abre en VS Code la carpeta local de esa misma aplicación.
-3. Pulsa el icono de **SonarQube Dashboard** en la barra de actividad.
+3. Pulsa el icono de **SonarQube Dashboard & Pipeline** en la barra de actividad.
 4. Abre la pestaña **Configuración**.
 5. Selecciona **Español** o **English** en el desplegable de idioma. El dashboard, el panel lateral, las notificaciones, los modales y los mensajes del scanner cambian inmediatamente.
 6. Introduce la URL del servidor y un token de acceso.
@@ -138,7 +175,7 @@ Al abrir un archivo con hallazgos, la extensión marca directamente las líneas 
 - resalta la línea con el color correspondiente al tipo de hallazgo y añade una marca en la regla de visión general del editor;
 - muestra un CodeLens sobre la línea afectada con severidad, regla y acceso directo al detalle;
 - al situar el puntero sobre el icono muestra la descripción, regla, tipo, severidad o prioridad, estado, resolución, archivo, línea, proyecto, componente, identificador e impactos disponibles;
-- el enlace del tooltip abre el detalle completo del defecto o Security Hotspot en **SonarQube Dashboard**.
+- el enlace del tooltip abre el detalle completo del defecto o Security Hotspot en **SonarQube Dashboard & Pipeline**.
 
 Los indicadores solo se crean para hallazgos cuya ruta de SonarQube coincide con un archivo real de la carpeta vinculada. Se actualizan al sincronizar el dashboard y se eliminan al limpiar sus datos.
 
@@ -321,7 +358,7 @@ La extensión obtiene el detalle bajo demanda para no retrasar la carga inicial 
 
 ## Integraciones predefinidas
 
-La versión 0.20.1 detecta herramientas conocidas del proyecto y las ofrece como pasos reutilizables del pipeline. Según los archivos, scripts y dependencias disponibles, puede proponer:
+La extensión detecta herramientas conocidas del proyecto y las ofrece como pasos reutilizables del pipeline. Según los archivos, scripts y dependencias disponibles, puede proponer:
 
 - auditoría de dependencias con `npm audit`, `pnpm audit` o `yarn audit`;
 - ESLint;
@@ -335,10 +372,6 @@ Las integraciones detectadas aparecen en **Configuración → Pipeline**, dentro
 ## Pipeline de análisis configurable
 
 ![Configuración de compilación, tests y pasos personalizados](docs/images/analysis-pipeline-configuration.png)
-
-<!-- Captura pendiente de la organización actual de la pestaña Pipeline:
-![Pestaña Pipeline con pasos, plantillas e integraciones](docs/images/pipeline-configuration-v021.png)
--->
 
 La pestaña **Configuración → Pipeline** detecta automáticamente los comandos habituales de compilación y tests según el proyecto. Ambos pueden reemplazarse manualmente. También permite crear pasos personalizados para auditorías de dependencias, linters, SAST, generación de informes u otras herramientas disponibles en el workspace.
 
@@ -362,9 +395,9 @@ Durante la ejecución, el modal muestra un stepper cuando hay más de un paso. C
 
 ## Plantillas de pipeline
 
-![Editor de plantillas de pipeline](docs/images/pipeline-templates.png)
+![Editor de plantillas de pipeline](docs/images/analysis-pipeline-configuration.png)
 
-La versión 0.21.0 incorpora un acordeón de plantillas reutilizables en **Configuración → Pipeline**:
+La extensión incorpora un acordeón de plantillas reutilizables en **Configuración → Pipeline**:
 
 - **Rápido:** compilación y SonarQube.
 - **Completo:** compilación, tests, auditoría de dependencias y SonarQube.
@@ -484,7 +517,7 @@ Los issues Overall se publican como diagnósticos nativos de VS Code:
 - muestran regla y descripción;
 - incluyen severidad, línea y columna;
 - muestran en el editor el icono del tipo de hallazgo y permiten consultar todos sus datos desde la propia línea;
-- identifican a **SonarQube Dashboard** como origen;
+- identifican a **SonarQube Dashboard & Pipeline** como origen;
 - permiten navegar al código con un clic.
 
 Para evitar diagnósticos asociados a archivos incorrectos, no se publica un issue cuando su ruta de SonarQube no puede resolverse dentro de la carpeta vinculada.
@@ -564,86 +597,23 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
 
 `sonarQubeDashboard.language` acepta `en` o `es` y se guarda globalmente para el entorno de VS Code. `autoRefresh` activa la sincronización al abrir o cambiar el workspace. Un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica.
 
-## Desarrollo
+## Limitaciones operativas
 
-Instala las dependencias y compila:
+- La extensión no sustituye al servidor ni al scanner de SonarQube; necesita una instancia accesible y las herramientas requeridas por el modo de scanner seleccionado.
+- Los issues, hotspots, datos de cobertura y duplicaciones solo se muestran cuando sus rutas pueden asociarse con archivos de la carpeta activa.
+- Las gráficas históricas de New Code no se generan porque el periodo de New Code puede cambiar entre análisis y no siempre es comparable.
+- Las operaciones de escritura dependen de los permisos del token y de las acciones que SonarQube devuelva para cada issue.
+- Los comandos externos del pipeline pueden modificar archivos, acceder a la red o ejecutar código del proyecto. Revisa cada comando y utiliza únicamente workspaces de confianza.
+- La cobertura solo está disponible cuando el scanner ha importado informes compatibles en SonarQube.
 
-```bash
-npm install
-npm run compile
-```
+## Documentación técnica
 
-Para mantener el compilador activo:
-
-```bash
-npm run watch
-```
-
-Pulsa `F5` desde Visual Studio Code para ejecutar la extensión en un **Extension Development Host**.
-
-### Estructura
-
-```text
-src/
-├── constants.ts
-├── dashboardPanel.ts
-├── diagnostics.ts
-├── extension.ts
-├── sonarClient.ts
-├── types.ts
-├── scanner/
-│   ├── analysisService.ts
-│   ├── detector.ts
-│   ├── processRunner.ts
-│   └── types.ts
-└── dashboard/
-    ├── contracts.ts
-    ├── summary.ts
-    ├── components/
-    ├── modals/
-    ├── pages/
-    ├── scripts/
-    └── styles/
-```
-
-Colores, iconos, severidades, tipos, estados y métricas están centralizados. Las páginas, componentes, scripts, modales y estilos del webview se mantienen en módulos separados.
-
-## Generar el VSIX
-
-Desde PowerShell:
-
-```powershell
-.\generar-vsix.ps1
-```
-
-Sin reinstalar dependencias:
-
-```powershell
-.\generar-vsix.ps1 -SinInstalarDependencias
-```
-
-También se puede ejecutar:
-
-```bat
-generar-vsix.cmd
-```
-
-El VSIX utiliza la versión indicada en `package.json`.
-
-## Instalar el VSIX
-
-1. Abre la paleta con `Ctrl + Shift + P`.
-2. Ejecuta **Extensions: Install from VSIX...**.
-3. Selecciona `sonarqube-dashboard-<versión>.vsix`.
-4. Recarga la ventana cuando VS Code lo solicite.
-
-## Repositorio
-
-- Código fuente: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS>
-- Incidencias: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues>
+- [Modelo de seguridad y uso seguro](SECURITY.md)
+- [Tratamiento de datos y persistencia local](PRIVACY.md)
+- [Diagnóstico y resolución de problemas](SUPPORT.md)
+- [Historial de versiones](CHANGELOG.md)
+- [Términos de licencia](LICENSE)
 
 ## Licencia
 
-Consulta [LICENSE](LICENSE) para conocer los términos de uso y distribución.
-
-Esta licencia no es una licencia Open Source aprobada por la Open Source Initiative, ya que limita la modificación y distribución de trabajos derivados.
+Consulta [LICENSE](LICENSE) para conocer los términos de uso y distribución. La licencia no está aprobada como Open Source por la Open Source Initiative porque limita la modificación y distribución de trabajos derivados.

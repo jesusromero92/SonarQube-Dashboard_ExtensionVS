@@ -1,8 +1,26 @@
 # Changelog
 
-All notable changes to SonarQube Dashboard will be documented in this file.
+All notable changes to SonarQube Dashboard & Pipeline will be documented in this file.
 
-*Todos los cambios relevantes de SonarQube Dashboard se documentarán en este archivo.*
+*Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
+
+## [1.0.0] - 2026-08-02
+
+### Changed
+
+- Marketplace launch under the **SonarQube Dashboard & Pipeline** name with optimized description, categories, keywords, gallery banner, screenshots, trust documentation, support links, and bilingual positioning.
+
+  *Lanzamiento en Marketplace con el nombre **SonarQube Dashboard & Pipeline**, descripción, categorías, palabras clave, banner, capturas, documentación de confianza, soporte y posicionamiento bilingüe optimizados.*
+
+### Added
+
+- GitHub issue templates, CI packaging workflow, manual Marketplace publishing workflow, reproducible demo project, and a launch and content kit.
+
+  *Plantillas de incidencias, workflow de CI y empaquetado, publicación manual en Marketplace, proyecto de demostración y kit de lanzamiento y contenidos.*
+
+- Security, privacy, support, and contribution documentation.
+
+  *Documentación de seguridad, privacidad, soporte y contribución.*
 
 ## [0.21.0] - 2026-08-01
 

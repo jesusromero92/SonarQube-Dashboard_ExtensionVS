@@ -13,3 +13,5 @@ docs/images/*.svg
 
 generar-vsix.ps1
 generar-vsix.cmd
+.github/**
+examples/**

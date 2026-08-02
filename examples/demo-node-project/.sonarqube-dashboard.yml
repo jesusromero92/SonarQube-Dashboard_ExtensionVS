@@ -1,0 +1,28 @@
+version: 1
+name: "Complete demo"
+description: "Build, test, dependency audit, and SonarQube."
+steps:
+  - id: "build"
+    name: "Build"
+    kind: build
+    command: "npm run compile"
+    failurePolicy: stop
+    enabled: true
+  - id: "tests"
+    name: "Run tests"
+    kind: test
+    command: "npm test"
+    failurePolicy: stop
+    enabled: true
+  - id: "audit"
+    name: "Dependency audit"
+    kind: custom
+    command: "npm run audit:high"
+    failurePolicy: continue
+    enabled: true
+  - id: "sonarqube-analysis"
+    name: "SonarQube analysis"
+    kind: sonar
+    command: ""
+    failurePolicy: stop
+    enabled: true

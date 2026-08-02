@@ -1,14 +1,52 @@
-# SonarQube Dashboard for Visual Studio Code
+# SonarQube Dashboard & Pipeline for Visual Studio Code
 
 **English** | [Español](README.es.md)
 
-SonarQube Dashboard connects each workspace folder to a SonarQube project and brings its results directly into the Visual Studio Code workflow.
+Technical user guide for configuring, synchronizing, analyzing, and operating SonarQube projects and local quality pipelines from Visual Studio Code.
 
-The extension can run a new repository analysis, inspect project status, compare **Overall** and **New Code**, review issues and Security Hotspots, analyze changes between scans, and publish findings directly in the **Problems** panel.
+![SonarQube Dashboard & Pipeline overview](docs/images/marketplace-hero.png)
+
+> **Community extension:** this project is independent and is not affiliated with, endorsed by, or maintained by SonarSource. SonarQube is a trademark of SonarSource SA.
+
+## Functional scope
+
+| Area | Technical behavior |
+|---|---|
+| SonarQube connection | Validates the configured server and token, lists accessible projects, and stores the selected project per workspace folder. |
+| Synchronization | Retrieves issues, Security Hotspots, Quality Gate conditions, ratings, measures, history, coverage, and duplication data. |
+| Local file mapping | Matches SonarQube component paths to files inside the active workspace folder and optional local subfolder. |
+| Repository analysis | Detects Maven, Gradle, .NET, NPM, Docker, or a custom scanner command and executes it in the workspace. |
+| Quality pipeline | Runs build, test, audit, security, SonarQube, and custom commands in the selected order with per-step failure policies. |
+| Editor integration | Publishes Problems entries, gutter decorations, hovers, CodeLens, issue flows, coverage, and duplication indicators. |
+| Execution history | Stores the latest 30 pipeline executions per analysis folder, including status, duration, steps, and bounded log output. |
+| Diagnostics | Reports environment, compatibility, scanner, detected commands, tools, server latency, and the latest failed request with secrets redacted. |
+
+## Operating model
+
+1. The active workspace folder provides the server, project, branch, local path, scanner, pipeline, and notification configuration.
+2. The access token is read from VS Code `SecretStorage`; it is not stored in `settings.json`.
+3. Synchronization queries the configured SonarQube server and maps returned component paths to local files.
+4. Only findings whose files can be resolved inside the active folder are published to the local dashboard, Problems, editor decorations, and issue explorer.
+5. Repository analysis executes the confirmed pipeline in the trusted workspace and streams output to the execution view.
+6. Completed execution metadata is stored in workspace state with a maximum of 30 entries per analysis folder.
+7. Changing the active folder switches to that folder's independent configuration and cancels obsolete requests.
+
+## Installation
+
+### Visual Studio Marketplace
+
+Open **Extensions** in Visual Studio Code, search for **SonarQube Dashboard & Pipeline**, select the extension, and choose **Install**.
+
+### VSIX package
+
+1. Open the Command Palette with `Ctrl + Shift + P` or `Cmd + Shift + P`.
+2. Run **Extensions: Install from VSIX...**.
+3. Select `vscode-sonarqube-dashboard-pipeline-<version>.vsix`.
+4. Reload the window when requested.
 
 ## Requirements
 
-For SonarQube Dashboard to work correctly:
+For SonarQube Dashboard & Pipeline to work correctly:
 
 1. The application must already have been analyzed in SonarQube at least once.
 2. The local folder for that same application must be open in Visual Studio Code.
@@ -52,7 +90,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 
 1. Make sure the application already has at least one analysis available in SonarQube.
 2. Open the local folder for that same application in VS Code.
-3. Select the **SonarQube Dashboard** icon in the Activity Bar.
+3. Select the **SonarQube Dashboard & Pipeline** icon in the Activity Bar.
 4. Open the **Configuration** tab.
 5. Select **English** or **Español** from the language dropdown. The dashboard, side panel, notifications, dialogs, and scanner messages update immediately.
 6. Enter the server URL and an access token.
@@ -137,7 +175,7 @@ When a file containing findings is opened, the extension marks the affected line
 - the affected line is highlighted with the corresponding finding-type color and a marker is added to the editor overview ruler;
 - a CodeLens above the affected line shows severity, rule, and direct access to the details;
 - hovering over the icon displays the description, rule, type, severity or priority, status, resolution, file, line, project, component, identifier, and available impacts;
-- the tooltip link opens the complete issue or Security Hotspot details in **SonarQube Dashboard**.
+- the tooltip link opens the complete issue or Security Hotspot details in **SonarQube Dashboard & Pipeline**.
 
 Indicators are only created for findings whose SonarQube path matches a real file in the linked folder. They are refreshed when dashboard data is synchronized and removed when its data is cleared.
 
@@ -320,7 +358,7 @@ The extension loads hotspot details on demand so they do not delay the initial d
 
 ## Predefined integrations
 
-Version 0.20.1 detects known project tools and offers them as reusable pipeline steps. Depending on the available files, scripts, and dependencies, it can propose:
+The extension detects known project tools and offers them as reusable pipeline steps. Depending on the available files, scripts, and dependencies, it can propose:
 
 - dependency auditing with `npm audit`, `pnpm audit`, or `yarn audit`;
 - ESLint;
@@ -334,10 +372,6 @@ Detected integrations appear under **Configuration → Pipeline**, inside the **
 ## Configurable analysis pipeline
 
 ![Build, test, and custom-step configuration](docs/images/analysis-pipeline-configuration.png)
-
-<!-- Pending screenshot for the current Pipeline tab layout:
-![Pipeline tab with steps, templates, and integrations](docs/images/pipeline-configuration-v021.png)
--->
 
 The **Configuration → Pipeline** tab automatically detects common build and test commands for the current project. Both commands can be overridden manually. Custom steps can also run dependency audits, linters, SAST tools, report generators, or any other tool available in the workspace.
 
@@ -361,11 +395,9 @@ While the pipeline runs, the dialog displays a stepper whenever more than one st
 
 ## Pipeline templates
 
-<!-- Pending screenshot for the template editor:
-![Pipeline template editor](docs/images/pipeline-templates-v021.png)
--->
+![Pipeline template editor](docs/images/analysis-pipeline-configuration.png)
 
-Version 0.21.0 adds a reusable template accordion under **Configuration → Pipeline**:
+The extension provides a reusable template accordion under **Configuration → Pipeline**:
 
 - **Quick:** build and SonarQube.
 - **Complete:** build, tests, dependency audit, and SonarQube.
@@ -484,7 +516,7 @@ Overall issues are published as native VS Code diagnostics:
 - displaying rule and description;
 - including severity, line, and column;
 - displaying the finding-type icon in the editor and exposing all available details from the affected line;
-- identifying **SonarQube Dashboard** as the source;
+- identifying **SonarQube Dashboard & Pipeline** as the source;
 - supporting one-click navigation to the code.
 
 To avoid diagnostics being associated with the wrong files, an issue is not published when its SonarQube path cannot be resolved inside the linked folder.
@@ -565,86 +597,23 @@ When the active folder changes, the extension selects the matching configuration
 
 `sonarQubeDashboard.language` accepts `en` or `es` and is stored globally for the VS Code environment. `autoRefresh` enables synchronization when opening or changing the workspace. A value greater than `0` for `refreshIntervalMinutes` enables periodic updates.
 
-## Development
+## Operational limitations
 
-Install dependencies and compile:
+- The extension does not replace the SonarQube server or scanner; it requires a reachable SonarQube instance and the tools needed by the selected scanner mode.
+- Issues, hotspots, coverage, and duplication details are displayed only when their component paths can be mapped to files in the active workspace folder.
+- Historical New Code charts are intentionally not produced because the New Code period can change between analyses and is not necessarily comparable.
+- Write operations depend on the permissions granted to the configured SonarQube token and on the actions returned by the server.
+- External pipeline commands can modify files, access the network, or execute project code. Review every command and use only trusted workspaces.
+- Coverage is available only when the scanner has imported compatible coverage reports into SonarQube.
 
-```bash
-npm install
-npm run compile
-```
+## Technical documents
 
-Keep the compiler running:
-
-```bash
-npm run watch
-```
-
-Press `F5` in Visual Studio Code to run the extension in an **Extension Development Host**.
-
-### Structure
-
-```text
-src/
-├── constants.ts
-├── dashboardPanel.ts
-├── diagnostics.ts
-├── extension.ts
-├── sonarClient.ts
-├── types.ts
-├── scanner/
-│   ├── analysisService.ts
-│   ├── detector.ts
-│   ├── processRunner.ts
-│   └── types.ts
-└── dashboard/
-    ├── contracts.ts
-    ├── summary.ts
-    ├── components/
-    ├── modals/
-    ├── pages/
-    ├── scripts/
-    └── styles/
-```
-
-Colors, icons, severities, types, statuses, and metrics are centralized. Webview pages, components, scripts, dialogs, and styles are maintained in separate modules.
-
-## Generate the VSIX
-
-From PowerShell:
-
-```powershell
-.\generar-vsix.ps1
-```
-
-Without reinstalling dependencies:
-
-```powershell
-.\generar-vsix.ps1 -SinInstalarDependencias
-```
-
-You can also run:
-
-```bat
-generar-vsix.cmd
-```
-
-The VSIX uses the version defined in `package.json`.
-
-## Install the VSIX
-
-1. Open the Command Palette with `Ctrl + Shift + P`.
-2. Run **Extensions: Install from VSIX...**.
-3. Select `sonarqube-dashboard-<version>.vsix`.
-4. Reload the window when requested by VS Code.
-
-## Repository
-
-- Source code: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS>
-- Issues: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues>
+- [Security model and secure operation](SECURITY.md)
+- [Data processing and local persistence](PRIVACY.md)
+- [Diagnostics and troubleshooting](SUPPORT.md)
+- [Release history](CHANGELOG.md)
+- [License terms](LICENSE)
 
 ## License
 
-See [LICENSE](LICENSE) for usage and distribution terms.
-
-This license is not an Open Source Initiative-approved license because it restricts modification and distribution of derivative works.
+See [LICENSE](LICENSE) for usage and distribution terms. The license is not approved as Open Source by the Open Source Initiative because it restricts modification and distribution of derivative works.

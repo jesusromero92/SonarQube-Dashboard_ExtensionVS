@@ -1,0 +1,11 @@
+{
+  "name": "sonarqube-dashboard-pipeline-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small dependency-free project for trying SonarQube Dashboard & Pipeline.",
+  "scripts": {
+    "compile": "node scripts/build.js",
+    "test": "node --test test/*.test.js",
+    "audit:high": "npm audit --audit-level=high"
+  }
+}

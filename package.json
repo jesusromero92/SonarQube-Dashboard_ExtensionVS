@@ -2,13 +2,13 @@
   "name": "vscode-sonarqube-dashboard-pipeline",
   "displayName": "SonarQube Dashboard & Pipeline",
   "description": "%extension.description%",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS.git"
+    "url": "https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS.git"
   },
   "bugs": {
     "url": "https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues"
@@ -18,8 +18,9 @@
     "vscode": "^1.96.0"
   },
   "categories": [
-    "Other",
-    "Linters"
+    "Linters",
+    "Testing",
+    "Visualization"
   ],
   "activationEvents": [
     "onStartupFinished",
@@ -354,5 +355,42 @@
         "sonarQubeDashboard.sonar.postAnalysisCommands"
       ]
     }
-  }
+  },
+  "keywords": [
+    "sonarqube",
+    "sonar",
+    "quality gate",
+    "code quality",
+    "static analysis",
+    "sast",
+    "devsecops",
+    "security",
+    "security hotspots",
+    "vulnerabilities",
+    "code smells",
+    "technical debt",
+    "coverage",
+    "code coverage",
+    "duplication",
+    "pipeline",
+    "ci",
+    "quality pipeline",
+    "npm audit",
+    "semgrep",
+    "trivy",
+    "maven",
+    "gradle",
+    "dotnet",
+    "typescript"
+  ],
+  "galleryBanner": {
+    "color": "#111827",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "markdown": "github",
+  "qna": "https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues",
+  "extensionKind": [
+    "workspace"
+  ]
 }
