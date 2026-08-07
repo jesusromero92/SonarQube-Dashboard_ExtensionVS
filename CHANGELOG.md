@@ -4,6 +4,24 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.0.2] - 2026-08-07
+
+### Added
+
+- Native **Get Started** walkthrough for the first SonarQube connection, synchronization, pipeline execution, and result review.
+
+  *Walkthrough nativo de **Primeros pasos** para la primera conexión con SonarQube, sincronización, ejecución del pipeline y revisión de resultados.*
+
+- Contextual welcome actions in empty **Issue explorer** and **Pipeline executions** views.
+
+  *Acciones contextuales de bienvenida en las vistas vacías **Explorador de issues** y **Ejecuciones del pipeline**.*
+
+### Changed
+
+- Marketplace documentation now exposes the real analysis workflow and technical value proposition before the full reference guide.
+
+  *La documentación de Marketplace muestra ahora el flujo real de análisis y la propuesta técnica antes de la guía de referencia completa.*
+
 ## [1.0.0] - 2026-08-02
 
 ### Changed

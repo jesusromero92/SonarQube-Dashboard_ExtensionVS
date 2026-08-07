@@ -770,6 +770,18 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.getStarted,
+      () => vscode.commands.executeCommand(
+        'workbench.action.openWalkthrough',
+        `${context.extension.id}#sonarQubeDashboard.gettingStarted`,
+        false
+      )
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.configure,
+      () => dashboardPanel?.showPage('configuration')
+    ),
+    vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.open,
       () => dashboardPanel?.show()
     ),

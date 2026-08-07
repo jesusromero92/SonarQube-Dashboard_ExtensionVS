@@ -30,6 +30,8 @@ export const DASHBOARD_CONFIGURATION_KEYS = {
 } as const;
 
 export const DASHBOARD_COMMANDS = {
+  getStarted: 'sonarQubeDashboard.getStarted',
+  configure: 'sonarQubeDashboard.configure',
   open: 'sonarQubeDashboard.open',
   refresh: 'sonarQubeDashboard.refresh',
   clear: 'sonarQubeDashboard.clear',

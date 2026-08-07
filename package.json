@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard-pipeline",
   "displayName": "SonarQube Dashboard & Pipeline",
   "description": "%extension.description%",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -41,7 +41,9 @@
     "onCommand:sonarQubeDashboard.copyFileIssues",
     "onCommand:sonarQubeDashboard.showCoverage",
     "onCommand:sonarQubeDashboard.previousFlowLocation",
-    "onCommand:sonarQubeDashboard.nextFlowLocation"
+    "onCommand:sonarQubeDashboard.nextFlowLocation",
+    "onCommand:sonarQubeDashboard.getStarted",
+    "onCommand:sonarQubeDashboard.configure"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -76,6 +78,16 @@
       ]
     },
     "commands": [
+      {
+        "command": "sonarQubeDashboard.getStarted",
+        "title": "%command.getStarted%",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "sonarQubeDashboard.configure",
+        "title": "%command.configure%",
+        "icon": "$(settings-gear)"
+      },
       {
         "command": "sonarQubeDashboard.open",
         "title": "%command.open%",
@@ -329,7 +341,71 @@
           "group": "1_copy@1"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "sonarQubeDashboard.gettingStarted",
+        "title": "%walkthrough.title%",
+        "description": "%walkthrough.description%",
+        "steps": [
+          {
+            "id": "openDashboard",
+            "title": "%walkthrough.open.title%",
+            "description": "%walkthrough.open.description%",
+            "media": {
+              "image": "docs/images/sidebar-summary.png",
+              "altText": "%walkthrough.open.alt%"
+            },
+            "completionEvents": [
+              "onCommand:sonarQubeDashboard.open"
+            ]
+          },
+          {
+            "id": "connectProject",
+            "title": "%walkthrough.connect.title%",
+            "description": "%walkthrough.connect.description%",
+            "media": {
+              "image": "docs/images/configuration.png",
+              "altText": "%walkthrough.connect.alt%"
+            },
+            "completionEvents": [
+              "onCommand:sonarQubeDashboard.configure"
+            ]
+          },
+          {
+            "id": "runAnalysis",
+            "title": "%walkthrough.analyze.title%",
+            "description": "%walkthrough.analyze.description%",
+            "media": {
+              "image": "docs/images/analysis-pipeline-execution.png",
+              "altText": "%walkthrough.analyze.alt%"
+            },
+            "completionEvents": [
+              "onCommand:sonarQubeDashboard.analyze"
+            ]
+          },
+          {
+            "id": "inspectResults",
+            "title": "%walkthrough.results.title%",
+            "description": "%walkthrough.results.description%",
+            "media": {
+              "image": "docs/images/dashboard-overview.png",
+              "altText": "%walkthrough.results.alt%"
+            }
+          }
+        ]
+      }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "sonarQubeDashboard.issueTree",
+        "contents": "%viewsWelcome.issues%"
+      },
+      {
+        "view": "sonarQubeDashboard.pipelineExecutions",
+        "contents": "%viewsWelcome.pipeline%"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

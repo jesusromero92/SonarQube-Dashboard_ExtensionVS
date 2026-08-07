@@ -4,7 +4,13 @@
 
 Technical user guide for configuring, synchronizing, analyzing, and operating SonarQube projects and local quality pipelines from Visual Studio Code.
 
+**Connect SonarQube, run configurable quality pipelines, inspect Quality Gates, issues, Security Hotspots, coverage, duplication, and execution history without leaving VS Code.**
+
 ![SonarQube Dashboard & Pipeline overview](docs/images/marketplace-hero.png)
+
+![SonarQube Dashboard & Pipeline analysis workflow](docs/images/marketplace-demo.gif)
+
+For a guided first run, open the Command Palette and execute **SonarQube Dashboard & Pipeline: Get Started**. The native walkthrough opens the dashboard, guides the SonarQube connection, launches the first pipeline, and points to the result views.
 
 > **Community extension:** this project is independent and is not affiliated with, endorsed by, or maintained by SonarSource. SonarQube is a trademark of SonarSource SA.
 
