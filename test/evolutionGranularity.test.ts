@@ -103,3 +103,13 @@ test('deshabilita la evolución histórica en el ámbito New Code', () => {
   assert.match(CHARTS_SCRIPT, /coverageEvolutionGrid\.hidden = !available/);
   assert.doesNotMatch(CHARTS_SCRIPT, /point\.newBugs/);
 });
+
+test('oculta por completo la evolución cuando todavía no existe un análisis anterior', () => {
+  assert.match(CHARTS_SCRIPT, /function historicalEvolutionAvailable\(\)/);
+  assert.match(CHARTS_SCRIPT, /currentSummary\.analysisComparisonAvailable !== false/);
+  assert.match(CHARTS_SCRIPT, /currentSummary\.latestAnalysis && currentSummary\.previousAnalysis/);
+  assert.match(CHARTS_SCRIPT, /issuesEvolutionSection\.hidden = !hasHistoricalEvolution/);
+  assert.match(CHARTS_SCRIPT, /coverageEvolutionSection\.hidden = !hasHistoricalEvolution/);
+  assert.match(CHARTS_SCRIPT, /if \(!hasHistoricalEvolution\)/);
+});
+

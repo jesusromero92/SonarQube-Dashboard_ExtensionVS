@@ -20,6 +20,11 @@ export const DIALOG_EVENTS_SCRIPT = `
     }
 
     bindDialogDismiss(
+      elements.issueFiltersDialog,
+      [elements.issueFiltersDialogClose]
+    );
+
+    bindDialogDismiss(
       elements.ruleDialog,
       [
         elements.ruleDialogClose,

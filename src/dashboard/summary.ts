@@ -14,6 +14,7 @@ export function createEmptyRefreshSummary(): RefreshSummary {
     newIssues: [],
     hotspots: [],
     newHotspots: [],
+    hasAnalysis: false,
     severity: [],
     newSeverity: [],
     evolution: [],

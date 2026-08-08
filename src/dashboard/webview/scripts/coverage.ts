@@ -217,8 +217,18 @@ export const COVERAGE_SCRIPT = `    let selectedCoverageFile = null;
     }
 
     function renderCoverageView() {
-      renderCoverageSummary();
-      renderCoverageTables();
+      const hasAnalysis = analysisAvailable();
+      elements.coverageScopeEmpty.hidden = hasAnalysis;
+      elements.coverageScopeEmptyMessage.textContent = translateLocalizationValue(
+        'Todavía no se ha ejecutado ningún análisis.'
+      );
+      elements.coverageCurrentData.hidden = !hasAnalysis;
+
+      if (hasAnalysis) {
+        renderCoverageSummary();
+        renderCoverageTables();
+      }
+
       renderCoverageEvolution();
     }
 

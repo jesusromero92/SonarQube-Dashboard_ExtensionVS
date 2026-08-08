@@ -748,6 +748,28 @@ export function buildEvolution(measures: SonarHistoryMeasure[]): EvolutionPoint[
   );
 }
 
+async function fetchAnalysisAvailability(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<boolean | null> {
+  const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/project_analyses/search`);
+  url.searchParams.set('project', config.projectKey);
+  url.searchParams.set('ps', '1');
+  if (config.branch?.trim()) {
+    url.searchParams.set('branch', config.branch.trim());
+  }
+
+  try {
+    const payload = await requestJson<{ analyses?: unknown[] }>(url, config.token, signal);
+    return (payload.analyses?.length ?? 0) > 0;
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    return null;
+  }
+}
+
 async function fetchEvolution(
   config: FolderSonarConfig,
   signal?: AbortSignal
@@ -1331,10 +1353,11 @@ export async function fetchAllIssues(
   for (const issue of allIssues) {
     issue.ruleName = ruleNames.get(issue.rule);
   }
-  const [evolution, qualityGate, summaryMetrics] = await Promise.all([
+  const [evolution, qualityGate, summaryMetrics, analysisAvailability] = await Promise.all([
     fetchEvolution(config, signal),
     fetchQualityGate(config, signal),
-    fetchSummaryMetrics(config, signal)
+    fetchSummaryMetrics(config, signal),
+    fetchAnalysisAvailability(config, signal)
   ]);
 
   return {
@@ -1344,6 +1367,7 @@ export async function fetchAllIssues(
     newHotspots,
     componentPaths,
     instanceMode: inferInstanceMode(configuredMode, overallResult.issues),
+    hasAnalysis: analysisAvailability === true || evolution.length > 0,
     evolution,
     qualityGate,
     ratings: summaryMetrics.ratings,

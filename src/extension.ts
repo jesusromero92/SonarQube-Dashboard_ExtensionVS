@@ -346,6 +346,7 @@ function appendFolderData(
   summary.newIssues.push(...newIssues);
   summary.hotspots.push(...hotspots);
   summary.newHotspots.push(...newHotspots);
+  summary.hasAnalysis = summary.hasAnalysis || loaded.hasAnalysis;
   summary.coverage.files.push(...coverage.files);
 
   if (summary.configuredFolders === 1) {

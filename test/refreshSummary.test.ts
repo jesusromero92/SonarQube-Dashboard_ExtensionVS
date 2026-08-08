@@ -88,3 +88,9 @@ test('el estado de sincronización usa el locale definido por el dashboard', () 
     /stale\s*\?\s*formatSuccessfulSyncTime\(currentSummary\.lastSuccessfulAt\)/
   );
 });
+
+test('el resumen vacío distingue explícitamente un proyecto sin análisis', () => {
+  const summary = createEmptyRefreshSummary();
+
+  assert.equal(summary.hasAnalysis, false);
+});

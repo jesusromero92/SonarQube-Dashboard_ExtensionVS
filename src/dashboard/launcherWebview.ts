@@ -293,6 +293,35 @@ export function getDashboardLauncherHtml(
     .rating.d { color: var(--rating-d); background: var(--rating-d-bg); border-color: transparent; }
     .rating.e { color: var(--rating-e); background: var(--rating-e-bg); border-color: transparent; }
     .empty { padding: 24px 12px; color: var(--vscode-descriptionForeground); text-align: center; }
+    .analysis-empty {
+      display: grid;
+      min-height: 220px;
+      place-items: center;
+      padding: 36px 18px;
+      text-align: center;
+    }
+    .analysis-empty-content {
+      display: grid;
+      max-width: 230px;
+      justify-items: center;
+      gap: 12px;
+    }
+    .analysis-empty-icon {
+      display: grid;
+      width: 48px;
+      height: 48px;
+      place-items: center;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 50%;
+      color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+      background: var(--vscode-editor-background);
+    }
+    .analysis-empty-icon svg { width: 26px; height: 26px; }
+    .analysis-empty p {
+      margin: 0;
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.5;
+    }
     .sync-notice {
       margin-bottom: 12px;
       padding: 9px 10px;
@@ -397,6 +426,16 @@ export function getDashboardLauncherHtml(
           <span id="newCodeSecurityReview" class="rating">—</span>
         </div>
       </div>
+      <div id="analysisEmpty" class="analysis-empty" hidden>
+        <div class="analysis-empty-content">
+          <div class="analysis-empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p>Todavía no se ha ejecutado ningún análisis.</p>
+        </div>
+      </div>
       <div id="empty" class="empty" hidden>No hay un proyecto vinculado.</div>
     </div>
   </section>
@@ -425,6 +464,7 @@ export function getDashboardLauncherHtml(
     const qualitySection = document.getElementById('qualitySection');
     const qualityGate = document.getElementById('qualityGate');
     const ratings = document.getElementById('ratings');
+    const analysisEmpty = document.getElementById('analysisEmpty');
     const ratingElements = {
       overall: {
         maintainability: document.getElementById('overallMaintainability'),
@@ -481,16 +521,22 @@ export function getDashboardLauncherHtml(
       const errors = Array.isArray(summary.errors) ? summary.errors.filter(Boolean) : [];
       const syncFailed = summary.syncStatus === 'error' && errors.length > 0;
       const hasSuccessfulSync = summary.hasSuccessfulSync === true;
-      const unavailable = Boolean(summary.configuredFolders) && syncFailed && !hasSuccessfulSync;
-      const stale = Boolean(summary.configuredFolders) && syncFailed && hasSuccessfulSync;
+      const configured = Boolean(summary.configuredFolders);
+      const unavailable = configured && syncFailed && !hasSuccessfulSync;
+      const stale = configured && syncFailed && hasSuccessfulSync;
+      const hasAnalysis = summary.hasAnalysis === true ||
+        Boolean(summary.latestAnalysis) ||
+        Boolean((summary.evolution || []).length);
       total.textContent = String(summary.published || 0);
       severityList.textContent = '';
-      const hasSummary = Boolean(summary.configuredFolders) && !unavailable;
-      totalSummary.hidden = !hasSummary;
-      severitySection.hidden = !hasSummary;
-      qualitySection.hidden = !hasSummary;
-      ratings.hidden = !hasSummary;
-      defectTypes.hidden = !hasSummary;
+      const hasSummary = configured && !unavailable;
+      const showAnalysisSummary = hasSummary && hasAnalysis;
+      totalSummary.hidden = !showAnalysisSummary;
+      severitySection.hidden = !showAnalysisSummary;
+      qualitySection.hidden = !showAnalysisSummary;
+      ratings.hidden = !showAnalysisSummary;
+      defectTypes.hidden = !showAnalysisSummary;
+      analysisEmpty.hidden = !hasSummary || hasAnalysis;
       empty.hidden = hasSummary || stale;
       syncNotice.hidden = !stale;
       syncNotice.className = 'sync-notice';

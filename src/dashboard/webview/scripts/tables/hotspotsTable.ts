@@ -13,6 +13,23 @@ export const HOTSPOTS_TABLE_SCRIPT = `    function hotspotDisplayStatus(hotspot)
     }
 
     function renderHotspots() {
+      const hasAnalysis = analysisAvailable();
+      const hasHotspots = currentHotspots.length > 0;
+      elements.hotspotsScopeEmpty.hidden = hasHotspots;
+      elements.hotspotsScopeEmptyMessage.textContent = translateLocalizationValue(
+        hasAnalysis
+          ? 'No se han encontrado Security Hotspots en este ámbito.'
+          : 'Todavía no se ha ejecutado ningún análisis.'
+      );
+      elements.hotspotsContent.hidden = !hasHotspots;
+
+      if (!hasHotspots) {
+        elements.hotspotsBody.textContent = '';
+        elements.hotspotsCount.textContent = '0' + dashboardMessages.hotspotPlural;
+        elements.noHotspots.hidden = true;
+        return;
+      }
+
       const query = elements.hotspotFilter.value.trim().toLowerCase();
       const pendingOnly = elements.pendingHotspotsOnly.checked;
       const filtered = currentHotspots.filter(hotspot => {
@@ -32,9 +49,7 @@ export const HOTSPOTS_TABLE_SCRIPT = `    function hotspotDisplayStatus(hotspot)
       elements.hotspotsCount.textContent = String(filtered.length) +
         (filtered.length === 1 ? dashboardMessages.hotspotSingular : dashboardMessages.hotspotPlural);
       elements.noHotspots.hidden = filtered.length > 0;
-      elements.noHotspots.textContent = currentHotspots.length
-        ? 'No hay Security Hotspots que coincidan con el filtro.'
-        : 'No se han encontrado Security Hotspots en este ámbito.';
+      elements.noHotspots.textContent = 'No hay Security Hotspots que coincidan con el filtro.';
 
       for (const hotspot of filtered) {
         const row = document.createElement('tr');

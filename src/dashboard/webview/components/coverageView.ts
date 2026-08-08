@@ -18,9 +18,27 @@ function granularityDropdown(id: string): string {
 }
 
 export const COVERAGE_VIEW_MARKUP = `          <section id="coverageView" hidden>
-            <div id="coverageSummary" class="metrics-summary coverage-summary" aria-label="Resumen de cobertura"></div>
+            <section
+              id="coverageScopeEmpty"
+              class="issues-scope-empty panel"
+              role="status"
+              aria-live="polite"
+              hidden
+            >
+              <div class="issues-scope-empty-content">
+                <div class="issues-scope-empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <p id="coverageScopeEmptyMessage">Todavía no se ha ejecutado ningún análisis.</p>
+              </div>
+            </section>
 
-            <div class="rank-grid coverage-rank-grid">
+            <div id="coverageCurrentData">
+              <div id="coverageSummary" class="metrics-summary coverage-summary" aria-label="Resumen de cobertura"></div>
+
+              <div class="rank-grid coverage-rank-grid">
               <section class="panel compact-table">
                 <div class="panel-header">
                   <h2>Archivos con menor cobertura</h2>
@@ -60,6 +78,7 @@ export const COVERAGE_VIEW_MARKUP = `          <section id="coverageView" hidden
                   <div id="noDuplicationFiles" class="no-results">No hay datos de duplicación por archivo.</div>
                 </div>
               </section>
+              </div>
             </div>
 
             <section id="coverageEvolutionSection" class="evolution-section">

@@ -471,6 +471,9 @@ export class DashboardPanel {
       case 'copyDiagnostics':
         await this.copyDiagnostics(message.folderUri);
         break;
+      case 'copyIssues':
+        await this.copyIssues(message.clipboardText);
+        break;
       case 'refresh':
         await this.refreshFromPanel();
         break;
@@ -1158,6 +1161,12 @@ ${selected.name}`,
     this.latestDiagnostics.set(key, snapshot);
     await vscode.env.clipboard.writeText(formatDiagnosticsReport(snapshot));
     this.postMessage({ type: 'diagnosticsCopied' });
+  }
+
+  private async copyIssues(clipboardText?: string): Promise<void> {
+    if (!clipboardText) return;
+    await vscode.env.clipboard.writeText(clipboardText);
+    this.postMessage({ type: 'issuesCopied' });
   }
 
   private async save(message: DashboardWebviewMessage): Promise<void> {

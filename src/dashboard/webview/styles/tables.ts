@@ -124,6 +124,105 @@ export function getTableStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIcon
     }
     .table-toolbar h2 { margin: 0; font-size: 13px; }
     .table-toolbar input { width: min(360px, 42vw); margin-left: auto; }
+    .issues-toolbar .issue-filter-toggle { margin-left: auto; }
+    .issues-toolbar #filter { margin-left: 0; }
+    .toolbar-filter-button {
+      position: relative;
+      display: inline-flex;
+      min-height: 32px;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px;
+      white-space: nowrap;
+    }
+    .toolbar-filter-button svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .toolbar-filter-button.active {
+      color: var(--vscode-foreground);
+      background: var(--vscode-list-activeSelectionBackground);
+    }
+    .toolbar-icon-button {
+      position: relative;
+      display: inline-grid;
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      min-height: 32px;
+      place-items: center;
+      padding: 0;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 2px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-editor-background);
+    }
+    .toolbar-icon-button:hover,
+    .toolbar-icon-button.active {
+      background: var(--vscode-toolbar-hoverBackground);
+    }
+    .toolbar-icon-button.copied {
+      color: var(--vscode-testing-iconPassed);
+      border-color: var(--vscode-testing-iconPassed);
+    }
+    .toolbar-icon-button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+    .toolbar-icon-button svg {
+      width: 17px;
+      height: 17px;
+      fill: currentColor;
+    }
+    .toolbar-filter-count {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      display: grid;
+      min-width: 16px;
+      height: 16px;
+      place-items: center;
+      padding: 0 4px;
+      border-radius: 8px;
+      color: var(--vscode-badge-foreground);
+      background: var(--vscode-badge-background);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .issue-filters-dialog {
+      width: min(720px, calc(100vw - 48px));
+    }
+    .issue-filters-dialog-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .issue-filters-dialog-fields label {
+      display: grid;
+      min-width: 0;
+      gap: 6px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+    }
+    .issue-filters-dialog-fields select,
+    .issue-filters-dialog-fields input {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+    }
+    .issue-filter-dialog-wide {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 620px) {
+      .issue-filters-dialog-fields {
+        grid-template-columns: 1fr;
+      }
+      .issue-filter-dialog-wide {
+        grid-column: auto;
+      }
+    }
     .table-wrap { overflow: auto; max-height: 410px; }
     .body-scroll-table {
       overflow: hidden;

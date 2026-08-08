@@ -48,6 +48,7 @@ export interface DashboardWebviewMessage {
   transition?: string;
   assignee?: string;
   comment?: string;
+  clipboardText?: string;
   flowIndex?: number;
   locationIndex?: number;
   groupIndex?: number;

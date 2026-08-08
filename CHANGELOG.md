@@ -4,6 +4,65 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.1.0] - 2026-08-08
+
+### Added
+
+- The **Issues** table now includes a dedicated **Filters** action that opens the existing dashboard modal component.
+
+  *La tabla de **Issues** incorpora una acción específica de **Filtros** que abre el componente de modal existente del dashboard.*
+
+- Issue filters are available for **severity**, **type**, **status**, **file**, and **rule**, with an active-filter counter displayed on the Filters button.
+
+  *Los filtros de issues permiten filtrar por **severidad**, **tipo**, **estado**, **archivo** y **regla**, mostrando además en el botón de Filtros el número de filtros activos.*
+
+- A new copy action is available next to the Issues search field. It exports every issue in the current scope using a compact structure containing, in this exact order: **rule name, file, line, severity, and issue type**.
+
+  *Se ha añadido una nueva acción de copia junto al buscador de Issues. Exporta todos los issues del ámbito actual con una estructura compacta que contiene, exactamente en este orden: **nombre de la regla, archivo, línea, severidad y tipo de defecto**.*
+
+- The copied issue text is intentionally prepared as concise context for **AI-assisted remediation**: it can be pasted into an AI assistant so the model receives the relevant SonarQube findings and can work through the listed defects without unnecessary issue metadata.
+
+  *El texto copiado está preparado expresamente como contexto conciso para la **corrección asistida por IA**: puede pegarse en un asistente de IA para que el modelo reciba los hallazgos relevantes de SonarQube y pueda trabajar en la corrección de todos los defectos indicados sin incluir metadatos innecesarios.*
+
+### Changed
+
+- Issue filters now use a draft-and-apply workflow. Changing a field inside the modal does not affect the table until **Apply** is pressed.
+
+  *Los filtros de Issues utilizan ahora un flujo de edición y aplicación. Cambiar un campo dentro del modal no modifica la tabla hasta pulsar **Aplicar**.*
+
+- The dashboard now distinguishes between **a project with no SonarQube analysis yet** and **an analyzed project with zero issues** instead of inferring analysis state from the issue count.
+
+  *El dashboard distingue ahora entre **un proyecto que todavía no tiene ningún análisis de SonarQube** y **un proyecto analizado con cero issues**, en lugar de deducir el estado del análisis a partir del número de issues.*
+
+- When no analysis exists, the **Overall** and **New Code** scope controls are disabled until SonarQube has published the first analysis.
+
+  *Cuando no existe ningún análisis, los controles de ámbito **Overall** y **New Code** permanecen deshabilitados hasta que SonarQube publique el primer análisis.*
+
+- Historical evolution sections for **issues**, **coverage**, and **duplication** are hidden until at least two SonarQube analyses are available for comparison.
+
+  *Las secciones de evolución histórica de **issues**, **cobertura** y **duplicación** permanecen ocultas hasta que existan al menos dos análisis de SonarQube que puedan compararse.*
+
+- In **Coverage and duplication**, metric cards and the **Lowest coverage files** / **Most duplicated files** tables are hidden when no analysis exists. The view now shows the same empty-state container used by the Issues view.
+
+  *En **Cobertura y duplicación**, las tarjetas de métricas y las tablas **Archivos con menor cobertura** / **Archivos con mayor duplicación** se ocultan cuando todavía no existe ningún análisis. La vista muestra ahora el mismo contenedor de estado vacío utilizado en Issues.*
+
+- The **Security Hotspots** view uses the same no-analysis empty state and now differentiates it from a completed analysis containing zero hotspots.
+
+  *La vista de **Security Hotspots** utiliza el mismo estado vacío cuando no existe ningún análisis y lo diferencia de un análisis completado que contiene cero hotspots.*
+
+- The side **Summary** panel follows the same analysis-state logic. Before the first analysis, issue totals, severity/type breakdowns, Quality Gate, and ratings are hidden and replaced with the no-analysis state; after an analysis with zero issues, the normal zero-value summary is shown.
+
+  *El panel lateral de **Resumen** sigue la misma lógica de estado del análisis. Antes del primer análisis se ocultan los totales de issues, desgloses por severidad/tipo, Quality Gate y ratings, mostrando en su lugar el estado sin análisis; después de un análisis con cero issues se muestra normalmente el resumen con valores a cero.*
+
+### Fixed
+
+- Empty states are now consistent across **Issues**, **Security Hotspots**, **Coverage and duplication**, and the side Summary panel, avoiding misleading zero-result screens before the first analysis.
+
+  *Los estados vacíos son ahora coherentes entre **Issues**, **Security Hotspots**, **Cobertura y duplicación** y el panel lateral de Resumen, evitando mostrar resultados a cero que puedan interpretarse erróneamente antes del primer análisis.*
+
+- Projects with a valid first analysis but no issues are no longer treated as projects that have never been analyzed.
+
+  *Los proyectos con un primer análisis válido pero sin issues ya no se tratan como proyectos que nunca han sido analizados.*
 ## [1.0.2] - 2026-08-07
 
 ### Added

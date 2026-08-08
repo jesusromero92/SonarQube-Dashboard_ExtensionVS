@@ -20,6 +20,13 @@ export const DASHBOARD_STATE_SCRIPT = `
       key: 'severityRank',
       direction: 'desc'
     };
+    let activeIssueFilters = {
+      severity: '',
+      type: '',
+      status: '',
+      file: '',
+      rule: ''
+    };
     const topSort = {
       files: { key: 'count', direction: 'desc' },
       rules: { key: 'count', direction: 'desc' }

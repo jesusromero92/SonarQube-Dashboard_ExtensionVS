@@ -466,6 +466,7 @@ export interface LoadedIssues {
   newHotspots: SonarHotspot[];
   componentPaths: Map<string, string>;
   instanceMode: SonarInstanceMode;
+  hasAnalysis: boolean;
   evolution: EvolutionPoint[];
   qualityGate: QualityGateSummary;
   ratings: RatingsSummary;
@@ -769,6 +770,7 @@ export interface RefreshSummary {
   newIssues: DashboardIssue[];
   hotspots: DashboardHotspot[];
   newHotspots: DashboardHotspot[];
+  hasAnalysis: boolean;
   severity: SeverityCount[];
   newSeverity: SeverityCount[];
   evolution: EvolutionPoint[];

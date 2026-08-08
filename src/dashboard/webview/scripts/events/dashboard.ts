@@ -94,7 +94,23 @@ export const DASHBOARD_EVENTS_SCRIPT = `
       'click',
       showQualityGateDialog
     );
+    elements.issueFiltersToggle.addEventListener('click', () => {
+      renderIssueFilterOptions();
+      syncIssueFilterDialogFromActive();
+      if (!elements.issueFiltersDialog.open) {
+        elements.issueFiltersDialog.showModal();
+      }
+    });
     elements.filter.addEventListener('input', renderIssues);
+    elements.clearIssueFilters.addEventListener('click', clearIssueFieldFilters);
+    elements.applyIssueFilters.addEventListener('click', applyIssueFieldFilters);
+    elements.copyIssues.addEventListener('click', () => {
+      if (!currentIssues.length) return;
+      vscode.postMessage({
+        type: 'copyIssues',
+        clipboardText: issueClipboardPayload()
+      });
+    });
     elements.hotspotFilter.addEventListener(
       'input',
       renderHotspots

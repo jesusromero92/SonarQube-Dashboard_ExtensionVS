@@ -88,6 +88,23 @@ export const MESSAGE_EVENTS_SCRIPT = `
           }, 1500);
           break;
 
+        case 'issuesCopied':
+          elements.copyIssues.classList.add('copied');
+          elements.copyIssues.title = translateLocalizationValue('Issues copiados');
+          elements.copyIssues.setAttribute(
+            'aria-label',
+            translateLocalizationValue('Issues copiados')
+          );
+          setTimeout(() => {
+            elements.copyIssues.classList.remove('copied');
+            elements.copyIssues.title = translateLocalizationValue('Copiar todos los issues');
+            elements.copyIssues.setAttribute(
+              'aria-label',
+              translateLocalizationValue('Copiar todos los issues')
+            );
+          }, 1500);
+          break;
+
         case 'projectsLoading':
           elements.sonarCompatibility.hidden = true;
           setConnectionBusy(true);

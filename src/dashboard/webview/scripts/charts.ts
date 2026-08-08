@@ -82,11 +82,28 @@ export const CHARTS_SCRIPT = `    const evolutionSeries = Object.fromEntries(
       elements.severityEvolutionHelp.textContent = severityHelp[evolutionGranularities.severity];
     }
 
+    function historicalEvolutionAvailable() {
+      return currentSummary.analysisComparisonAvailable !== false &&
+        Boolean(currentSummary.latestAnalysis && currentSummary.previousAnalysis);
+    }
+
     function evolutionAvailableForCurrentScope() {
       return currentScope === 'overall';
     }
 
     function updateEvolutionScopeAvailability() {
+      const hasHistoricalEvolution = historicalEvolutionAvailable();
+      elements.issuesEvolutionSection.hidden = !hasHistoricalEvolution;
+      elements.coverageEvolutionSection.hidden = !hasHistoricalEvolution;
+
+      if (!hasHistoricalEvolution) {
+        elements.issuesEvolutionUnavailable.hidden = true;
+        elements.issuesEvolutionGrid.hidden = true;
+        elements.coverageEvolutionUnavailable.hidden = true;
+        elements.coverageEvolutionGrid.hidden = true;
+        return false;
+      }
+
       const available = evolutionAvailableForCurrentScope();
       elements.issuesEvolutionUnavailable.hidden = available;
       elements.issuesEvolutionGrid.hidden = !available;
