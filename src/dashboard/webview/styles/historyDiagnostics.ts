@@ -228,8 +228,9 @@ export const HISTORY_DIAGNOSTICS_STYLES = `
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: 12px;
       line-height: 1.45;
-      white-space: pre-wrap;
-      word-break: break-word;
+      white-space: pre;
+      word-break: normal;
+      tab-size: 8;
     }
     @keyframes pipeline-accordion-reveal {
       from { opacity: 0; transform: translateY(-4px); }

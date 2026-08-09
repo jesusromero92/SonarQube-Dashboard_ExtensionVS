@@ -22,7 +22,8 @@ import {
   SonarCeTaskResponse
 } from './types';
 
-const MAX_LOG_LINES = 1200;
+const MAX_LOG_CHUNKS = 4000;
+const MAX_LOG_CHARACTERS = 400_000;
 const CE_POLL_INTERVAL_MS = 2000;
 const CE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const DOCKER_SCAN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -50,6 +51,7 @@ export class AnalysisService implements vscode.Disposable {
   private state: AnalysisState = emptyAnalysisState();
   private detectedScanner: DetectedScanner | undefined;
   private token = '';
+  private logCharacterCount = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -105,6 +107,7 @@ export class AnalysisService implements vscode.Disposable {
   ): void {
     this.controller = new AbortController();
     this.token = request.config.token;
+    this.logCharacterCount = 0;
     this.state = {
       running: true,
       phase: 'detecting',
@@ -820,7 +823,7 @@ export class AnalysisService implements vscode.Disposable {
       result = await this.runner.run(
         spec,
         this.controller?.signal ?? AbortSignal.abort(),
-        line => this.appendLog(line)
+        chunk => this.appendProcessOutput(chunk)
       );
     } catch (error) {
       if (this.controller?.signal.aborted) {
@@ -833,7 +836,7 @@ export class AnalysisService implements vscode.Disposable {
       throw error;
     }
     if (result.exitCode !== 0) {
-      const tail = result.output.slice(-8).join(' ');
+      const tail = result.output.slice(-16).join('').slice(-8_000);
       if (/not recognized|no se reconoce|not found|command not found/i.test(tail)) {
         throw new Error(`No se encontró la herramienta necesaria para ejecutar “${spec.command || spec.shellCommand}”.`);
       }
@@ -966,10 +969,24 @@ export class AnalysisService implements vscode.Disposable {
   }
 
   private appendLog(line: string): void {
-    const redacted = this.redact(line);
-    this.state.log.push(redacted);
-    if (this.state.log.length > MAX_LOG_LINES) {
-      this.state.log.splice(0, this.state.log.length - MAX_LOG_LINES);
+    this.appendLogChunk(`${this.redact(line)}\n`);
+  }
+
+  private appendProcessOutput(chunk: string): void {
+    this.appendLogChunk(this.redact(chunk));
+  }
+
+  private appendLogChunk(chunk: string): void {
+    if (!chunk) {
+      return;
+    }
+    this.state.log.push(chunk);
+    this.logCharacterCount += chunk.length;
+    while (
+      this.state.log.length > 1 &&
+      (this.state.log.length > MAX_LOG_CHUNKS || this.logCharacterCount > MAX_LOG_CHARACTERS)
+    ) {
+      this.logCharacterCount -= this.state.log.shift()?.length ?? 0;
     }
     this.emit();
   }

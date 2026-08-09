@@ -101,8 +101,16 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: 12px;
       line-height: 1.45;
-      white-space: pre-wrap;
-      word-break: break-word;
+      white-space: pre;
+      word-break: normal;
+      tab-size: 8;
+    }
+    .terminal-line {
+      min-height: 1.45em;
+      white-space: pre;
+    }
+    .terminal-line--placeholder {
+      color: var(--vscode-descriptionForeground);
     }
     .confirmation-dialog {
       width: min(560px, calc(100vw - 40px));

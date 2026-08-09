@@ -9,7 +9,7 @@ import {
 
 const HISTORY_KEY_PREFIX = 'sonarQubeDashboard.pipelineHistory:';
 const HISTORY_LIMIT = 30;
-const HISTORY_LOG_LINE_LIMIT = 2_000;
+const HISTORY_LOG_CHUNK_LIMIT = 4_000;
 const HISTORY_LOG_CHARACTER_LIMIT = 250_000;
 
 export class PipelineHistoryStore {
@@ -83,20 +83,22 @@ function historyKey(rootPath: string): string {
 }
 
 
-function compactHistoryLog(lines: string[]): string[] {
-  const selected = lines.slice(-HISTORY_LOG_LINE_LIMIT);
+function compactHistoryLog(chunks: string[]): string[] {
+  const selected = chunks.slice(-HISTORY_LOG_CHUNK_LIMIT);
   let remaining = HISTORY_LOG_CHARACTER_LIMIT;
   const result: string[] = [];
   for (let index = selected.length - 1; index >= 0 && remaining > 0; index -= 1) {
-    const line = selected[index];
-    const value = line.length <= remaining
-      ? line
-      : line.slice(Math.max(0, line.length - remaining));
-    result.unshift(value);
-    remaining -= value.length + 1;
+    const chunk = selected[index];
+    if (chunk.length > remaining) {
+      // No se corta un chunk por la mitad: podría partir una secuencia ANSI,
+      // un carácter UTF-8 ya decodificado o una orden de control de terminal.
+      break;
+    }
+    result.unshift(chunk);
+    remaining -= chunk.length;
   }
-  if (result.length < lines.length) {
-    result.unshift('[…] El inicio del registro se ha omitido para limitar el historial.');
+  if (result.length < chunks.length) {
+    result.unshift('[…] El inicio del registro se ha omitido para limitar el historial.\n');
   }
   return result;
 }

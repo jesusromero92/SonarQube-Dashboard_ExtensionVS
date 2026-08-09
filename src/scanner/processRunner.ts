@@ -1,4 +1,5 @@
 import { ChildProcess, spawn } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { ProcessResult, ProcessSpec } from './types';
 
 export class ProcessRunner {
@@ -7,7 +8,7 @@ export class ProcessRunner {
   async run(
     spec: ProcessSpec,
     signal: AbortSignal,
-    onLine: (line: string) => void
+    onOutput: (chunk: string) => void
   ): Promise<ProcessResult> {
     if (signal.aborted) {
       throw new Error('Análisis cancelado.');
@@ -21,12 +22,12 @@ export class ProcessRunner {
 
     return new Promise<ProcessResult>((resolve, reject) => {
       let settled = false;
-      let stdoutBuffer = '';
-      let stderrBuffer = '';
+      const stdoutDecoder = new StringDecoder('utf8');
+      const stderrDecoder = new StringDecoder('utf8');
 
       const child = spawn(launch.command, launch.args, {
         cwd: spec.cwd,
-        env: spec.env,
+        env: this.terminalEnvironment(spec.env),
         windowsHide: true,
         windowsVerbatimArguments: process.platform === 'win32'
           && /(?:^|[\\/])cmd\.exe$/i.test(launch.command),
@@ -35,32 +36,16 @@ export class ProcessRunner {
       });
       this.child = child;
 
-      const emit = (line: string): void => {
-        const normalized = line.replace(/\r$/, '');
-        if (!normalized) {
+      const emit = (chunk: string): void => {
+        if (!chunk) {
           return;
         }
-        output.push(normalized);
-        onLine(normalized);
+        output.push(chunk);
+        onOutput(chunk);
       };
 
-      const consume = (chunk: Buffer, stream: 'stdout' | 'stderr'): void => {
-        let buffer = stream === 'stdout' ? stdoutBuffer : stderrBuffer;
-        buffer += chunk.toString('utf8');
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          emit(line);
-        }
-        if (stream === 'stdout') {
-          stdoutBuffer = buffer;
-        } else {
-          stderrBuffer = buffer;
-        }
-      };
-
-      child.stdout?.on('data', (chunk: Buffer) => consume(chunk, 'stdout'));
-      child.stderr?.on('data', (chunk: Buffer) => consume(chunk, 'stderr'));
+      child.stdout?.on('data', (chunk: Buffer) => emit(stdoutDecoder.write(chunk)));
+      child.stderr?.on('data', (chunk: Buffer) => emit(stderrDecoder.write(chunk)));
 
       const abortHandler = (): void => {
         this.cancel();
@@ -100,8 +85,8 @@ export class ProcessRunner {
         if (timeout) clearTimeout(timeout);
         signal.removeEventListener('abort', abortHandler);
         this.child = undefined;
-        if (stdoutBuffer) emit(stdoutBuffer);
-        if (stderrBuffer) emit(stderrBuffer);
+        emit(stdoutDecoder.end());
+        emit(stderrDecoder.end());
 
         if (signal.aborted) {
           reject(new Error('Análisis cancelado.'));
@@ -139,6 +124,26 @@ export class ProcessRunner {
     } catch {
       child.kill('SIGTERM');
     }
+  }
+
+  private terminalEnvironment(environment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    const env = { ...process.env, ...environment };
+    // La salida se muestra dentro de un emulador ANSI del webview. Estas
+    // variables permiten que CLIs genéricas con soporte de color/Unicode no
+    // degraden innecesariamente su salida solo porque stdout está capturado.
+    if (!env.TERM || env.TERM === 'dumb') {
+      env.TERM = 'xterm-256color';
+    }
+    if (!env.COLORTERM) {
+      env.COLORTERM = 'truecolor';
+    }
+    if (!env.NO_COLOR && env.FORCE_COLOR === undefined) {
+      env.FORCE_COLOR = '1';
+    }
+    if (!env.NO_COLOR && env.CLICOLOR_FORCE === undefined) {
+      env.CLICOLOR_FORCE = '1';
+    }
+    return env;
   }
 
   private shellLaunch(commandLine: string): { command: string; args: string[] } {

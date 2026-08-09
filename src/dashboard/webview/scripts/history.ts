@@ -127,23 +127,9 @@ export const HISTORY_SCRIPT = `    function formatDuration(durationMs) {
     }
 
     function renderPipelineHistoryLog(container, lines) {
-      const nextLines = Array.isArray(lines) ? lines : [];
-      const nextText = nextLines.join('\\n');
-      elements.historyLogCount.textContent = nextLines.length + ' ' +
-        translateLocalizationValue(nextLines.length === 1 ? 'línea' : 'líneas');
-      if (container.textContent === nextText) return;
-
-      const distanceFromBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight;
-      const followOutput = distanceFromBottom <= 24;
-      const previousScrollTop = container.scrollTop;
-      container.textContent = nextText;
-
-      requestAnimationFrame(() => {
-        container.scrollTop = followOutput
-          ? container.scrollHeight
-          : Math.min(previousScrollTop, container.scrollHeight);
-      });
+      const visibleLineCount = renderTerminalLog(container, lines, '');
+      elements.historyLogCount.textContent = visibleLineCount + ' ' +
+        translateLocalizationValue(visibleLineCount === 1 ? 'línea' : 'líneas');
     }
 
     function renderHistoryStatusIcon(status) {

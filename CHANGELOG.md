@@ -48,6 +48,10 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
   *Se ha estabilizado el panel de estado del análisis del repositorio para que su altura no cambie entre reposo y ejecución, manteniendo el texto alineado verticalmente con el icono de análisis y truncando el contenido largo en lugar de redimensionar el panel.*
 
+- Pipeline console output and execution history now use a generic terminal renderer for any tool, preserving ANSI colors, Unicode symbols, carriage-return progress updates, cursor/line control sequences, tabs, spacing, and streamed stdout/stderr chunks instead of printing terminal escape codes literally.
+
+  *La consola del pipeline y el historial de ejecuciones utilizan ahora un renderizador de terminal genérico para cualquier herramienta, conservando colores ANSI, símbolos Unicode, actualizaciones de progreso mediante retorno de carro, secuencias de control de cursor/línea, tabulaciones, espacios y chunks de stdout/stderr en streaming, en lugar de imprimir literalmente los códigos de escape del terminal.*
+
 ## [1.1.0] - 2026-08-08
 
 ### Added
