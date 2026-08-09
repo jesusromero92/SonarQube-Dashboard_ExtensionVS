@@ -8,6 +8,10 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 ### Added
 
+- The extension now opens `CHANGELOG.md` automatically on the first activation of each installed version. The last displayed version is stored globally, so release notes are shown once after installation or update and are not reopened on subsequent starts of the same version.
+
+  *La extensión abre ahora `CHANGELOG.md` automáticamente en la primera activación de cada versión instalada. La última versión mostrada se guarda globalmente, por lo que las notas de la versión se muestran una sola vez tras instalar o actualizar y no vuelven a abrirse en los siguientes inicios de esa misma versión.*
+
 - The **SonarQube** configuration tab now includes a dedicated **Analysis inclusions and exclusions** accordion for `sonar.inclusions` and `sonar.exclusions`. Patterns can be entered one per line or separated with commas and are applied to the built-in Maven, Gradle, .NET, NPM, and Docker analysis flows.
 
   *La pestaña de configuración **SonarQube** incorpora un nuevo acordeón de **Inclusiones y exclusiones del análisis** para `sonar.inclusions` y `sonar.exclusions`. Los patrones pueden introducirse uno por línea o separados por comas y se aplican a los flujos integrados de Maven, Gradle, .NET, NPM y Docker.*
@@ -29,6 +33,10 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 - English and Spanish translations and both README files now document the analysis-scope configuration and its independent save/reset behavior.
 
   *Se han actualizado las traducciones en inglés y español y ambos README para documentar la configuración del alcance del análisis y su comportamiento independiente de guardado/restablecimiento.*
+
+- The **SonarQube Dashboard** editor tab now uses the same SonarQube icon as the VS Code activity bar, with a dedicated white variant for dark themes to keep the icon clearly visible.
+
+  *La pestaña del editor **SonarQube Dashboard** utiliza ahora el mismo icono de SonarQube que la barra de actividad de VS Code, con una variante blanca específica para temas oscuros que mantiene el icono claramente visible.*
 
 ### Fixed
 

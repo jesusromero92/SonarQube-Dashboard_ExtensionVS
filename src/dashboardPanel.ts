@@ -331,12 +331,12 @@ export class DashboardPanel {
       light: vscode.Uri.joinPath(
         this.context.extensionUri,
         'media',
-        'SonarQube-light.svg'
+        'SonarQube.svg'
       ),
       dark: vscode.Uri.joinPath(
         this.context.extensionUri,
         'media',
-        'SonarQube-dark.svg'
+        'SonarQube-tab-dark.svg'
       )
     };
     panel.webview.options = {

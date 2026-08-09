@@ -74,6 +74,38 @@ let issueTree: IssueTreeProvider;
 let pipelineExecutionTree: PipelineExecutionTreeProvider;
 let notifications: NotificationManager;
 
+const CHANGELOG_VERSION_STATE_KEY = 'sonarqubeDashboard.lastShownChangelogVersion';
+
+async function showChangelogIfNeeded(context: vscode.ExtensionContext): Promise<void> {
+  const currentVersion = String(context.extension.packageJSON.version ?? '').trim();
+  if (!currentVersion) {
+    return;
+  }
+
+  const lastShownVersion = context.globalState.get<string>(
+    CHANGELOG_VERSION_STATE_KEY
+  );
+  if (lastShownVersion === currentVersion) {
+    return;
+  }
+
+  const changelogUri = vscode.Uri.joinPath(context.extensionUri, 'CHANGELOG.md');
+
+  try {
+    await vscode.workspace.fs.stat(changelogUri);
+    await vscode.commands.executeCommand('markdown.showPreview', changelogUri);
+    await context.globalState.update(
+      CHANGELOG_VERSION_STATE_KEY,
+      currentVersion
+    );
+  } catch (error) {
+    console.warn(
+      `SonarQube Dashboard could not open CHANGELOG.md for version ${currentVersion}:`,
+      error
+    );
+  }
+}
+
 function worstRating(current: RatingGrade, candidate: RatingGrade): RatingGrade {
   return RATING_GRADE_RANKS[candidate] > RATING_GRADE_RANKS[current]
     ? candidate
@@ -957,6 +989,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   configureRefreshTimer(context);
+  runAsync(showChangelogIfNeeded(context), 'changelog display');
 
   if (
     vscode.workspace
