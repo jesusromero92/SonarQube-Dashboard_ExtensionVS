@@ -137,7 +137,34 @@ ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'a
                   <div id="customScannerField" class="field full-width-field" hidden>
                     <label for="customScannerCommand">Comando personalizado</label>
                     <input id="customScannerCommand" type="text" placeholder="sonar-scanner -Dsonar.projectKey=\${projectKey}" spellcheck="false">
-                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
+                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code>, <code>\${branch}</code>, <code>\${analysisInclusions}</code>, <code>\${analysisExclusions}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="configuration-disclosure">
+                <summary>Inclusiones y exclusiones del análisis</summary>
+                <div class="configuration-disclosure-content">
+                  <div class="configuration-section-intro">
+                    <strong>Define el alcance de archivos enviado al scanner</strong>
+                    <p class="hint">Usa patrones comodín compatibles con SonarQube. Puedes escribir un patrón por línea o separarlos por comas.</p>
+                  </div>
+                  <div class="form-grid advanced-grid analysis-scope-grid">
+                    <div class="field">
+                      <label for="analysisInclusions">Inclusiones <code>sonar.inclusions</code></label>
+                      <textarea id="analysisInclusions" rows="4" placeholder="src/**&#10;packages/*/src/**" spellcheck="false"></textarea>
+                      <div class="hint">Si se indica, solo los archivos de código fuente que coincidan con estos patrones entrarán en el alcance del análisis.</div>
+                    </div>
+                    <div class="field">
+                      <label for="analysisExclusions">Exclusiones <code>sonar.exclusions</code></label>
+                      <textarea id="analysisExclusions" rows="4" placeholder="**/generated/**&#10;**/*.min.js" spellcheck="false"></textarea>
+                      <div class="hint">Los archivos que coincidan con estos patrones se excluirán del análisis.</div>
+                    </div>
+                  </div>
+                  <div class="hint analysis-scope-note">Si ambos campos están vacíos, el scanner genérico mantiene las exclusiones técnicas automáticas de la extensión cuando no existe <code>sonar-project.properties</code>.</div>
+                  <div class="pipeline-save-row analysis-scope-save-row">
+                    <span id="analysisScopeSaveStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>
+                    <button id="saveAnalysisScope" type="button" disabled>Guardar inclusiones y exclusiones</button>
                   </div>
                 </div>
               </details>

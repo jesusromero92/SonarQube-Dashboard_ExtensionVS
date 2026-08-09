@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard-pipeline",
   "displayName": "SonarQube Dashboard & Pipeline",
   "description": "%extension.description%",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -247,6 +247,18 @@
             "%configuration.scannerMode.custom%"
           ],
           "description": "%configuration.sonar_scannerMode.description%"
+        },
+        "sonarQubeDashboard.sonar.analysisInclusions": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "%configuration.sonar_analysisInclusions.description%"
+        },
+        "sonarQubeDashboard.sonar.analysisExclusions": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "%configuration.sonar_analysisExclusions.description%"
         },
         "sonarQubeDashboard.sonar.buildCommand": {
           "type": "string",

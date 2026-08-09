@@ -3,6 +3,11 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { detectScanner } from './detector';
 import {
+  analysisScopeProperties,
+  hasExplicitAnalysisScope,
+  normalizeAnalysisPatterns
+} from './analysisScope';
+import {
   expandAnalysisPipelineCommand,
   parseAnalysisPipeline
 } from './pipeline';
@@ -616,7 +621,8 @@ export class AnalysisService implements vscode.Disposable {
       `/k:${request.config.projectKey}`,
       `/n:${request.config.projectName || request.config.projectKey}`,
       `/d:sonar.host.url=${request.config.serverUrl}`,
-      tokenProperty
+      tokenProperty,
+      ...analysisScopeProperties(request.config, '/d:')
     ];
     if (request.config.branch?.trim()) {
       beginArgs.push(`/d:sonar.branch.name=${request.config.branch.trim()}`);
@@ -659,7 +665,9 @@ export class AnalysisService implements vscode.Disposable {
     const args = ['--yes', '@sonar/scan', ...this.sonarProperties(request, '-D')];
     if (!hasProperties) {
       args.push('-Dsonar.sources=.');
-      args.push(`-Dsonar.exclusions=${DEFAULT_EXCLUSIONS}`);
+      if (!hasExplicitAnalysisScope(request.config)) {
+        args.push(`-Dsonar.exclusions=${DEFAULT_EXCLUSIONS}`);
+      }
     }
     if (javaBinaryDirectories.length > 0) {
       args.push(`-Dsonar.java.binaries=${javaBinaryDirectories.join(',')}`);
@@ -694,7 +702,9 @@ export class AnalysisService implements vscode.Disposable {
     const scannerArgs = [...this.sonarProperties(request, '-D')];
     if (!hasProperties) {
       scannerArgs.push('-Dsonar.sources=.');
-      scannerArgs.push(`-Dsonar.exclusions=${DEFAULT_EXCLUSIONS}`);
+      if (!hasExplicitAnalysisScope(request.config)) {
+        scannerArgs.push(`-Dsonar.exclusions=${DEFAULT_EXCLUSIONS}`);
+      }
     }
     scannerArgs.push('-Dsonar.scanner.skipJreProvisioning=true');
     scannerArgs.push('-Dsonar.working.directory=/usr/src/.scannerwork');
@@ -742,7 +752,9 @@ export class AnalysisService implements vscode.Disposable {
       .replace(/\$\{projectKey\}/g, request.config.projectKey)
       .replace(/\$\{projectName\}/g, request.config.projectName || request.config.projectKey)
       .replace(/\$\{serverUrl\}/g, request.config.serverUrl)
-      .replace(/\$\{branch\}/g, request.config.branch ?? '');
+      .replace(/\$\{branch\}/g, request.config.branch ?? '')
+      .replace(/\$\{analysisInclusions\}/g, normalizeAnalysisPatterns(request.config.analysisInclusions))
+      .replace(/\$\{analysisExclusions\}/g, normalizeAnalysisPatterns(request.config.analysisExclusions));
 
     this.update('scanning', 'Ejecutando el comando de análisis personalizado…');
     await this.execute({
@@ -838,6 +850,7 @@ export class AnalysisService implements vscode.Disposable {
     if (request.config.branch?.trim()) {
       values.push(`${prefix}sonar.branch.name=${request.config.branch.trim()}`);
     }
+    values.push(...analysisScopeProperties(request.config, prefix));
     return values;
   }
 

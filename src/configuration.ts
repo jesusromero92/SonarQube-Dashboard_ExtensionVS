@@ -31,6 +31,14 @@ export async function getFolderFormConfig(
     baseDir: configuration.get<string>(SONAR_CONFIGURATION_KEYS.baseDir, '').trim(),
     hasToken: Boolean(await context.secrets.get(tokenKey(folder))),
     scannerMode: configuration.get<ScannerMode>(SONAR_CONFIGURATION_KEYS.scannerMode, 'auto'),
+    analysisInclusions: configuration.get<string>(
+      SONAR_CONFIGURATION_KEYS.analysisInclusions,
+      ''
+    ).trim(),
+    analysisExclusions: configuration.get<string>(
+      SONAR_CONFIGURATION_KEYS.analysisExclusions,
+      ''
+    ).trim(),
     buildCommand: configuration.get<string>(SONAR_CONFIGURATION_KEYS.buildCommand, '').trim(),
     testCommand: context.workspaceState.get<string>(testCommandKey(folder), '').trim(),
     customScannerCommand: configuration.get<string>(SONAR_CONFIGURATION_KEYS.customScannerCommand, '').trim(),
@@ -64,6 +72,8 @@ export async function getFolderConfig(
     baseDir: form.baseDir,
     token,
     scannerMode: form.scannerMode,
+    analysisInclusions: form.analysisInclusions,
+    analysisExclusions: form.analysisExclusions,
     buildCommand: form.buildCommand,
     testCommand: form.testCommand,
     customScannerCommand: form.customScannerCommand,
@@ -83,6 +93,8 @@ export async function saveFolderConfig(
     baseDir: string;
     token?: string;
     scannerMode?: ScannerMode;
+    analysisInclusions?: string;
+    analysisExclusions?: string;
     buildCommand?: string;
     testCommand?: string;
     customScannerCommand?: string;
@@ -123,6 +135,16 @@ export async function saveFolderConfig(
   await configuration.update(
     SONAR_CONFIGURATION_KEYS.scannerMode,
     values.scannerMode ?? 'auto',
+    vscode.ConfigurationTarget.WorkspaceFolder
+  );
+  await configuration.update(
+    SONAR_CONFIGURATION_KEYS.analysisInclusions,
+    values.analysisInclusions?.trim() ?? '',
+    vscode.ConfigurationTarget.WorkspaceFolder
+  );
+  await configuration.update(
+    SONAR_CONFIGURATION_KEYS.analysisExclusions,
+    values.analysisExclusions?.trim() ?? '',
     vscode.ConfigurationTarget.WorkspaceFolder
   );
   await configuration.update(

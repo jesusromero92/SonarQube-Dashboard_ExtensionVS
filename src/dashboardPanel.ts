@@ -444,6 +444,9 @@ export class DashboardPanel {
       case 'save':
         await this.save(message);
         break;
+      case 'saveAnalysisScope':
+        await this.saveAnalysisScope(message);
+        break;
       case 'savePipeline':
         await this.savePipeline(message);
         break;
@@ -531,6 +534,8 @@ export class DashboardPanel {
           baseDir: '',
           hasToken: false,
           scannerMode: 'auto',
+          analysisInclusions: '',
+          analysisExclusions: '',
           buildCommand: '',
           testCommand: '',
           detectedBuildCommand: '',
@@ -603,6 +608,8 @@ export class DashboardPanel {
         projectKey: connectionDraftDirty ? '' : config.projectKey,
         projectName: connectionDraftDirty ? '' : config.projectName,
         hasToken: connectionDraftDirty ? false : config.hasToken,
+        analysisInclusions: connectionDraftDirty ? '' : config.analysisInclusions,
+        analysisExclusions: connectionDraftDirty ? '' : config.analysisExclusions,
         analysisPermission,
         notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
         significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
@@ -648,6 +655,7 @@ export class DashboardPanel {
     this.projectLoadController = new AbortController();
     this.dirtyConnectionFolders.add(folderUri);
     this.validatedConnections.delete(folderUri);
+    await this.persistAnalysisScope(folder, '', '');
     await this.refreshConfiguredFolderCount(
       vscode.workspace.workspaceFolders ?? []
     );
@@ -849,6 +857,75 @@ export class DashboardPanel {
     );
   }
 
+  private async persistAnalysisScope(
+    folder: vscode.WorkspaceFolder,
+    analysisInclusions: string,
+    analysisExclusions: string
+  ): Promise<void> {
+    const current = await getFolderFormConfig(this.context, folder);
+    await saveFolderConfig(this.context, folder, {
+      serverUrl: current.serverUrl,
+      projectKey: current.projectKey,
+      projectName: current.projectName,
+      branch: current.branch,
+      baseDir: current.baseDir,
+      scannerMode: current.scannerMode,
+      analysisInclusions,
+      analysisExclusions,
+      buildCommand: current.buildCommand,
+      testCommand: current.testCommand,
+      customScannerCommand: current.customScannerCommand,
+      preAnalysisCommands: current.preAnalysisCommands,
+      postAnalysisCommands: current.postAnalysisCommands
+    });
+  }
+
+  private async saveAnalysisScope(
+    message: DashboardWebviewMessage
+  ): Promise<void> {
+    const folder = this.getWorkspaceFolder(message.folderUri);
+    if (!folder) {
+      this.postMessage({
+        type: 'analysisScopeSaveError',
+        message: 'Abre una carpeta antes de guardar las inclusiones y exclusiones.'
+      });
+      return;
+    }
+
+    const current = await getFolderFormConfig(this.context, folder);
+    if (
+      !current.projectKey ||
+      this.dirtyConnectionFolders.has(folder.uri.toString())
+    ) {
+      this.postMessage({
+        type: 'analysisScopeSaveError',
+        message: 'Sincroniza primero un proyecto antes de guardar las inclusiones y exclusiones.'
+      });
+      return;
+    }
+
+    const analysisInclusions = (message.analysisInclusions ?? '').trim();
+    const analysisExclusions = (message.analysisExclusions ?? '').trim();
+
+    try {
+      await this.persistAnalysisScope(
+        folder,
+        analysisInclusions,
+        analysisExclusions
+      );
+      this.postMessage({
+        type: 'analysisScopeSaved',
+        analysisInclusions,
+        analysisExclusions
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'analysisScopeSaveError',
+        message: `No se pudieron guardar las inclusiones y exclusiones: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
   private async savePipeline(message: DashboardWebviewMessage): Promise<void> {
     const folder = this.getWorkspaceFolder(message.folderUri);
     if (!folder) {
@@ -868,6 +945,8 @@ export class DashboardPanel {
         branch: current.branch,
         baseDir: current.baseDir,
         scannerMode: current.scannerMode,
+        analysisInclusions: current.analysisInclusions,
+        analysisExclusions: current.analysisExclusions,
         buildCommand: message.buildCommand ?? '',
         testCommand: message.testCommand ?? '',
         customScannerCommand: current.customScannerCommand,
@@ -1182,6 +1261,15 @@ ${selected.name}`,
     const token = (message.token ?? '').trim();
     const existingToken = await this.context.secrets.get(tokenKey(folder));
     const savedConnection = await getFolderFormConfig(this.context, folder);
+    const resetAnalysisScope =
+      this.dirtyConnectionFolders.has(folder.uri.toString()) ||
+      savedConnection.projectKey !== projectKey;
+    const analysisInclusions = resetAnalysisScope
+      ? ''
+      : (message.analysisInclusions ?? '').trim();
+    const analysisExclusions = resetAnalysisScope
+      ? ''
+      : (message.analysisExclusions ?? '').trim();
 
     if (!this.isValidHttpUrl(serverUrl)) {
       this.postStatus('error', 'Introduce una URL válida de SonarQube.');
@@ -1236,6 +1324,8 @@ ${selected.name}`,
         baseDir: message.baseDir ?? '',
         token,
         scannerMode,
+        analysisInclusions,
+        analysisExclusions,
         buildCommand: message.buildCommand ?? '',
         testCommand: message.testCommand ?? '',
         customScannerCommand: message.customScannerCommand ?? '',
@@ -1274,6 +1364,8 @@ ${selected.name}`,
           hasToken: Boolean(token || existingToken),
           analysisPermission,
           scannerMode,
+          analysisInclusions,
+          analysisExclusions,
           buildCommand: message.buildCommand ?? '',
           testCommand: message.testCommand ?? '',
           detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
@@ -1715,6 +1807,10 @@ ${selected.name}`,
     this.dirtyConnectionFolders.add(folderUri);
     this.validatedConnections.delete(folderUri);
     this.creationCapabilities.delete(folderUri);
+    const folder = this.getWorkspaceFolder(folderUri);
+    if (folder) {
+      await this.persistAnalysisScope(folder, '', '');
+    }
     await this.refreshConfiguredFolderCount(
       vscode.workspace.workspaceFolders ?? []
     );

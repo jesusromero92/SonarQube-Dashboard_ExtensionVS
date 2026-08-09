@@ -26,6 +26,8 @@
   "configuration.scannerMode.npm": "Uses SonarScanner for NPM as a generic scanner.",
   "configuration.scannerMode.docker": "Uses the sonarsource/sonar-scanner-cli image.",
   "configuration.scannerMode.custom": "Runs the configured custom command.",
+  "configuration.sonar_analysisInclusions.description": "Optional sonar.inclusions patterns for repository analysis. Use one pattern per line or separate patterns with commas.",
+  "configuration.sonar_analysisExclusions.description": "Optional sonar.exclusions patterns for repository analysis. Use one pattern per line or separate patterns with commas.",
   "configuration.sonar_buildCommand.description": "Optional build command run before the generic scanner or instead of dotnet build.",
   "configuration.sonar_customScannerCommand.description": "Custom analysis command. The token is provided through SONAR_TOKEN.",
   "configuration.sonar_preAnalysisCommands.description": "Pipeline commands run before the SonarQube analysis. Use one command per line and optionally prefix it with Name ::.",

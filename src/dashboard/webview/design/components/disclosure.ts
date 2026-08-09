@@ -5,7 +5,7 @@ export const DISCLOSURE_STYLES = `
     .configuration-tabs {
       display: flex;
       gap: 2px;
-      padding: 0 16px;
+      padding: 0;
       border-bottom: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editorGroupHeader-tabsBackground);
     }
@@ -58,10 +58,16 @@ export const DISCLOSURE_STYLES = `
     .configuration-disclosure-content {
       padding-top: 14px;
     }
+    .analysis-scope-note {
+      margin-top: 10px;
+    }
+    .analysis-scope-save-row .pipeline-save-status {
+      margin-right: 0;
+    }
 
     @media (max-width: 620px) {
       .configuration-tabs {
-        padding: 0 8px;
+        padding: 0;
         overflow-x: auto;
       }
       .configuration-tabs button {

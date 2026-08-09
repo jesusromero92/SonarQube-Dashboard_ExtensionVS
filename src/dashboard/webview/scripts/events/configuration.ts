@@ -106,6 +106,9 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       }
 
       selectedProjectKey = selectedValue;
+      if (selectedValue !== currentConfig.projectKey) {
+        resetAnalysisScopeFields();
+      }
       updateSaveAvailability();
     });
 
@@ -140,6 +143,7 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       selectedProjectKey = '';
       currentConfig.projectKey = '';
       currentConfig.projectName = '';
+      resetAnalysisScopeFields();
       summaryVisible = false;
       elements.configState.textContent = 'Sin configurar';
       updateSaveAvailability();
@@ -150,6 +154,27 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       vscode.postMessage({
         type: 'loadProjects',
         ...values()
+      });
+    });
+
+    elements.analysisInclusions.addEventListener('input', () => {
+      clearAnalysisScopeSaveStatus();
+    });
+
+    elements.analysisExclusions.addEventListener('input', () => {
+      clearAnalysisScopeSaveStatus();
+    });
+
+    elements.saveAnalysisScope.addEventListener('click', () => {
+      setAnalysisScopeSaveStatus(
+        'loading',
+        'Guardando inclusiones y exclusiones…'
+      );
+      vscode.postMessage({
+        type: 'saveAnalysisScope',
+        folderUri: elements.folder.value,
+        analysisInclusions: elements.analysisInclusions.value.trim(),
+        analysisExclusions: elements.analysisExclusions.value.trim()
       });
     });
 

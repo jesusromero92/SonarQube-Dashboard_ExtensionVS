@@ -1,5 +1,7 @@
 export const ANALYSIS_STYLES = `    .analysis-panel {
       display: flex;
+      height: 86px;
+      box-sizing: border-box;
       align-items: center;
       gap: 18px;
       margin-bottom: 16px;
@@ -8,8 +10,25 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       border-left: 3px solid var(--vscode-progressBar-background);
       background: var(--vscode-editorWidget-background);
     }
-    .analysis-summary { display: flex; min-width: 0; align-items: center; gap: 12px; }
+    .analysis-summary { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 12px; overflow: hidden; }
+    .analysis-summary > div:last-child {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .analysis-summary strong,
+    .analysis-summary p,
+    .analysis-summary .muted {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .analysis-summary p { margin: 3px 0; color: var(--vscode-descriptionForeground); }
+    .analysis-summary .muted:empty { display: none; }
     .analysis-icon {
       display: grid;
       width: 34px;
@@ -38,7 +57,7 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       transform: none;
       animation: dashboard-spin .8s linear infinite;
     }
-    .analysis-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .analysis-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; margin-left: auto; }
     .analysis-dialog-status {
       display: flex;
       align-items: center;
@@ -492,7 +511,7 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       .detected-integration-card > button { width: 100%; }
       .create-component-grid { grid-template-columns: 1fr; }
       .confirmation-details dt { width: 78px; flex-basis: 78px; }
-      .analysis-panel { align-items: flex-start; flex-direction: column; }
+      .analysis-panel { height: auto; min-height: 86px; align-items: flex-start; flex-direction: column; }
       .analysis-actions { width: 100%; margin-left: 0; }
       .analysis-actions button { flex: 1; }
       .pipeline-step-row,

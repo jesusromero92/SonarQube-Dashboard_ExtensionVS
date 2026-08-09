@@ -400,6 +400,8 @@ export interface FolderSonarConfig {
   baseDir?: string;
   token: string;
   scannerMode: ScannerMode;
+  analysisInclusions?: string;
+  analysisExclusions?: string;
   buildCommand?: string;
   testCommand?: string;
   customScannerCommand?: string;
@@ -415,6 +417,8 @@ export interface FolderSonarFormConfig {
   baseDir: string;
   hasToken: boolean;
   scannerMode: ScannerMode;
+  analysisInclusions: string;
+  analysisExclusions: string;
   buildCommand: string;
   testCommand: string;
   customScannerCommand: string;

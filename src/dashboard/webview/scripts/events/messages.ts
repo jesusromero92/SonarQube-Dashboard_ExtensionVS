@@ -19,6 +19,27 @@ export const MESSAGE_EVENTS_SCRIPT = `
           renderConfigurationSaved(message.config || {});
           break;
 
+        case 'analysisScopeSaved':
+          currentConfig = {
+            ...currentConfig,
+            analysisInclusions: message.analysisInclusions || '',
+            analysisExclusions: message.analysisExclusions || ''
+          };
+          elements.analysisInclusions.value = currentConfig.analysisInclusions;
+          elements.analysisExclusions.value = currentConfig.analysisExclusions;
+          setAnalysisScopeSaveStatus(
+            'success',
+            'Inclusiones y exclusiones guardadas.'
+          );
+          break;
+
+        case 'analysisScopeSaveError':
+          setAnalysisScopeSaveStatus(
+            'error',
+            message.message || 'No se pudieron guardar las inclusiones y exclusiones.'
+          );
+          break;
+
         case 'pipelineSaved':
           currentConfig = {
             ...currentConfig,
@@ -127,6 +148,7 @@ export const MESSAGE_EVENTS_SCRIPT = `
             currentConfig.projectKey = '';
             currentConfig.projectName = '';
             selectedProjectKey = '';
+            resetAnalysisScopeFields();
             elements.configState.textContent = 'Sin configurar';
             setProjectOptions(
               message.projects || [],
@@ -161,6 +183,7 @@ export const MESSAGE_EVENTS_SCRIPT = `
             currentConfig.hasToken = false;
             currentConfig.sonarCompatibility = undefined;
             elements.configState.textContent = 'Sin configurar';
+            resetAnalysisScopeFields();
             resetProjectOptionsForDisconnectedConnection();
             elements.sonarCompatibility.hidden = true;
             renderEmptyState();

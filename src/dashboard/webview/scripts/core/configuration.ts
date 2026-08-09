@@ -1,6 +1,7 @@
 export const CONFIGURATION_CORE_SCRIPT = `
     const CREATE_PROJECT_OPTION = '__create_project__';
     const CREATE_APPLICATION_OPTION = '__create_application__';
+    let analysisScopeSaving = false;
 
     function values() {
       return {
@@ -15,6 +16,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
         branch: elements.branch.value.trim(),
         baseDir: elements.baseDir.value.trim(),
         scannerMode: elements.scannerMode.value,
+        analysisInclusions: elements.analysisInclusions.value.trim(),
+        analysisExclusions: elements.analysisExclusions.value.trim(),
         buildCommand: elements.buildCommand.value.trim(),
         testCommand: elements.testCommand.value.trim(),
         customScannerCommand: elements.customScannerCommand.value.trim(),
@@ -106,10 +109,52 @@ export const CONFIGURATION_CORE_SCRIPT = `
       );
     }
 
+    function canSaveAnalysisScope() {
+      return Boolean(
+        hasWorkspace &&
+        !connectionDraftDirty &&
+        currentConfig.projectKey &&
+        elements.projectKey.value === currentConfig.projectKey
+      );
+    }
+
     function updateSaveAvailability() {
       elements.save.disabled =
         configurationBusy || !canSynchronizeConfiguration();
+      elements.saveAnalysisScope.disabled =
+        analysisScopeSaving || !canSaveAnalysisScope();
       elements.savePipeline.disabled = pipelineSaving || !hasWorkspace;
+    }
+
+    function clearAnalysisScopeSaveStatus() {
+      elements.analysisScopeSaveStatus.hidden = true;
+      elements.analysisScopeSaveStatus.textContent = '';
+      elements.analysisScopeSaveStatus.className = 'pipeline-save-status';
+    }
+
+    function setAnalysisScopeSaveStatus(kind, message = '') {
+      analysisScopeSaving = kind === 'loading';
+      updateSaveAvailability();
+      if (!message) {
+        clearAnalysisScopeSaveStatus();
+        return;
+      }
+
+      elements.analysisScopeSaveStatus.hidden = false;
+      elements.analysisScopeSaveStatus.textContent =
+        translateLocalizationValue(message);
+      elements.analysisScopeSaveStatus.className =
+        'pipeline-save-status pipeline-save-status--' + kind;
+    }
+
+    function resetAnalysisScopeFields() {
+      elements.analysisInclusions.value = '';
+      elements.analysisExclusions.value = '';
+      currentConfig.analysisInclusions = '';
+      currentConfig.analysisExclusions = '';
+      analysisScopeSaving = false;
+      clearAnalysisScopeSaveStatus();
+      updateSaveAvailability();
     }
 
     function clearPipelineSaveStatus() {
@@ -447,6 +492,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.language.value = message.language || dashboardLanguage;
       pipelineSaving = false;
       clearPipelineSaveStatus();
+      analysisScopeSaving = false;
+      clearAnalysisScopeSaveStatus();
       hasWorkspace = folders.length > 0;
       elements.emptyWorkspace.hidden = hasWorkspace;
       elements.configurationContent.hidden = !hasWorkspace;
@@ -460,6 +507,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
           baseDir: '',
           hasToken: false,
           scannerMode: 'auto',
+          analysisInclusions: '',
+          analysisExclusions: '',
           buildCommand: '',
           testCommand: '',
           detectedBuildCommand: '',
@@ -530,6 +579,12 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.branch.value = currentConfig.branch || '';
       elements.baseDir.value = currentConfig.baseDir || '';
       elements.scannerMode.value = currentConfig.scannerMode || 'auto';
+      elements.analysisInclusions.value = connectionDraftDirty
+        ? ''
+        : currentConfig.analysisInclusions || '';
+      elements.analysisExclusions.value = connectionDraftDirty
+        ? ''
+        : currentConfig.analysisExclusions || '';
       elements.buildCommand.value = currentConfig.buildCommand || '';
       elements.testCommand.value = currentConfig.testCommand || '';
       renderDetectedProjectActions(currentConfig);
@@ -582,6 +637,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
       connectionDraftFolderUri = '';
       connectionValidated = Boolean(config.serverUrl && config.hasToken);
       currentConfig = config;
+      analysisScopeSaving = false;
+      clearAnalysisScopeSaveStatus();
       selectedProjectKey = config.projectKey || selectedProjectKey;
       elements.projectKey.value = selectedProjectKey;
       elements.configState.textContent = selectedProjectKey
@@ -596,6 +653,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
           'El token puede consultar datos, pero no tiene permiso para ejecutar análisis en este proyecto.';
       }
       elements.scannerMode.value = config.scannerMode || 'auto';
+      elements.analysisInclusions.value = config.analysisInclusions || '';
+      elements.analysisExclusions.value = config.analysisExclusions || '';
       elements.buildCommand.value = config.buildCommand || '';
       elements.testCommand.value = config.testCommand || '';
       renderDetectedProjectActions(config);

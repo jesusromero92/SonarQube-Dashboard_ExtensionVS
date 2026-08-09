@@ -14,6 +14,8 @@ export const SONAR_CONFIGURATION_KEYS = {
   branch: 'branch',
   baseDir: 'baseDir',
   scannerMode: 'scannerMode',
+  analysisInclusions: 'analysisInclusions',
+  analysisExclusions: 'analysisExclusions',
   buildCommand: 'buildCommand',
   customScannerCommand: 'customScannerCommand',
   preAnalysisCommands: 'preAnalysisCommands',

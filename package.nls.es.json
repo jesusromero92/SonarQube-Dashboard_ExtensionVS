@@ -26,6 +26,8 @@
   "configuration.scannerMode.npm": "Usa SonarScanner for NPM como scanner genérico.",
   "configuration.scannerMode.docker": "Usa la imagen sonarsource/sonar-scanner-cli.",
   "configuration.scannerMode.custom": "Ejecuta el comando personalizado configurado.",
+  "configuration.sonar_analysisInclusions.description": "Patrones opcionales de sonar.inclusions para el análisis del repositorio. Usa un patrón por línea o sepáralos por comas.",
+  "configuration.sonar_analysisExclusions.description": "Patrones opcionales de sonar.exclusions para el análisis del repositorio. Usa un patrón por línea o sepáralos por comas.",
   "configuration.sonar_buildCommand.description": "Comando de compilación opcional ejecutado antes del scanner genérico o en lugar de dotnet build.",
   "configuration.sonar_customScannerCommand.description": "Comando personalizado de análisis. El token se proporciona mediante SONAR_TOKEN.",
   "configuration.sonar_preAnalysisCommands.description": "Comandos del pipeline ejecutados antes del análisis de SonarQube. Usa un comando por línea y, opcionalmente, el prefijo Nombre ::.",

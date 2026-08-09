@@ -536,7 +536,7 @@ El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados
 
 El flujo de conexión es explícito: **Conectar** valida la URL y el token y carga los componentes visibles sin seleccionar ninguno. Si la validación falla, el desplegable de proyectos permanece vacío y deshabilitado. El proyecto solo queda vinculado cuando el usuario lo selecciona y pulsa **Sincronizar**. Los borradores no guardados del servidor y del token se conservan al cambiar entre Datos y Configuración.
 
-La página de configuración está dividida en las pestañas **SonarQube**, **Pipeline** y **Notificaciones**, cada una con sus propios acordeones. La pestaña **SonarQube** contiene la conexión, el proyecto y la configuración avanzada del scanner; **Pipeline** contiene pasos, plantillas e integraciones; y **Notificaciones** agrupa los avisos automáticos.
+La página de configuración está dividida en las pestañas **SonarQube**, **Pipeline** y **Notificaciones**, cada una con sus propios acordeones. La pestaña **SonarQube** contiene la conexión, el proyecto, la configuración avanzada del scanner y el alcance de inclusiones/exclusiones del análisis; **Pipeline** contiene pasos, plantillas e integraciones; y **Notificaciones** agrupa los avisos automáticos.
 
 La página permite gestionar:
 
@@ -546,9 +546,15 @@ La página permite gestionar:
 - **Rama:** rama opcional que debe consultarse.
 - **Subcarpeta local:** correspondencia entre la raíz de SonarQube y una carpeta del workspace.
 - **Método de análisis:** automático, Maven, Gradle, .NET, NPM, Docker o personalizado.
+- **Inclusiones del análisis:** patrones comodín opcionales de `sonar.inclusions`. Puede escribirse un patrón por línea o separarlos por comas.
+- **Exclusiones del análisis:** patrones comodín opcionales de `sonar.exclusions`. Puede escribirse un patrón por línea o separarlos por comas.
 - **Comando de compilación:** comando opcional previo al scanner genérico o sustituto de `dotnet build`.
 - **Comando personalizado:** permite integrar herramientas o procesos propios sin guardar el token en el comando.
 - **Pipeline de análisis:** comandos de compilación y tests detectados, pasos personalizados, orden y política de fallo.
+
+El acordeón **Inclusiones y exclusiones del análisis** envía el alcance configurado a los flujos integrados de Maven, Gradle, .NET, NPM y Docker. Si ambos campos están vacíos y se utiliza el scanner genérico sin `sonar-project.properties`, la extensión conserva sus exclusiones automáticas para carpetas de dependencias y contenido generado. Los comandos de scanner personalizados pueden utilizar las variables normalizadas `${analysisInclusions}` y `${analysisExclusions}`.
+
+Usa **Guardar inclusiones y exclusiones** para persistir estos dos campos de forma independiente al resto de la configuración de SonarQube. El estado mostrado junto al botón confirma el resultado del guardado. Como este alcance es específico de cada proyecto, la extensión vacía ambos campos al volver a cargar la conexión de SonarQube y al sincronizar un proyecto o aplicación diferente; configura y guarda de nuevo el alcance para el nuevo componente vinculado.
 
 ### Seguridad del token
 
@@ -591,6 +597,8 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
   "sonarQubeDashboard.sonar.branch": "",
   "sonarQubeDashboard.sonar.baseDir": "",
   "sonarQubeDashboard.sonar.scannerMode": "auto",
+  "sonarQubeDashboard.sonar.analysisInclusions": "",
+  "sonarQubeDashboard.sonar.analysisExclusions": "",
   "sonarQubeDashboard.sonar.buildCommand": "",
   "sonarQubeDashboard.sonar.customScannerCommand": "",
   "sonarQubeDashboard.autoRefresh": true,

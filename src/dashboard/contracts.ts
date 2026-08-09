@@ -22,6 +22,8 @@ export interface DashboardWebviewMessage {
   branch?: string;
   baseDir?: string;
   scannerMode?: ScannerMode;
+  analysisInclusions?: string;
+  analysisExclusions?: string;
   buildCommand?: string;
   testCommand?: string;
   customScannerCommand?: string;

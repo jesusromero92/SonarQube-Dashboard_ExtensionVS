@@ -4,6 +4,42 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.2.0] - 2026-08-09
+
+### Added
+
+- The **SonarQube** configuration tab now includes a dedicated **Analysis inclusions and exclusions** accordion for `sonar.inclusions` and `sonar.exclusions`. Patterns can be entered one per line or separated with commas and are applied to the built-in Maven, Gradle, .NET, NPM, and Docker analysis flows.
+
+  *La pestaña de configuración **SonarQube** incorpora un nuevo acordeón de **Inclusiones y exclusiones del análisis** para `sonar.inclusions` y `sonar.exclusions`. Los patrones pueden introducirse uno por línea o separados por comas y se aplican a los flujos integrados de Maven, Gradle, .NET, NPM y Docker.*
+
+- Custom scanner commands can use `${analysisInclusions}` and `${analysisExclusions}` with the normalized pattern lists.
+
+  *Los comandos de scanner personalizados pueden utilizar `${analysisInclusions}` y `${analysisExclusions}` con las listas de patrones normalizadas.*
+
+### Changed
+
+- Analysis-scope settings are stored per workspace folder and exposed through the extension settings as `sonarQubeDashboard.sonar.analysisInclusions` and `sonarQubeDashboard.sonar.analysisExclusions`. The accordion now has its own **Save inclusions and exclusions** action and inline save status, so the scope can be persisted independently from the rest of the SonarQube configuration.
+
+  *La configuración del alcance del análisis se guarda por carpeta del workspace y se expone en los ajustes de la extensión como `sonarQubeDashboard.sonar.analysisInclusions` y `sonarQubeDashboard.sonar.analysisExclusions`. El acordeón dispone ahora de su propia acción **Guardar inclusiones y exclusiones** y estado de guardado junto al botón, por lo que el alcance puede persistirse de forma independiente al resto de la configuración de SonarQube.*
+
+- Analysis inclusions and exclusions are cleared when the SonarQube connection is reloaded or when a different project/application is synchronized, preventing a project-specific scope from being reused accidentally with another component.
+
+  *Las inclusiones y exclusiones del análisis se restablecen al volver a cargar la conexión de SonarQube o al sincronizar un proyecto/aplicación diferente, evitando reutilizar por error un alcance específico de otro componente.*
+
+- English and Spanish translations and both README files now document the analysis-scope configuration and its independent save/reset behavior.
+
+  *Se han actualizado las traducciones en inglés y español y ambos README para documentar la configuración del alcance del análisis y su comportamiento independiente de guardado/restablecimiento.*
+
+### Fixed
+
+- Removed the leading horizontal inset from the **SonarQube / Pipeline / Notifications** tab bar so the first tab starts flush with the configuration panel.
+
+  *Se ha eliminado la separación horizontal inicial de la barra de pestañas **SonarQube / Pipeline / Notificaciones**, de modo que la primera pestaña comienza alineada con el panel de configuración.*
+
+- Stabilized the repository-analysis status panel so its height no longer changes between idle and running states, with the status text vertically aligned with the analysis icon and long content truncated instead of resizing the panel.
+
+  *Se ha estabilizado el panel de estado del análisis del repositorio para que su altura no cambie entre reposo y ejecución, manteniendo el texto alineado verticalmente con el icono de análisis y truncando el contenido largo en lugar de redimensionar el panel.*
+
 ## [1.1.0] - 2026-08-08
 
 ### Added

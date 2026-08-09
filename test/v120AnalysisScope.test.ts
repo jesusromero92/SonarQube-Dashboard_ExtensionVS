@@ -1,0 +1,121 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+import test from 'node:test';
+import {
+  analysisScopeProperties,
+  hasExplicitAnalysisScope,
+  normalizeAnalysisPatterns
+} from '../src/scanner/analysisScope';
+import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
+import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
+import { ELEMENT_REGISTRY_SCRIPT } from '../src/dashboard/webview/scripts/core/elements';
+import { DISCLOSURE_STYLES } from '../src/dashboard/webview/design/components/disclosure';
+import { SOURCE_MESSAGES } from '../src/i18n/source';
+import { EN_MESSAGES } from '../src/i18n/en';
+import { ES_MESSAGES } from '../src/i18n/es';
+
+test('la versión 1.2.0 expone inclusiones y exclusiones en la configuración SonarQube', () => {
+  assert.match(CONFIGURATION_PAGE_MARKUP, /Inclusiones y exclusiones del análisis/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="analysisInclusions"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="analysisExclusions"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /sonar\.inclusions/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /sonar\.exclusions/);
+  assert.match(ELEMENT_REGISTRY_SCRIPT, /analysisInclusions/);
+  assert.match(ELEMENT_REGISTRY_SCRIPT, /analysisExclusions/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /analysisInclusions: elements\.analysisInclusions\.value\.trim\(\)/);
+  assert.match(CONFIGURATION_CORE_SCRIPT, /analysisExclusions: elements\.analysisExclusions\.value\.trim\(\)/);
+});
+
+test('los patrones aceptan líneas y comas, se limpian y no se duplican', () => {
+  assert.equal(
+    normalizeAnalysisPatterns('src/**\n packages/*/src/**,src/**\r\n'),
+    'src/**,packages/*/src/**'
+  );
+  assert.equal(normalizeAnalysisPatterns('   '), '');
+});
+
+test('las propiedades de alcance usan la sintaxis de cada scanner', () => {
+  const config = {
+    analysisInclusions: 'src/**\npackages/*/src/**',
+    analysisExclusions: '**/generated/**, **/*.min.js'
+  };
+
+  assert.deepEqual(analysisScopeProperties(config, '-D'), [
+    '-Dsonar.inclusions=src/**,packages/*/src/**',
+    '-Dsonar.exclusions=**/generated/**,**/*.min.js'
+  ]);
+  assert.deepEqual(analysisScopeProperties(config, '/d:'), [
+    '/d:sonar.inclusions=src/**,packages/*/src/**',
+    '/d:sonar.exclusions=**/generated/**,**/*.min.js'
+  ]);
+  assert.equal(hasExplicitAnalysisScope(config), true);
+  assert.equal(
+    hasExplicitAnalysisScope({ analysisInclusions: '', analysisExclusions: '' }),
+    false
+  );
+});
+
+test('los scanners integrados consumen el alcance y conservan los defaults solo sin configuración explícita', () => {
+  const analysisService = readFileSync(
+    path.resolve(process.cwd(), 'src/scanner/analysisService.ts'),
+    'utf8'
+  );
+
+  assert.match(
+    analysisService,
+    /\.\.\.analysisScopeProperties\(request\.config, '\/d:'\)/
+  );
+  assert.match(
+    analysisService,
+    /values\.push\(\.\.\.analysisScopeProperties\(request\.config, prefix\)\)/
+  );
+  assert.match(
+    analysisService,
+    /if \(!hasExplicitAnalysisScope\(request\.config\)\) \{[\s\S]*DEFAULT_EXCLUSIONS/
+  );
+  assert.match(analysisService, /analysisInclusions/);
+  assert.match(analysisService, /analysisExclusions/);
+});
+
+test('la barra de tabs ya no tiene separación horizontal inicial', () => {
+  const tabRule = DISCLOSURE_STYLES.match(/\.configuration-tabs \{[\s\S]*?\n    \}/)?.[0] ?? '';
+  assert.match(tabRule, /padding: 0;/);
+  assert.doesNotMatch(tabRule, /padding: 0 16px/);
+});
+
+test('manifest, traducciones y documentación incluyen la configuración 1.2.0', () => {
+  const packageManifest = JSON.parse(readFileSync(
+    path.resolve(process.cwd(), 'package.json'),
+    'utf8'
+  )) as {
+    version?: string;
+    contributes?: { configuration?: { properties?: Record<string, unknown> } };
+  };
+  const properties = packageManifest.contributes?.configuration?.properties ?? {};
+  assert.equal(packageManifest.version, '1.2.0');
+  assert.ok(properties['sonarQubeDashboard.sonar.analysisInclusions']);
+  assert.ok(properties['sonarQubeDashboard.sonar.analysisExclusions']);
+
+  for (const key of [
+    'analysisScopeTitle',
+    'analysisScopeDescription',
+    'analysisScopePatternsHint',
+    'analysisInclusions',
+    'analysisInclusionsHint',
+    'analysisExclusions',
+    'analysisExclusionsHint',
+    'analysisScopeDefaultsHint'
+  ] as const) {
+    assert.ok(SOURCE_MESSAGES[key]);
+    assert.ok(EN_MESSAGES[key]);
+    assert.ok(ES_MESSAGES[key]);
+  }
+
+  const readme = readFileSync(path.resolve(process.cwd(), 'README.md'), 'utf8');
+  const readmeEs = readFileSync(path.resolve(process.cwd(), 'README.es.md'), 'utf8');
+  const changelog = readFileSync(path.resolve(process.cwd(), 'CHANGELOG.md'), 'utf8');
+  assert.match(readme, /analysisInclusions/);
+  assert.match(readmeEs, /analysisExclusions/);
+  assert.match(changelog, /## \[1\.2\.0\] - 2026-08-09/);
+});

@@ -536,7 +536,7 @@ The **Clear Problems** command removes only diagnostics published by this extens
 
 The connection workflow is explicit: **Connect** validates the URL and token and loads the visible components without selecting one. The project dropdown remains empty and disabled when validation fails. A project is linked only after the user selects it and presses **Synchronize**. Unsaved server and token drafts are preserved when moving between Data and Configuration.
 
-The configuration page is split into **SonarQube**, **Pipeline**, and **Notifications** tabs, each with its own accordions. **SonarQube** contains connection, project, and advanced scanner settings; **Pipeline** contains steps, templates, and integrations; and **Notifications** groups automatic alerts.
+The configuration page is split into **SonarQube**, **Pipeline**, and **Notifications** tabs, each with its own accordions. **SonarQube** contains connection, project, advanced scanner settings, and analysis-scope inclusions/exclusions; **Pipeline** contains steps, templates, and integrations; and **Notifications** groups automatic alerts.
 
 The configuration page manages:
 
@@ -546,9 +546,15 @@ The configuration page manages:
 - **Branch:** optional branch to query.
 - **Local subfolder:** mapping between the SonarQube root and a workspace folder.
 - **Analysis method:** Automatic, Maven, Gradle, .NET, NPM, Docker, or Custom.
+- **Analysis inclusions:** optional `sonar.inclusions` wildcard patterns. Enter one pattern per line or separate patterns with commas.
+- **Analysis exclusions:** optional `sonar.exclusions` wildcard patterns. Enter one pattern per line or separate patterns with commas.
 - **Build command:** optional command executed before the generic scanner or used instead of `dotnet build`.
 - **Custom command:** integrates custom tools or processes without storing the token in the command.
 - **Analysis pipeline:** detected build and test commands, custom steps, ordering, and failure policy.
+
+The **Analysis inclusions and exclusions** accordion sends the configured scope to the built-in Maven, Gradle, .NET, NPM, and Docker scanner flows. When both fields are empty and the generic scanner is used without `sonar-project.properties`, the extension keeps its automatic exclusions for generated and dependency folders. Custom scanner commands can reference the normalized `${analysisInclusions}` and `${analysisExclusions}` variables.
+
+Use **Save inclusions and exclusions** to persist these two fields independently from the rest of the SonarQube configuration. The inline status next to the button confirms the result. Because the scope is project-specific, the extension clears both fields when the SonarQube connection is reloaded and when a different project or application is synchronized; configure and save the scope again for the newly linked component.
 
 ### Token security
 
@@ -591,6 +597,8 @@ When the active folder changes, the extension selects the matching configuration
   "sonarQubeDashboard.sonar.branch": "",
   "sonarQubeDashboard.sonar.baseDir": "",
   "sonarQubeDashboard.sonar.scannerMode": "auto",
+  "sonarQubeDashboard.sonar.analysisInclusions": "",
+  "sonarQubeDashboard.sonar.analysisExclusions": "",
   "sonarQubeDashboard.sonar.buildCommand": "",
   "sonarQubeDashboard.sonar.customScannerCommand": "",
   "sonarQubeDashboard.autoRefresh": true,
