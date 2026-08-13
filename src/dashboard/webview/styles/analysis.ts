@@ -58,6 +58,101 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       animation: dashboard-spin .8s linear infinite;
     }
     .analysis-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .analysis-baseline-comparison {
+      display: grid;
+      gap: 12px;
+      margin: -4px 0 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editorWidget-background);
+    }
+    .analysis-baseline-comparison[hidden] { display: none; }
+    .analysis-baseline-comparison--history {
+      margin: 2px 0 14px;
+      background: var(--vscode-editor-background);
+    }
+    .analysis-baseline-header {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .analysis-baseline-header > div {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .analysis-baseline-header > .muted {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .analysis-baseline-meta {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+      white-space: nowrap;
+    }
+    .analysis-baseline-scope {
+      padding: 2px 7px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 999px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .analysis-baseline-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+    }
+    .analysis-baseline-card {
+      display: grid;
+      min-width: 0;
+      gap: 5px;
+      padding: 10px 12px;
+      border-right: 1px solid var(--vscode-panel-border);
+    }
+    .analysis-baseline-card:last-child { border-right: 0; }
+    .analysis-baseline-card > span:first-child {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    .analysis-baseline-card > strong {
+      overflow: hidden;
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .analysis-baseline-delta {
+      width: fit-content;
+      max-width: 100%;
+      padding: 1px 7px;
+      border-radius: 999px;
+      color: var(--vscode-badge-foreground, #ffffff);
+      background: var(--vscode-badge-background);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .analysis-baseline-delta--improved {
+      color: var(--vscode-testing-iconPassed, var(--dashboard-quality-gate-ok));
+      background: color-mix(in srgb, var(--vscode-testing-iconPassed, var(--dashboard-quality-gate-ok)) 14%, transparent);
+    }
+    .analysis-baseline-delta--worsened {
+      color: var(--vscode-testing-iconFailed, var(--dashboard-quality-gate-error));
+      background: color-mix(in srgb, var(--vscode-testing-iconFailed, var(--dashboard-quality-gate-error)) 14%, transparent);
+    }
+    .analysis-baseline-delta--neutral {
+      color: var(--vscode-badge-foreground, #ffffff);
+      background: var(--vscode-badge-background);
+    }
+    .analysis-baseline-delta[hidden] { display: none; }
     .analysis-dialog-status {
       display: flex;
       align-items: center;
@@ -112,6 +207,135 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
     .terminal-line--placeholder {
       color: var(--vscode-descriptionForeground);
     }
+    .analysis-confirmation-stepper {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0;
+      margin: 0;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      list-style: none;
+    }
+    .analysis-confirmation-stepper::before {
+      position: absolute;
+      top: 29px;
+      right: 25%;
+      left: 25%;
+      height: 2px;
+      content: "";
+      background: var(--vscode-panel-border);
+    }
+    .analysis-confirmation-stepper-item {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: var(--vscode-descriptionForeground);
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .analysis-confirmation-stepper-number {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      flex: 0 0 26px;
+      place-items: center;
+      border: 2px solid var(--vscode-panel-border);
+      border-radius: 50%;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editorWidget-background);
+      font-variant-numeric: tabular-nums;
+    }
+    .analysis-confirmation-stepper-item.is-active {
+      color: var(--vscode-foreground);
+    }
+    .analysis-confirmation-stepper-item.is-active .analysis-confirmation-stepper-number {
+      border-color: var(--vscode-focusBorder);
+      color: var(--vscode-button-foreground);
+      background: var(--vscode-button-background);
+    }
+    .analysis-confirmation-stepper-item.is-complete .analysis-confirmation-stepper-number {
+      border-color: var(--vscode-testing-iconPassed, var(--dashboard-quality-gate-ok));
+      color: var(--vscode-editor-background);
+      background: var(--vscode-testing-iconPassed, var(--dashboard-quality-gate-ok));
+    }
+    .analysis-confirmation-wizard-step {
+      display: grid;
+      gap: 12px;
+    }
+    .analysis-confirmation-wizard-step[hidden] { display: none; }
+    .analysis-confirmation-review-details dt {
+      width: 130px;
+      flex-basis: 130px;
+    }
+    .analysis-confirmation-scope-value {
+      white-space: pre-wrap;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 12px;
+    }
+    .analysis-confirmation-steps-review {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editor-background);
+    }
+    .analysis-confirmation-steps-review > div {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    .analysis-confirmation-steps-review ol {
+      display: grid;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .analysis-confirmation-steps-review li {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      padding: 7px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editorWidget-background);
+    }
+    .analysis-confirmation-step-number {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--vscode-badge-foreground, #fff);
+      background: var(--vscode-badge-background);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .analysis-confirmation-step-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .analysis-confirmation-step-copy small {
+      overflow: hidden;
+      color: var(--vscode-descriptionForeground);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .analysis-confirmation-actions {
+      display: flex;
+      align-items: center;
+    }
+    .analysis-confirmation-actions-spacer { flex: 1 1 auto; }
     .confirmation-dialog {
       width: min(560px, calc(100vw - 40px));
     }
@@ -519,6 +743,9 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       .detected-integration-card > button { width: 100%; }
       .create-component-grid { grid-template-columns: 1fr; }
       .confirmation-details dt { width: 78px; flex-basis: 78px; }
+      .analysis-confirmation-review-details > div { align-items: flex-start; flex-direction: column; gap: 3px; }
+      .analysis-confirmation-review-details dt { width: auto; flex-basis: auto; }
+      .analysis-confirmation-stepper::before { top: 28px; }
       .analysis-panel { height: auto; min-height: 86px; align-items: flex-start; flex-direction: column; }
       .analysis-actions { width: 100%; margin-left: 0; }
       .analysis-actions button { flex: 1; }
@@ -528,5 +755,17 @@ export const ANALYSIS_STYLES = `    .analysis-panel {
       .pipeline-step-row .pipeline-step-policy-dropdown,
       .analysis-run-step .pipeline-step-policy-dropdown { grid-column: 2 / -1; }
       .analysis-run-heading { flex-direction: column; }
+    }
+    @media (max-width: 980px) {
+      .analysis-baseline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .analysis-baseline-card { border-bottom: 1px solid var(--vscode-panel-border); }
+      .analysis-baseline-card:nth-child(2n) { border-right: 0; }
+      .analysis-baseline-card:last-child { border-bottom: 0; }
+    }
+    @media (max-width: 620px) {
+      .analysis-baseline-header { flex-direction: column; }
+      .analysis-baseline-meta { justify-content: flex-start; }
+      .analysis-baseline-grid { grid-template-columns: 1fr; }
+      .analysis-baseline-card { border-right: 0; }
     }
 `;

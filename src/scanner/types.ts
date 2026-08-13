@@ -1,4 +1,4 @@
-import { FolderSonarConfig, ScannerMode } from '../types';
+import { FolderSonarConfig, QualityGateStatus, ScannerMode } from '../types';
 
 export type { ScannerMode } from '../types';
 
@@ -23,6 +23,29 @@ export interface AnalysisStepProgress extends AnalysisExecutionStep {
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;
+}
+
+export interface AnalysisBaselineSnapshot {
+  capturedAt: string;
+  hasAnalysis: boolean;
+  issues: number;
+  newIssues: number;
+  securityHotspots: number;
+  newSecurityHotspots: number;
+  coverage: number | null;
+  newCoverage: number | null;
+  duplication: number | null;
+  newDuplication: number | null;
+  qualityGate: QualityGateStatus;
+}
+
+export interface AnalysisBaselineComparison {
+  projectKey: string;
+  branch: string;
+  serverUrl: string;
+  before: AnalysisBaselineSnapshot;
+  after: AnalysisBaselineSnapshot;
+  capturedAt: string;
 }
 
 export type PipelineRunHistoryStatus = 'running' | 'success' | 'warning' | 'failed' | 'cancelled';
@@ -54,6 +77,7 @@ export interface PipelineRunHistoryEntry {
   durationMs: number;
   steps: PipelineRunHistoryStep[];
   log: string[];
+  comparison?: AnalysisBaselineComparison;
 }
 
 export type AnalysisPhase =
@@ -89,6 +113,8 @@ export interface AnalysisState {
   canCancel: boolean;
   log: string[];
   steps: AnalysisStepProgress[];
+  baseline?: AnalysisBaselineSnapshot;
+  comparison?: AnalysisBaselineComparison;
 }
 
 export interface AnalysisExecutionOptions {
@@ -99,6 +125,7 @@ export interface AnalysisRequest {
   rootPath: string;
   config: FolderSonarConfig;
   actions: AnalysisExecutionOptions;
+  baseline?: AnalysisBaselineSnapshot;
 }
 
 export interface ProcessSpec {

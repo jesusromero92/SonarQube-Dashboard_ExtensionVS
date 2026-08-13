@@ -24,7 +24,7 @@ Para realizar una primera configuración guiada, abre la paleta de comandos y ej
 | Análisis del repositorio | Detecta Maven, Gradle, .NET, NPM, Docker o un comando de scanner personalizado y lo ejecuta en el workspace. |
 | Pipeline de calidad | Ejecuta compilación, tests, auditorías, herramientas de seguridad, SonarQube y comandos personalizados en el orden seleccionado y con políticas de fallo por paso. |
 | Integración con el editor | Publica entradas en Problems, decoraciones, hovers, CodeLens, flujos de issues, cobertura e indicadores de duplicación. |
-| Historial de ejecuciones | Conserva las últimas 30 ejecuciones por carpeta de análisis, incluyendo estado, duración, pasos y log limitado. |
+| Historial de ejecuciones | Conserva las últimas 30 ejecuciones por carpeta de análisis, incluyendo estado, duración, pasos, log limitado y la línea base exacta antes/después de cada ejecución finalizada. |
 | Diagnóstico | Informa del entorno, compatibilidad, scanner, comandos detectados, herramientas, latencia del servidor y última petición fallida, ocultando secretos. |
 
 ## Modelo de funcionamiento
@@ -64,10 +64,11 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 
 ## Características principales
 
-- Análisis del repositorio desde VS Code con detección automática del scanner.
+- Análisis del repositorio desde VS Code con detección automática del scanner y un asistente de dos pasos para plantilla/confirmación que muestra la carpeta efectiva y el alcance de análisis de SonarQube.
 - Pipeline de análisis configurable con compilación, tests, integraciones predefinidas y pasos personalizados ordenables mediante drag & drop.
 - Plantillas reutilizables de pipeline: **Rápido**, **Completo**, **Seguridad**, **Release** y plantillas propias importables/exportables en YAML versionado.
-- Vista nativa **Ejecuciones del pipeline** con las últimas ejecuciones, su estado, duración, pasos y registro en tiempo real o histórico.
+- Vista nativa **Ejecuciones del pipeline** con las últimas ejecuciones, su estado, duración, pasos, registro en tiempo real o histórico y variaciones antes/después de SonarQube.
+- **Línea base local antes/después** automática para cada análisis del repositorio, con Issues, Security Hotspots, Cobertura, Duplicación y Quality Gate.
 - Pantalla de diagnóstico interno con entorno, servidor, compatibilidad, scanner, herramientas, comandos, última petición fallida y tiempo de respuesta.
 - Compatibilidad con Maven/Gradle para Java y Kotlin, SonarScanner for .NET para C#/VB.NET/F#, SonarScanner for NPM para proyectos con `package.json` y SonarScanner CLI en Docker para proyectos genéricos.
 - Selección manual de Maven, Gradle, .NET, NPM, Docker o un comando personalizado.
@@ -326,6 +327,7 @@ Atajos predeterminados:
 | Siguiente Blocker/Critical | `Ctrl+Alt+C` | `Cmd+Alt+C` |
 
 La barra de estado muestra la posición actual, por ejemplo `3/12`, y abre el siguiente defecto al seleccionarla.
+Al abrir o cambiar a un archivo que ya contiene diagnósticos de SonarQube en **Problems**, el editor muestra automáticamente el primer defecto de SonarQube de ese archivo y sitúa el cursor sobre su rango de diagnóstico.
 El explorador y los comandos de navegación siguen el ámbito Overall/New Code activo.
 Haz clic derecho sobre un grupo de archivo y selecciona **Copiar todos los defectos del archivo** para copiar su ruta y todos los defectos visibles, incluyendo línea, severidad, tipo, estado, resolución, regla, descripción, clave de regla y clave del defecto.
 
@@ -417,7 +419,7 @@ Los pasos reutilizables se crean primero en **Pasos del pipeline**. Después, el
 
 Las plantillas integradas se adaptan a los comandos y herramientas detectados en la carpeta. **Guardar cambios** actualiza la plantilla seleccionada para ese workspace, incluidas las plantillas predeterminadas, sin crear duplicados. Las plantillas personalizadas pueden eliminarse con confirmación; al eliminar una personalización de una plantilla integrada se recupera su definición predeterminada. También se pueden importar y exportar plantillas como `.sonarqube-dashboard.yml` o YAML equivalente.
 
-Al iniciar un análisis del repositorio, seleccionar una plantilla en **Plantilla para esta ejecución** aplica sus pasos inmediatamente; ya no existe una acción independiente **Aplicar plantilla**. Seleccionar **Sin plantilla** devuelve la ejecución al paso obligatorio de análisis de SonarQube para poder ajustarla manualmente.
+Al iniciar un análisis del repositorio se abre ahora un asistente de dos pasos. **Paso 1 — Seleccionar plantilla** permite elegir una plantilla y ajustar el orden de los pasos de la ejecución; al seleccionar una plantilla sus pasos se aplican inmediatamente y no existe una acción independiente **Aplicar plantilla**. Seleccionar **Sin plantilla** devuelve la ejecución al paso obligatorio de análisis de SonarQube para personalizarla manualmente. **Paso 2 — Confirmación** resume el proyecto, la carpeta efectiva que se analizará (incluida la subcarpeta local configurada), el método del scanner, la plantilla elegida, los `sonar.inclusions` / `sonar.exclusions` guardados y los pasos exactos en orden antes de que **Analizar** sea la acción final.
 
 El archivo exportado utiliza `version: 1` y conserva el orden de los pasos, incluido cualquier paso situado después de SonarQube:
 
@@ -445,6 +447,22 @@ steps:
     failurePolicy: continue
     enabled: true
 ```
+
+## Línea base antes/después del análisis
+
+Cada análisis del repositorio captura las métricas actuales del proyecto de SonarQube **justo antes de iniciar el pipeline**. La captura permanece interna mientras el pipeline está en ejecución. Cuando SonarQube termina de procesar el informe y la sincronización del dashboard finaliza correctamente, la extensión consulta de nuevo ese mismo proyecto, guarda la comparación completa junto a la ejecución y la muestra al abrir esa ejecución desde **Ejecuciones del pipeline**, por ejemplo:
+
+- **Issues:** `71 → 64 (-7)`
+- **Cobertura:** `73,2% → 75,8% (+2,6 pp)`
+- **Duplicación:** `4,1% → 3,7% (-0,4 pp)`
+- **Security Hotspots:** recuento antes/después y variación
+- **Quality Gate:** estado anterior → estado nuevo, indicando mejora o regresión
+
+Cuando una métrica **no tiene variación**, el historial conserva el valor antes/después (por ejemplo `0 → 0`) pero oculta el badge azul neutro de variación. Los badges quedan así reservados para cambios reales y para el estado de primera medición.
+
+La captura es específica del proyecto y utiliza métricas ligeras a nivel de proyecto en lugar de volver a cargar todo el conjunto de issues/archivos, por lo que un workspace con varias carpetas configuradas no mezcla métricas de componentes diferentes ni necesita una recarga completa adicional del dashboard. Si el proyecto nunca se había analizado, la extensión muestra el resultado como **primera medición** y utiliza los valores publicados como línea base de la siguiente ejecución, sin compararlos contra ceros artificiales.
+
+La comparación se muestra intencionadamente solo en el detalle del historial de **Ejecuciones del pipeline**, manteniendo el modal de análisis en vivo y el dashboard principal centrados en el progreso de ejecución y en los datos actuales de SonarQube. Se guarda junto a cada entrada del historial, de modo que una ejecución antigua conserva sus valores aunque se publiquen análisis posteriores. La captura de la línea base es opcional y tolerante a fallos: si la consulta previa no puede completarse, el pipeline se ejecuta igualmente y solo se omite la comparación histórica.
 
 ## Historial de ejecuciones
 
@@ -530,6 +548,7 @@ Los issues Overall se publican como diagnósticos nativos de VS Code:
 - muestran en el editor el icono del tipo de hallazgo y permiten consultar todos sus datos desde la propia línea;
 - identifican a **SonarQube Dashboard & Pipeline** como origen;
 - permiten navegar al código con un clic.
+- muestran automáticamente el primer diagnóstico de SonarQube cuando su archivo pasa a ser el editor activo.
 
 Para evitar diagnósticos asociados a archivos incorrectos, no se publica un issue cuando su ruta de SonarQube no puede resolverse dentro de la carpeta vinculada.
 

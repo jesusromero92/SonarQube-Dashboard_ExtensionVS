@@ -175,6 +175,14 @@ export const DIALOG_EVENTS_SCRIPT = `
         elements.analysisConfirmationCancel
       ]
     );
+    elements.analysisConfirmationBack.addEventListener(
+      'click',
+      () => showAnalysisConfirmationStep(1)
+    );
+    elements.analysisConfirmationNext.addEventListener(
+      'click',
+      reviewRepositoryAnalysis
+    );
     elements.analysisConfirmationConfirm.addEventListener(
       'click',
       confirmRepositoryAnalysis
@@ -187,6 +195,7 @@ export const DIALOG_EVENTS_SCRIPT = `
       applyTemplateToAnalysis(
         pipelineTemplateById(elements.analysisPipelineTemplate.value)
       );
+      refreshAnalysisConfirmationSummary();
     });
 
     bindDialogDismiss(

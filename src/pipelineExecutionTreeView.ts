@@ -117,6 +117,7 @@ implements vscode.TreeDataProvider<PipelineExecutionTreeNode>, vscode.Disposable
 
     item.description = [
       statusLabel(entry.status, spanish),
+      baselineDescription(entry, spanish),
       formatDate(entry.startedAt),
       formatDuration(entry.durationMs)
     ].filter(Boolean).join(' · ');
@@ -306,8 +307,100 @@ function executionTooltip(
   if (entry.message) {
     lines.push(`${messageTitle}: ${entry.message}`);
   }
+  const comparisonLines = baselineTooltipLines(entry, spanish);
+  if (comparisonLines.length > 0) {
+    lines.push('', ...comparisonLines);
+  }
 
   return new vscode.MarkdownString(lines.join('\n\n'));
+}
+
+function baselineDescription(
+  entry: PipelineRunHistoryEntry,
+  spanish: boolean
+): string {
+  const comparison = entry.comparison;
+  if (!comparison?.before?.hasAnalysis) {
+    return '';
+  }
+  const delta = comparison.after.issues - comparison.before.issues;
+  if (delta === 0) {
+    return spanish ? 'Issues sin cambio' : 'Issues unchanged';
+  }
+  return `Issues ${delta > 0 ? '+' : ''}${delta}`;
+}
+
+function baselineTooltipLines(
+  entry: PipelineRunHistoryEntry,
+  spanish: boolean
+): string[] {
+  const comparison = entry.comparison;
+  if (!comparison?.before || !comparison?.after) {
+    return [];
+  }
+  const title = spanish ? '**Antes → después**' : '**Before → after**';
+  if (!comparison.before.hasAnalysis) {
+    return [
+      title,
+      spanish
+        ? 'No existía un análisis previo; esta ejecución crea la nueva línea base.'
+        : 'There was no previous analysis; this run creates the new baseline.'
+    ];
+  }
+  const locale = spanish ? 'es-ES' : 'en-US';
+  const metric = (before: number | null, after: number | null, suffix = '') => {
+    if (before === null || after === null) return '—';
+    const delta = after - before;
+    const decimals = Number.isInteger(delta) ? 0 : 1;
+    const signed = `${delta > 0 ? '+' : delta < 0 ? '-' : ''}${formatBaselineNumber(
+      Math.abs(delta),
+      locale,
+      decimals
+    )}`;
+    return `${formatBaselineValue(before, suffix, locale)} → ${formatBaselineValue(
+      after,
+      suffix,
+      locale
+    )} (${signed}${suffix ? ' pp' : ''})`;
+  };
+  return [
+    title,
+    `Issues: ${metric(comparison.before.issues, comparison.after.issues)}`,
+    `Security Hotspots: ${metric(
+      comparison.before.securityHotspots,
+      comparison.after.securityHotspots
+    )}`,
+    `${spanish ? 'Cobertura' : 'Coverage'}: ${metric(
+      comparison.before.coverage,
+      comparison.after.coverage,
+      '%'
+    )}`,
+    `${spanish ? 'Duplicación' : 'Duplication'}: ${metric(
+      comparison.before.duplication,
+      comparison.after.duplication,
+      '%'
+    )}`,
+    `Quality Gate: ${baselineQualityGateLabel(comparison.before.qualityGate, spanish)} → ${baselineQualityGateLabel(comparison.after.qualityGate, spanish)}`
+  ];
+}
+
+function baselineQualityGateLabel(status: string, spanish: boolean): string {
+  const labels: Record<string, string> = spanish
+    ? { OK: 'Aprobado', WARN: 'Aviso', ERROR: 'Fallido', NONE: 'No disponible' }
+    : { OK: 'Passed', WARN: 'Warning', ERROR: 'Failed', NONE: 'Unavailable' };
+  return labels[String(status || 'NONE').toUpperCase()] ?? status;
+}
+
+function formatBaselineNumber(value: number, locale: string, decimals: number): string {
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
+function formatBaselineValue(value: number, suffix: string, locale: string): string {
+  const decimals = Number.isInteger(value) ? 0 : 1;
+  return `${formatBaselineNumber(value, locale, decimals)}${suffix}`;
 }
 
 function runningExecutionTitle(spanish: boolean): string {

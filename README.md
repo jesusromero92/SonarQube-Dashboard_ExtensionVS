@@ -24,7 +24,7 @@ For a guided first run, open the Command Palette and execute **SonarQube Dashboa
 | Repository analysis | Detects Maven, Gradle, .NET, NPM, Docker, or a custom scanner command and executes it in the workspace. |
 | Quality pipeline | Runs build, test, audit, security, SonarQube, and custom commands in the selected order with per-step failure policies. |
 | Editor integration | Publishes Problems entries, gutter decorations, hovers, CodeLens, issue flows, coverage, and duplication indicators. |
-| Execution history | Stores the latest 30 pipeline executions per analysis folder, including status, duration, steps, and bounded log output. |
+| Execution history | Stores the latest 30 pipeline executions per analysis folder, including status, duration, steps, bounded log output, and the exact before/after quality baseline for each completed run. |
 | Diagnostics | Reports environment, compatibility, scanner, detected commands, tools, server latency, and the latest failed request with secrets redacted. |
 
 ## Operating model
@@ -64,10 +64,11 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 
 ## Main features
 
-- Run repository analysis from VS Code with automatic scanner detection.
+- Run repository analysis from VS Code with automatic scanner detection and a two-step template/confirmation wizard that previews the effective folder and SonarQube analysis scope.
 - Configurable analysis pipeline with build, test, predefined integration, and custom steps ordered through drag & drop.
 - Reusable pipeline templates: **Quick**, **Complete**, **Security**, **Release**, and custom templates that can be imported or exported as versioned YAML.
-- Native **Pipeline executions** view for recent runs, including live or historical status, duration, steps, and log output.
+- Native **Pipeline executions** view for recent runs, including live or historical status, duration, steps, log output, and before/after SonarQube baseline deltas.
+- Automatic local **before/after baseline** around each repository analysis for Issues, Security Hotspots, Coverage, Duplication, and Quality Gate.
 - Internal diagnostics page with environment, server, compatibility, scanner, tools, commands, last failed request, and server response time.
 - Support for Maven and Gradle projects using Java or Kotlin, SonarScanner for .NET for C#/VB.NET/F#, SonarScanner for NPM for projects containing `package.json`, and SonarScanner CLI through Docker for generic projects.
 - Manual selection of Maven, Gradle, .NET, NPM, Docker, or a custom command.
@@ -326,6 +327,7 @@ Default shortcuts:
 | Next Blocker/Critical issue | `Ctrl+Alt+C` | `Cmd+Alt+C` |
 
 The status bar shows the current position, for example `3/12`, and opens the next issue when selected.
+When you open or switch to a file that already has SonarQube diagnostics in **Problems**, the editor automatically reveals the first SonarQube issue in that file and places the cursor on its diagnostic range.
 The explorer and navigation commands follow the active Overall/New Code scope.
 Right-click a file group and select **Copy all file issues** to copy its path and every visible issue, including line, severity, type, status, resolution, rule, description, rule key, and issue key.
 
@@ -417,7 +419,7 @@ Reusable steps are created first under **Pipeline steps**. The template editor t
 
 Built-in templates adapt to the commands and tools detected in the folder. **Save changes** updates the selected template for the workspace, including built-in templates, without creating duplicates. Custom templates are deleted with confirmation; deleting a workspace override for a built-in template restores its default definition. Templates can also be imported and exported as `.sonarqube-dashboard.yml` or another YAML file.
 
-When starting a repository analysis, choosing a template in **Template for this run** applies its steps immediately; there is no separate **Apply template** action. Selecting **No template** restores the run to the required SonarQube analysis step so the execution can be adjusted manually.
+Starting a repository analysis now opens a two-step wizard. **Step 1 — Select template** lets you choose a template and adjust the ordered run steps; choosing a template applies its steps immediately and there is no separate **Apply template** action. Selecting **No template** restores the required SonarQube analysis step for manual customization. **Step 2 — Confirmation** summarizes the project, effective analysis folder (including the configured local subfolder), scanner method, selected template, saved `sonar.inclusions` / `sonar.exclusions`, and the exact ordered steps before **Analyze** becomes the final action.
 
 The exported format uses `version: 1` and preserves step order, including steps placed after SonarQube:
 
@@ -445,6 +447,22 @@ steps:
     failurePolicy: continue
     enabled: true
 ```
+
+## Before/after analysis baseline
+
+Every repository analysis captures the current SonarQube project metrics **immediately before the pipeline starts**. The capture remains internal while the pipeline is running. After the scanner report has been processed and the dashboard refresh succeeds, the extension reads the same project again, stores the completed comparison with the pipeline execution, and renders it when that run is opened from **Pipeline executions**, for example:
+
+- **Issues:** `71 → 64 (-7)`
+- **Coverage:** `73.2% → 75.8% (+2.6 pp)`
+- **Duplication:** `4.1% → 3.7% (-0.4 pp)`
+- **Security Hotspots:** before/after count and delta
+- **Quality Gate:** previous status → new status, with improvement/regression indication
+
+When a metric has **no variation**, the history keeps the before/after value (for example `0 → 0`) but omits the neutral blue delta badge. Delta badges are therefore reserved for actual changes and the first-measurement state.
+
+The snapshot is project-specific rather than workspace-aggregated and uses lightweight project-level measures instead of reloading the complete issue/file dataset, so multi-folder workspaces do not mix metrics from different SonarQube components or pay for an extra full dashboard refresh. If the project has never been analyzed, the extension labels the result as the **first measurement** and uses the published values as the baseline for the next run instead of comparing against artificial zeros.
+
+The comparison is intentionally shown only in the **Pipeline executions** history detail, keeping the live repository-analysis modal and main dashboard focused on execution progress and current SonarQube data. It is persisted with each pipeline history entry, so opening an older run shows the values that belonged to that run even after newer analyses have changed the project again. Baseline collection is best-effort: if the pre-run metric query fails, the pipeline still runs normally and only the optional historical comparison is omitted.
 
 ## Pipeline run history
 
@@ -529,6 +547,7 @@ Overall issues are published as native VS Code diagnostics:
 - displaying the finding-type icon in the editor and exposing all available details from the affected line;
 - identifying **SonarQube Dashboard & Pipeline** as the source;
 - supporting one-click navigation to the code.
+- automatically revealing the first SonarQube diagnostic when its file becomes the active editor.
 
 To avoid diagnostics being associated with the wrong files, an issue is not published when its SonarQube path cannot be resolved inside the linked folder.
 

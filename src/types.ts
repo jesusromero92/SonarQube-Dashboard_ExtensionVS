@@ -482,6 +482,19 @@ export interface LoadedIssues {
   coverage: RemoteCoverageData;
 }
 
+export interface SonarAnalysisBaselineData {
+  hasAnalysis: boolean;
+  issues: number;
+  newIssues: number;
+  securityHotspots: number;
+  newSecurityHotspots: number;
+  coverage: number | null;
+  newCoverage: number | null;
+  duplication: number | null;
+  newDuplication: number | null;
+  qualityGate: QualityGateStatus;
+}
+
 export type DashboardSeverity = string;
 export type QualityGateStatus = 'OK' | 'WARN' | 'ERROR' | 'NONE';
 export type RatingGrade = 'A' | 'B' | 'C' | 'D' | 'E' | 'NONE';

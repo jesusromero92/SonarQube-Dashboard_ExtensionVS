@@ -1,4 +1,118 @@
-export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
+export const ANALYSIS_SCRIPT = `    function analysisConfirmationFolderLabel() {
+      const selectedFolder = elements.folder.selectedOptions[0];
+      const folderName = selectedFolder?.textContent || currentFolderUri || '—';
+      const baseDir = String(currentConfig.baseDir || '').trim();
+      return baseDir ? folderName + ' / ' + baseDir : folderName;
+    }
+
+    function analysisConfirmationSelectedTemplateLabel() {
+      const selectedOption = elements.analysisPipelineTemplate.selectedOptions[0];
+      return selectedOption?.textContent?.trim() || translateLocalizationValue('Sin plantilla');
+    }
+
+    function analysisConfirmationScopeLabel(value, emptyLabel) {
+      const normalized = String(value || '').trim();
+      return normalized || translateLocalizationValue(emptyLabel);
+    }
+
+    function refreshAnalysisConfirmationSummary() {
+      const selectedProject = elements.projectKey.selectedOptions[0];
+      elements.analysisConfirmationProject.textContent =
+        selectedProject?.dataset.projectName ||
+        currentConfig.projectName ||
+        currentConfig.projectKey ||
+        '—';
+      elements.analysisConfirmationFolder.textContent = analysisConfirmationFolderLabel();
+      elements.analysisConfirmationFolder.title = currentFolderUri || '';
+      elements.analysisConfirmationBranch.textContent =
+        currentConfig.branch || translateLocalizationValue('Rama principal');
+      elements.analysisConfirmationScanner.textContent =
+        elements.scannerMode.selectedOptions[0]?.textContent ||
+        elements.scannerMode.value ||
+        translateLocalizationValue('Automático');
+      elements.analysisConfirmationTemplate.textContent = analysisConfirmationSelectedTemplateLabel();
+      elements.analysisConfirmationInclusions.textContent = analysisConfirmationScopeLabel(
+        currentConfig.analysisInclusions,
+        'Sin inclusiones configuradas'
+      );
+      elements.analysisConfirmationExclusions.textContent = analysisConfirmationScopeLabel(
+        currentConfig.analysisExclusions,
+        'Sin exclusiones configuradas'
+      );
+
+      const steps = collectAnalysisRunSteps().filter(step => step.enabled);
+      elements.analysisConfirmationStepsSummary.textContent = '';
+      for (const [index, step] of steps.entries()) {
+        const item = document.createElement('li');
+        const number = document.createElement('span');
+        number.className = 'analysis-confirmation-step-number';
+        number.textContent = String(index + 1);
+
+        const copy = document.createElement('span');
+        copy.className = 'analysis-confirmation-step-copy';
+        const name = document.createElement('strong');
+        name.textContent = step.name || translateLocalizationValue('Nuevo paso');
+        const detail = document.createElement('small');
+        detail.textContent = step.kind === 'sonar'
+          ? translateLocalizationValue('Scanner configurado')
+          : (step.command || '—');
+        copy.append(name, detail);
+        item.append(number, copy);
+        elements.analysisConfirmationStepsSummary.appendChild(item);
+      }
+      elements.analysisConfirmationStepCount.textContent = String(steps.length);
+    }
+
+    function showAnalysisConfirmationStep(stepNumber) {
+      const review = stepNumber === 2;
+      elements.analysisConfirmationTemplateStep.hidden = review;
+      elements.analysisConfirmationReviewStep.hidden = !review;
+      elements.analysisConfirmationBack.hidden = !review;
+      elements.analysisConfirmationNext.hidden = review;
+      elements.analysisConfirmationConfirm.hidden = !review;
+
+      elements.analysisConfirmationTemplateStepIndicator.classList.toggle('is-active', !review);
+      elements.analysisConfirmationTemplateStepIndicator.classList.toggle('is-complete', review);
+      elements.analysisConfirmationReviewStepIndicator.classList.toggle('is-active', review);
+      elements.analysisConfirmationReviewStepIndicator.classList.remove('is-complete');
+      if (review) {
+        elements.analysisConfirmationTemplateStepIndicator.removeAttribute('aria-current');
+        elements.analysisConfirmationReviewStepIndicator.setAttribute('aria-current', 'step');
+      } else {
+        elements.analysisConfirmationTemplateStepIndicator.setAttribute('aria-current', 'step');
+        elements.analysisConfirmationReviewStepIndicator.removeAttribute('aria-current');
+      }
+
+      if (review) {
+        refreshAnalysisConfirmationSummary();
+        elements.analysisConfirmationConfirm.focus();
+      } else {
+        requestAnimationFrame(() => {
+          elements.analysisPipelineTemplate.closest('.select-dropdown')
+            ?.querySelector('.select-dropdown__trigger')
+            ?.focus();
+        });
+      }
+    }
+
+    function focusIncompleteAnalysisStep() {
+      const incompleteRow = [...elements.analysisRunSteps.querySelectorAll('.analysis-run-step')]
+        .find(analysisRunStepIsIncomplete);
+      if (!incompleteRow) return false;
+      incompleteRow.querySelector(
+        '.pipeline-step-name-dropdown .select-dropdown__trigger'
+      )?.focus();
+      return true;
+    }
+
+    function reviewRepositoryAnalysis() {
+      updateAnalysisConfirmAvailability();
+      if (focusIncompleteAnalysisStep()) return;
+      refreshAnalysisConfirmationSummary();
+      showAnalysisConfirmationStep(2);
+    }
+
+    function requestAnalysis() {
       if (!isConfigured()) {
         navigate('configuration');
         setStatus('error', 'Configura primero la conexión y el proyecto.');
@@ -9,21 +123,9 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         return;
       }
 
-      const selectedFolder = elements.folder.selectedOptions[0];
-      const selectedProject = elements.projectKey.selectedOptions[0];
-      elements.analysisConfirmationProject.textContent =
-        selectedProject?.dataset.projectName ||
-        currentConfig.projectName ||
-        currentConfig.projectKey ||
-        '—';
-      elements.analysisConfirmationFolder.textContent =
-        selectedFolder?.textContent || currentFolderUri || '—';
-      elements.analysisConfirmationScanner.textContent =
-        elements.scannerMode.selectedOptions[0]?.textContent ||
-        elements.scannerMode.value ||
-        'Automático';
-
       renderAnalysisRunSteps();
+      refreshAnalysisConfirmationSummary();
+      showAnalysisConfirmationStep(1);
       if (!elements.analysisConfirmationDialog.open) {
         elements.analysisConfirmationDialog.showModal();
       }
@@ -31,12 +133,8 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
 
     function confirmRepositoryAnalysis() {
       updateAnalysisConfirmAvailability();
-      const incompleteRow = [...elements.analysisRunSteps.querySelectorAll('.analysis-run-step')]
-        .find(analysisRunStepIsIncomplete);
-      if (incompleteRow) {
-        incompleteRow.querySelector(
-          '.pipeline-step-name-dropdown .select-dropdown__trigger'
-        )?.focus();
+      if (focusIncompleteAnalysisStep()) {
+        showAnalysisConfirmationStep(1);
         return;
       }
 
@@ -45,6 +143,7 @@ export const ANALYSIS_SCRIPT = `    function requestAnalysis() {
         step.enabled && step.kind !== 'sonar' && !step.command
       );
       if (invalidStep) {
+        showAnalysisConfirmationStep(1);
         const row = elements.analysisRunSteps.querySelector(
           '[data-step-id="' + CSS.escape(invalidStep.id) + '"]'
         );

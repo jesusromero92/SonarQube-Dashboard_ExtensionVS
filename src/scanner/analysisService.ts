@@ -14,6 +14,7 @@ import {
 import { PipelineHistoryStore } from './history';
 import { ProcessRunner } from './processRunner';
 import {
+  AnalysisBaselineComparison,
   AnalysisExecutionStep,
   AnalysisRequest,
   AnalysisState,
@@ -116,7 +117,9 @@ export class AnalysisService implements vscode.Disposable {
       startedAt: new Date().toISOString(),
       canCancel: true,
       log: [],
-      steps: executionSteps.map(step => ({ ...step, status: 'pending' }))
+      steps: executionSteps.map(step => ({ ...step, status: 'pending' })),
+      baseline: request.baseline,
+      comparison: undefined
     };
     this.emit();
   }
@@ -423,6 +426,27 @@ export class AnalysisService implements vscode.Disposable {
     };
     this.appendLog(message);
     this.emit();
+  }
+
+  async setBaselineComparison(
+    request: AnalysisRequest,
+    comparison: AnalysisBaselineComparison
+  ): Promise<void> {
+    this.state = {
+      ...this.state,
+      comparison
+    };
+    this.emit();
+    try {
+      await this.history.updateComparison(
+        request.rootPath,
+        this.state.startedAt,
+        comparison,
+        this.state.log
+      );
+    } catch (error) {
+      console.error('[SonarQube Dashboard] baseline comparison could not be saved', error);
+    }
   }
 
   setRefreshError(message: string): void {
@@ -1037,7 +1061,19 @@ export function emptyAnalysisState(): AnalysisState {
 }
 
 function cloneState(state: AnalysisState): AnalysisState {
-  return { ...state, log: [...state.log], steps: state.steps.map(step => ({ ...step })) };
+  return {
+    ...state,
+    log: [...state.log],
+    steps: state.steps.map(step => ({ ...step })),
+    baseline: state.baseline ? { ...state.baseline } : undefined,
+    comparison: state.comparison
+      ? {
+          ...state.comparison,
+          before: { ...state.comparison.before },
+          after: { ...state.comparison.after }
+        }
+      : undefined
+  };
 }
 
 async function exists(value: string): Promise<boolean> {

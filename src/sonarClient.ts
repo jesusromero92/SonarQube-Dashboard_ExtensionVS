@@ -69,7 +69,8 @@ import {
   SonarMeasuresComponentTreeResponse,
   SonarSourceLinesResponse,
   SonarUser,
-  SonarUsersResponse
+  SonarUsersResponse,
+  SonarAnalysisBaselineData
 } from './types';
 
 export interface SonarRequestFailure {
@@ -889,6 +890,7 @@ async function fetchSummaryMetrics(
   ratings: RatingsSummary;
   types: DefectTypeSummary;
   newTypes: DefectTypeSummary;
+  hasMeasures: boolean;
 }> {
   const requestMetrics = async (metrics: readonly string[]): Promise<SonarMeasuresComponentResponse> => {
     const url = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component`);
@@ -931,6 +933,7 @@ async function fetchSummaryMetrics(
     ])
   );
   return {
+    hasMeasures: measures.length > 0,
     ratings: {
       overall: {
         maintainability: normalizeRating(values.get('sqale_rating')),
@@ -989,6 +992,34 @@ function coverageTotals(measures: readonly SonarCurrentMeasure[] | undefined, ne
   };
 }
 
+async function fetchProjectCoverageTotals(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<{ overall: CoverageTotals; newCode: CoverageTotals }> {
+  const projectUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component`);
+  projectUrl.searchParams.set('component', config.projectKey);
+  projectUrl.searchParams.set('metricKeys', SONAR_COVERAGE_METRICS.join(','));
+  if (config.branch?.trim()) {
+    projectUrl.searchParams.set('branch', config.branch.trim());
+  }
+
+  const projectPayload = await requestJson<SonarMeasuresComponentResponse>(
+    projectUrl,
+    config.token,
+    signal
+  ).catch(error => {
+    if (signal?.aborted) {
+      throw error;
+    }
+    return { component: { measures: [] } };
+  });
+  const projectMeasures = projectPayload.component?.measures ?? [];
+  return {
+    overall: coverageTotals(projectMeasures, false),
+    newCode: coverageTotals(projectMeasures, true)
+  };
+}
+
 function remoteCoverageFile(component: SonarMeasureComponent): RemoteCoverageFile | undefined {
   const path = component.path?.trim();
   if (!path) {
@@ -1020,19 +1051,7 @@ async function fetchCoverageData(
   config: FolderSonarConfig,
   signal?: AbortSignal
 ): Promise<RemoteCoverageData> {
-  const projectUrl = new URL(`${normalizeServerUrl(config.serverUrl)}/api/measures/component`);
-  projectUrl.searchParams.set('component', config.projectKey);
-  projectUrl.searchParams.set('metricKeys', SONAR_COVERAGE_METRICS.join(','));
-  if (config.branch?.trim()) {
-    projectUrl.searchParams.set('branch', config.branch.trim());
-  }
-
-  const projectPayload = await requestJson<SonarMeasuresComponentResponse>(
-    projectUrl,
-    config.token,
-    signal
-  ).catch(() => ({ component: { measures: [] } }));
-  const projectMeasures = projectPayload.component?.measures ?? [];
+  const projectTotals = await fetchProjectCoverageTotals(config, signal);
   const files: RemoteCoverageFile[] = [];
   let page = 1;
   let total = Number.POSITIVE_INFINITY;
@@ -1068,8 +1087,8 @@ async function fetchCoverageData(
   }
 
   return {
-    overall: coverageTotals(projectMeasures, false),
-    newCode: coverageTotals(projectMeasures, true),
+    overall: projectTotals.overall,
+    newCode: projectTotals.newCode,
     files
   };
 }
@@ -1317,6 +1336,37 @@ export async function fetchRuleDetail(
     isExternal: (rule.external ?? rule.isExternal) === true,
     createdAt: rule.createdAt?.trim() ?? '',
     updatedAt: rule.updatedAt?.trim() ?? ''
+  };
+}
+
+export async function fetchAnalysisBaselineData(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<SonarAnalysisBaselineData> {
+  const [summaryMetrics, coverage, qualityGate, analysisAvailability] = await Promise.all([
+    fetchSummaryMetrics(config, signal),
+    fetchProjectCoverageTotals(config, signal),
+    fetchQualityGate(config, signal),
+    fetchAnalysisAvailability(config, signal)
+  ]);
+
+  return {
+    hasAnalysis: analysisAvailability ?? summaryMetrics.hasMeasures,
+    issues:
+      summaryMetrics.types.bugs
+      + summaryMetrics.types.codeSmells
+      + summaryMetrics.types.vulnerabilities,
+    newIssues:
+      summaryMetrics.newTypes.bugs
+      + summaryMetrics.newTypes.codeSmells
+      + summaryMetrics.newTypes.vulnerabilities,
+    securityHotspots: summaryMetrics.types.securityHotspots,
+    newSecurityHotspots: summaryMetrics.newTypes.securityHotspots,
+    coverage: coverage.overall.coverage,
+    newCoverage: coverage.newCode.coverage,
+    duplication: coverage.overall.duplicatedLinesDensity,
+    newDuplication: coverage.newCode.duplicatedLinesDensity,
+    qualityGate: qualityGate.status
   };
 }
 

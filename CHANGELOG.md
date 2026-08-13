@@ -4,6 +4,48 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.3.0] - 2026-08-13
+
+### Added
+
+- Opening or switching to a local file that contains SonarQube diagnostics now automatically reveals the first SonarQube problem in that file. The cursor is placed on the first published diagnostic and the editor scrolls to it, while explicit navigation to a specific issue keeps its requested target.
+
+  *Al abrir o cambiar a un archivo local que contiene diagnósticos de SonarQube, la extensión muestra automáticamente el primer defecto de SonarQube de ese archivo. El cursor se sitúa en el primer diagnóstico publicado y el editor se desplaza hasta él, mientras que la navegación explícita a un defecto concreto mantiene el destino solicitado.*
+
+- Repository analysis now captures a local SonarQube baseline immediately before the pipeline starts and compares it with the metrics published after SonarQube finishes processing the new analysis. The **Pipeline executions** history detail shows before/after values and deltas for **Issues**, **Security Hotspots**, **Coverage**, **Duplication**, and the **Quality Gate**.
+
+  *El análisis del repositorio captura ahora una línea base local de SonarQube justo antes de iniciar el pipeline y la compara con las métricas publicadas después de que SonarQube termine de procesar el nuevo análisis. El detalle del historial de **Ejecuciones del pipeline** muestra los valores antes/después y sus variaciones para **Issues**, **Security Hotspots**, **Cobertura**, **Duplicación** y el **Quality Gate**.*
+
+- The comparison is also stored with the pipeline execution history, so completed runs keep their exact baseline even after newer analyses are published. The native **Pipeline executions** tree surfaces the issue delta and the execution detail page renders the complete comparison.
+
+  *La comparación se guarda también junto al historial de ejecuciones del pipeline, por lo que cada ejecución finalizada conserva su línea base exacta aunque posteriormente se publiquen nuevos análisis. La vista nativa **Ejecuciones del pipeline** muestra la variación de issues y la página de detalle representa la comparación completa.*
+
+- The baseline comparison is kept out of the live analysis modal and main dashboard and is presented only in pipeline history, avoiding layout noise while the scanner is running.
+
+  *La comparación de línea base se mantiene fuera del modal de análisis en vivo y del dashboard principal y se presenta únicamente en el historial del pipeline, evitando ruido visual mientras se ejecuta el scanner.*
+
+- Informational historical badges such as the first-measurement state use the VS Code badge foreground color, keeping their text readable on badge backgrounds in dark themes.
+
+  *Los badges informativos del historial, como el estado de primera medición, utilizan el color de primer plano de los badges de VS Code, manteniendo el texto legible sobre sus fondos en temas oscuros.*
+
+### Changed
+
+- Starting a repository analysis now uses a two-step wizard. **Step 1 — Select template** lets the user choose a pipeline template and adjust the execution steps. **Step 2 — Confirmation** shows the effective project, analysis folder (including the configured local subfolder), scanner method, selected template, SonarQube inclusions/exclusions, and the ordered steps before the pipeline starts.
+
+  *El inicio de un análisis del repositorio utiliza ahora un asistente de dos pasos. **Paso 1 — Seleccionar plantilla** permite elegir una plantilla de pipeline y ajustar los pasos de la ejecución. **Paso 2 — Confirmación** muestra el proyecto efectivo, la carpeta que se analizará (incluida la subcarpeta local configurada), el método del scanner, la plantilla seleccionada, las inclusiones/exclusiones de SonarQube y los pasos ordenados antes de iniciar el pipeline.*
+
+- Historical before/after cards no longer render a neutral blue delta badge when a metric did not change. The before/after value remains visible, while badges are reserved for real changes or the first-measurement state.
+
+  *Las tarjetas históricas de comparación antes/después ya no muestran un badge azul neutro cuando una métrica no ha variado. El valor antes/después sigue visible y los badges se reservan para cambios reales o para el estado de primera medición.*
+
+- Baseline capture is project-specific and uses lightweight project-level SonarQube measures instead of reloading the complete issue/file dataset, so it remains accurate in multi-folder workspaces without adding a second full dashboard refresh before and after every pipeline. A failure to capture the optional baseline does not block repository analysis.
+
+  *La captura de la línea base es específica del proyecto y utiliza métricas ligeras de proyecto de SonarQube en lugar de volver a cargar todo el conjunto de issues/archivos, por lo que sigue siendo precisa en workspaces con varias carpetas sin añadir una segunda recarga completa del dashboard antes y después de cada pipeline. Un fallo al capturar esta línea base opcional no bloquea el análisis del repositorio.*
+
+- When a project has no previous SonarQube analysis, the result is treated as the first measurement instead of comparing artificial zero values. The published metrics become the new baseline for the next run.
+
+  *Cuando un proyecto todavía no tiene un análisis previo de SonarQube, el resultado se trata como primera medición en lugar de compararlo contra ceros artificiales. Las métricas publicadas pasan a ser la nueva línea base para la siguiente ejecución.*
+
 ## [1.2.2] - 2026-08-13
 
 ### Added

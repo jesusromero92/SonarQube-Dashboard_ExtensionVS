@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type * as vscode from 'vscode';
 import {
+  AnalysisBaselineComparison,
   AnalysisRequest,
   AnalysisState,
   PipelineRunHistoryEntry,
@@ -63,13 +64,37 @@ export class PipelineHistoryStore {
         new Date(completedAt).getTime() - new Date(startedAt).getTime()
       ),
       steps,
-      log: compactHistoryLog(state.log)
+      log: compactHistoryLog(state.log),
+      comparison: state.comparison
     };
     const previous = await this.list(request.rootPath);
     await this.context.workspaceState.update(
       historyKey(request.rootPath),
       [entry, ...previous].slice(0, HISTORY_LIMIT)
     );
+  }
+
+  async updateComparison(
+    rootPath: string,
+    startedAt: string | undefined,
+    comparison: AnalysisBaselineComparison,
+    log?: string[]
+  ): Promise<void> {
+    if (!startedAt) {
+      return;
+    }
+    const entries = await this.list(rootPath);
+    const index = entries.findIndex(entry => entry.startedAt === startedAt);
+    if (index < 0) {
+      return;
+    }
+    const updated = [...entries];
+    updated[index] = {
+      ...updated[index],
+      comparison,
+      log: log ? compactHistoryLog(log) : updated[index].log
+    };
+    await this.context.workspaceState.update(historyKey(rootPath), updated);
   }
 
   async clear(rootPath: string): Promise<void> {

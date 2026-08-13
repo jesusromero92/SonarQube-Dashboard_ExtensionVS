@@ -1,3 +1,4 @@
+import { getBaselineComparisonMarkup } from '../components/baselineComparison';
 import { getAccordionMarkup } from '../components/ui/accordion';
 
 const STEPS_ACCORDION_MARKUP = getAccordionMarkup({
@@ -64,6 +65,8 @@ export const HISTORY_PAGE_MARKUP = `      <section id="historyPage" class="page"
                 <strong id="historyEntryDuration">—</strong>
               </section>
             </div>
+
+${getBaselineComparisonMarkup('historyComparison', 'analysis-baseline-comparison--history')}
 
             <div class="accordion-group pipeline-execution-accordions">
 ${STEPS_ACCORDION_MARKUP}

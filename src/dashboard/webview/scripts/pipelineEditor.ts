@@ -641,6 +641,7 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       for (const row of rows) {
         row.classList.toggle('is-incomplete', incompleteRows.includes(row));
       }
+      elements.analysisConfirmationNext.disabled = incompleteRows.length > 0;
       elements.analysisConfirmationConfirm.disabled = incompleteRows.length > 0;
     }
 

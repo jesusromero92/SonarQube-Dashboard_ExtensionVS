@@ -161,6 +161,7 @@ export const HISTORY_SCRIPT = `    function formatDuration(durationMs) {
         entry.branch || translateLocalizationValue('Rama principal');
       elements.historyEntryStarted.textContent = formatHistoryDate(entry.startedAt);
       elements.historyEntryDuration.textContent = formatDuration(entry.durationMs);
+      renderBaselineComparison(elements.historyComparison, entry.comparison);
       elements.historyStepsCount.textContent = String(
         Array.isArray(entry.steps) ? entry.steps.length : 0
       );
@@ -234,7 +235,8 @@ export const HISTORY_SCRIPT = `    function formatDuration(durationMs) {
           new Date(completedAt || Date.now()).getTime() - new Date(startedAt).getTime()
         ),
         steps: Array.isArray(state.steps) ? state.steps : [],
-        log: Array.isArray(state.log) ? state.log : []
+        log: Array.isArray(state.log) ? state.log : [],
+        comparison: state.comparison
       };
 
       if (!updateLivePipelineHistoryItem(active)) {

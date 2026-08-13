@@ -84,7 +84,7 @@ test('la barra de tabs ya no tiene separación horizontal inicial', () => {
   assert.doesNotMatch(tabRule, /padding: 0 16px/);
 });
 
-test('manifest 1.2.2, traducciones y documentación mantienen la configuración 1.2.0', () => {
+test('manifest 1.3.0, traducciones y documentación mantienen la configuración 1.2.0', () => {
   const packageManifest = JSON.parse(readFileSync(
     path.resolve(process.cwd(), 'package.json'),
     'utf8'
@@ -93,7 +93,7 @@ test('manifest 1.2.2, traducciones y documentación mantienen la configuración 
     contributes?: { configuration?: { properties?: Record<string, unknown> } };
   };
   const properties = packageManifest.contributes?.configuration?.properties ?? {};
-  assert.equal(packageManifest.version, '1.2.2');
+  assert.equal(packageManifest.version, '1.3.0');
   assert.ok(properties['sonarQubeDashboard.sonar.analysisInclusions']);
   assert.ok(properties['sonarQubeDashboard.sonar.analysisExclusions']);
 

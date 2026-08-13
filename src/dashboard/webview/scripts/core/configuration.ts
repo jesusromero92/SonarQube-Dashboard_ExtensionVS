@@ -667,6 +667,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       refreshConfigurationDropdowns(true);
       renderSonarCompatibility(config.sonarCompatibility, false);
       updateSaveAvailability();
+      renderAnalysisState(currentAnalysisState);
       renderEmptyState();
     }
 `;

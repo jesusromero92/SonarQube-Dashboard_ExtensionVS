@@ -10,6 +10,9 @@ export class IssueNavigationManager implements vscode.Disposable {
   private scope: 'overall' | 'newCode' = 'overall';
   private lastIssueKey: string | undefined;
   private currentFileOnly = false;
+  private activeEditorEntryUri: string | undefined;
+  private revealedForActiveEditorUri: string | undefined;
+  private explicitNavigation = false;
   private readonly statusBar = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     90
@@ -25,7 +28,14 @@ export class IssueNavigationManager implements vscode.Disposable {
     this.disposables.push(
       this.statusBar,
       this.changedEmitter,
-      vscode.window.onDidChangeActiveTextEditor(() => this.updateStatus()),
+      vscode.window.onDidChangeActiveTextEditor(editor => {
+        this.activeEditorEntryUri = editor?.document.uri.toString();
+        this.revealedForActiveEditorUri = undefined;
+        this.updateStatus();
+        if (editor) {
+          this.revealFirstSonarProblem(editor);
+        }
+      }),
       vscode.window.onDidChangeTextEditorSelection(() => this.updateStatus())
     );
     this.updateStatus();
@@ -48,6 +58,10 @@ export class IssueNavigationManager implements vscode.Disposable {
     }
     this.changedEmitter.fire();
     this.updateStatus();
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      this.revealFirstSonarProblem(editor);
+    }
   }
 
   clear(): void {
@@ -116,6 +130,7 @@ export class IssueNavigationManager implements vscode.Disposable {
   }
 
   async open(issue: DashboardIssue): Promise<void> {
+    this.explicitNavigation = true;
     try {
       const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(issue.fileUri));
       const editor = await vscode.window.showTextDocument(document, {
@@ -133,10 +148,14 @@ export class IssueNavigationManager implements vscode.Disposable {
         vscode.TextEditorRevealType.InCenterIfOutsideViewport
       );
       this.lastIssueKey = issue.key;
+      this.activeEditorEntryUri = issue.fileUri;
+      this.revealedForActiveEditorUri = issue.fileUri;
       this.updateStatus();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await vscode.window.showErrorMessage(message);
+    } finally {
+      this.explicitNavigation = false;
     }
   }
 
@@ -147,6 +166,43 @@ export class IssueNavigationManager implements vscode.Disposable {
   dispose(): void {
     for (const disposable of this.disposables) {
       disposable.dispose();
+    }
+  }
+
+  private revealFirstSonarProblem(editor: vscode.TextEditor): void {
+    if (this.explicitNavigation || editor.document.uri.scheme !== 'file') {
+      return;
+    }
+
+    const uri = editor.document.uri.toString();
+    if (this.activeEditorEntryUri !== uri) {
+      this.activeEditorEntryUri = uri;
+      this.revealedForActiveEditorUri = undefined;
+    }
+    if (this.revealedForActiveEditorUri === uri) {
+      return;
+    }
+
+    const diagnostics = vscode.languages.getDiagnostics(editor.document.uri)
+      .filter(diagnostic => diagnostic.source === 'SonarQube Dashboard')
+      .sort(compareDiagnosticPosition);
+    const first = diagnostics[0];
+    if (!first || vscode.window.activeTextEditor !== editor) {
+      return;
+    }
+
+    const position = first.range.start;
+    editor.selection = new vscode.Selection(position, position);
+    editor.revealRange(
+      first.range,
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport
+    );
+    this.revealedForActiveEditorUri = uri;
+
+    const issueKey = diagnosticCode(first);
+    if (issueKey && this.overallIssues.some(issue => issue.key === issueKey)) {
+      this.lastIssueKey = issueKey;
+      this.updateStatus();
     }
   }
 
@@ -212,6 +268,27 @@ export class IssueNavigationManager implements vscode.Disposable {
     this.statusBar.tooltip = issueNavigationTooltip(spanish, this.currentFileOnly);
     this.statusBar.show();
   }
+}
+
+function compareDiagnosticPosition(
+  left: vscode.Diagnostic,
+  right: vscode.Diagnostic
+): number {
+  return left.range.start.line - right.range.start.line
+    || left.range.start.character - right.range.start.character
+    || left.severity - right.severity;
+}
+
+function diagnosticCode(diagnostic: vscode.Diagnostic): string | undefined {
+  if (typeof diagnostic.code === 'string') {
+    return diagnostic.code;
+  }
+  if (typeof diagnostic.code === 'number') {
+    return String(diagnostic.code);
+  }
+  return diagnostic.code?.value === undefined
+    ? undefined
+    : String(diagnostic.code.value);
 }
 
 function initialIssueIndex(direction: 1 | -1, issueCount: number): number {

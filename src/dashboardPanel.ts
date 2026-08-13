@@ -40,6 +40,10 @@ import {
   formatDiagnosticsReport
 } from './dashboard/diagnostics';
 import { AnalysisService } from './scanner/analysisService';
+import {
+  compareAnalysisBaselines,
+  createAnalysisBaselineSnapshot
+} from './scanner/baseline';
 import { detectProjectActions } from './scanner/projectActions';
 import { parseAnalysisPipeline } from './scanner/pipeline';
 import {
@@ -51,6 +55,7 @@ import {
   serializePipelineTemplateYaml
 } from './scanner/pipelineTemplates';
 import {
+  AnalysisBaselineSnapshot,
   AnalysisExecutionOptions,
   AnalysisExecutionStep,
   AnalysisRequest,
@@ -62,6 +67,7 @@ import { IssueFlowController } from './issueFlowController';
 import { DuplicationComparisonPanel } from './dashboard/duplicationComparisonPanel';
 import {
   checkAnalysisPermission,
+  fetchAnalysisBaselineData,
   fetchHotspotDetail,
   fetchIssueLifecycle,
   fetchRuleDetail,
@@ -1191,7 +1197,8 @@ ${selected.name}`,
       completedAt: '',
       durationMs: Math.max(0, Date.now() - new Date(startedAt).getTime()),
       steps: state.steps.map(step => ({ ...step })),
-      log: [...state.log]
+      log: [...state.log],
+      comparison: state.comparison
     };
     return [active, ...saved];
   }
@@ -1593,6 +1600,7 @@ ${selected.name}`,
       return undefined;
     }
 
+    const baseline = await this.captureAnalysisBaseline(config);
     const detectedActions = await detectProjectActions(rootPath);
     const buildCommand = firstNonEmpty(
       config.buildCommand?.trim(),
@@ -1607,7 +1615,22 @@ ${selected.name}`,
       ? requestedSteps
       : this.defaultAnalysisSteps(config, buildCommand, testCommand);
 
-    return { config, rootPath, actions: { steps } };
+    return { config, rootPath, actions: { steps }, baseline };
+  }
+
+  private async captureAnalysisBaseline(
+    config: FolderSonarConfig
+  ): Promise<AnalysisBaselineSnapshot | undefined> {
+    try {
+      const data = await fetchAnalysisBaselineData(config);
+      return createAnalysisBaselineSnapshot(data);
+    } catch (error) {
+      console.warn(
+        '[SonarQube Dashboard] no se pudo capturar la línea base previa al pipeline',
+        error
+      );
+      return undefined;
+    }
   }
 
   private async runAnalysis(
@@ -1618,8 +1641,36 @@ ${selected.name}`,
 
     const summary = await this.refreshCallback('analysis');
     this.setRefreshSummary(summary, true);
+    if (summary.errors.length === 0) {
+      await this.updateAnalysisBaselineComparison(analysisContext);
+    }
     this.reportAnalysisRefreshResult(summary);
     this.navigate('data');
+  }
+
+  private async updateAnalysisBaselineComparison(
+    analysisContext: AnalysisRequest
+  ): Promise<void> {
+    if (!analysisContext.baseline) {
+      return;
+    }
+    try {
+      const data = await fetchAnalysisBaselineData(analysisContext.config);
+      const after = createAnalysisBaselineSnapshot(data);
+      await this.analysisService.setBaselineComparison(
+        analysisContext,
+        compareAnalysisBaselines(analysisContext.baseline, after, {
+          projectKey: analysisContext.config.projectKey,
+          branch: analysisContext.config.branch,
+          serverUrl: analysisContext.config.serverUrl
+        })
+      );
+    } catch (error) {
+      console.warn(
+        '[SonarQube Dashboard] no se pudo completar la comparación antes/después',
+        error
+      );
+    }
   }
 
   private reportAnalysisRefreshResult(summary: RefreshSummary): void {
