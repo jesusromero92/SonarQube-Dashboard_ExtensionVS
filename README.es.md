@@ -181,7 +181,10 @@ Al abrir un archivo con hallazgos, la extensión marca directamente las líneas 
 - resalta la línea con el color correspondiente al tipo de hallazgo y añade una marca en la regla de visión general del editor;
 - muestra un CodeLens sobre la línea afectada con severidad, regla y acceso directo al detalle;
 - al situar el puntero sobre el icono muestra la descripción, regla, tipo, severidad o prioridad, estado, resolución, archivo, línea, proyecto, componente, identificador e impactos disponibles;
-- el enlace del tooltip abre el detalle completo del defecto o Security Hotspot en **SonarQube Dashboard & Pipeline**.
+- el enlace del tooltip abre el detalle completo del defecto o Security Hotspot en **SonarQube Dashboard & Pipeline**;
+- para los issues de SonarQube, la bombilla nativa de VS Code ofrece acciones Quick Fix para **Ver regla**, **Marcar como aceptado**, **Asignarme issue**, **Abrir en SonarQube** y **Gestionar defecto en Dashboard**;
+
+Las acciones Quick Fix que modifican SonarQube respetan los permisos del token configurado. Si el usuario actual no puede aceptar o asignar un issue, la extensión no lo modifica e informa de que la operación no está disponible.
 
 Los indicadores solo se crean para hallazgos cuya ruta de SonarQube coincide con un archivo real de la carpeta vinculada. Se actualizan al sincronizar el dashboard y se eliminan al limpiar sus datos.
 

@@ -352,6 +352,9 @@ export interface CreateSonarComponentRequest {
 }
 
 export interface SonarCurrentUserResponse {
+  login?: string;
+  name?: string;
+  active?: boolean;
   permissions?: {
     global?: string[];
   };

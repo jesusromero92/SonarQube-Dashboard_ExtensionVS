@@ -1414,6 +1414,27 @@ async function fetchActiveUsers(
   );
 }
 
+
+export async function fetchCurrentUser(
+  config: FolderSonarConfig,
+  signal?: AbortSignal
+): Promise<SonarUser> {
+  const payload = await requestJson<SonarCurrentUserResponse>(
+    new URL(`${normalizeServerUrl(config.serverUrl)}/api/users/current`),
+    config.token,
+    signal
+  );
+  const login = payload.login?.trim();
+  if (!login) {
+    throw new Error('SonarQube no devolvió el usuario autenticado para este token.');
+  }
+  return {
+    login,
+    name: payload.name?.trim() || login,
+    active: payload.active
+  };
+}
+
 export async function fetchIssueLifecycle(
   config: FolderSonarConfig,
   issue: DashboardIssue,

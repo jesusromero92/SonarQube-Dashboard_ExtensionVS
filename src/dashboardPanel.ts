@@ -104,6 +104,7 @@ export class DashboardPanel {
   private currentPage: DashboardPage = 'data';
   private language: DashboardLanguage = getDashboardLanguage();
   private pendingIssueDetail: DashboardIssue | undefined;
+  private pendingRuleIssue: DashboardIssue | undefined;
   private managedIssue: DashboardIssue | undefined;
   private pendingHotspotDetail: DashboardHotspot | undefined;
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
@@ -294,6 +295,15 @@ export class DashboardPanel {
     }
   }
 
+  async showRuleDetail(issue: DashboardIssue): Promise<void> {
+    const panelWasOpen = Boolean(this.panel);
+    this.pendingRuleIssue = issue;
+    await this.show('data');
+    if (panelWasOpen) {
+      this.postPendingRuleDetail();
+    }
+  }
+
   async showHotspotDetail(hotspot: DashboardHotspot): Promise<void> {
     const panelWasOpen = Boolean(this.panel);
     this.pendingHotspotDetail = hotspot;
@@ -391,6 +401,7 @@ export class DashboardPanel {
           });
         this.navigate(this.currentPage);
         this.postPendingIssueDetail();
+        this.postPendingRuleDetail();
         this.postPendingHotspotDetail();
         break;
       case 'selectFolder':
@@ -2198,6 +2209,17 @@ ${selected.name}`,
       issue: this.pendingIssueDetail
     });
     this.pendingIssueDetail = undefined;
+  }
+
+  private postPendingRuleDetail(): void {
+    if (!this.pendingRuleIssue) {
+      return;
+    }
+    this.postMessage({
+      type: 'showRuleDetail',
+      issue: this.pendingRuleIssue
+    });
+    this.pendingRuleIssue = undefined;
   }
 
   private postPendingHotspotDetail(): void {

@@ -4,6 +4,14 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.2.2] - 2026-08-13
+
+### Added
+
+- SonarQube issues published in the editor now expose native VS Code **Quick Fix** actions from the light bulb: **View rule**, **Mark as accepted**, **Assign issue to me**, **Open in SonarQube**, and **Manage issue in Dashboard**. The actions use the current SonarQube token and refresh the workspace data after remote issue mutations.
+
+  *Los issues de SonarQube publicados en el editor incorporan ahora acciones nativas **Quick Fix** desde la bombilla de VS Code: **Ver regla**, **Marcar como aceptado**, **Asignarme issue**, **Abrir en SonarQube** y **Gestionar defecto en Dashboard**. Las acciones utilizan el token actual de SonarQube y actualizan los datos del workspace después de modificar un issue remoto.*
+
 ## [1.2.1] - 2026-08-13
 
 ### Changed

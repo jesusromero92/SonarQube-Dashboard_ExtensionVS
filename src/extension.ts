@@ -48,13 +48,19 @@ import {
   NotificationManager,
   NotificationScope
 } from './notificationManager';
-import { fetchAllIssues } from './sonarClient';
+import {
+  fetchAllIssues,
+  fetchCurrentUser,
+  fetchIssueLifecycle,
+  mutateIssue
+} from './sonarClient';
 import {
   CoverageSummary,
   DashboardHotspot,
   DashboardIssue,
   DefectTypeSummary,
   EvolutionPoint,
+  FolderSonarConfig,
   QualityGateStatus,
   RatingGrade,
   RefreshSummary,
@@ -734,6 +740,83 @@ function issueTreeGroupLabel(
   }
 }
 
+
+function workspaceFolderForIssue(issue: DashboardIssue): vscode.WorkspaceFolder | undefined {
+  const folderUri = issue.folderUri?.trim();
+  if (folderUri) {
+    const exact = vscode.workspace.workspaceFolders?.find(
+      folder => folder.uri.toString() === folderUri
+    );
+    if (exact) {
+      return exact;
+    }
+  }
+  return vscode.workspace.getWorkspaceFolder(vscode.Uri.parse(issue.fileUri));
+}
+
+async function issueConnection(
+  context: vscode.ExtensionContext,
+  issue: DashboardIssue
+): Promise<{ folder: vscode.WorkspaceFolder; config: FolderSonarConfig } | undefined> {
+  const spanish = getDashboardLanguage() === 'es';
+  const folder = workspaceFolderForIssue(issue);
+  if (!folder) {
+    await vscode.window.showWarningMessage(
+      spanish
+        ? 'La carpeta asociada al issue ya no está abierta.'
+        : 'The workspace folder associated with the issue is no longer open.'
+    );
+    return undefined;
+  }
+  const config = await getFolderConfig(context, folder);
+  if (!config) {
+    await vscode.window.showWarningMessage(
+      spanish
+        ? 'La carpeta no tiene una conexión válida con SonarQube.'
+        : 'The folder does not have a valid SonarQube connection.'
+    );
+    return undefined;
+  }
+  return { folder, config };
+}
+
+function acceptTransitionKey(
+  transitions: readonly { key: string; name: string }[]
+): string | undefined {
+  const normalize = (value: string): string => value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s'’_-]+/g, '');
+  const accepted = new Set(['accept', 'accepted', 'wontfix']);
+  return transitions.find(transition =>
+    accepted.has(normalize(transition.key)) ||
+    accepted.has(normalize(transition.name))
+  )?.key;
+}
+
+async function refreshAfterIssueMutation(
+  context: vscode.ExtensionContext,
+  successMessageEs: string,
+  successMessageEn: string
+): Promise<void> {
+  const summary = await refreshAll(context, 'sync');
+  dashboardPanel?.setRefreshSummary(summary, summary.configuredFolders > 0);
+  await vscode.window.showInformationMessage(
+    getDashboardLanguage() === 'es' ? successMessageEs : successMessageEn
+  );
+}
+
+function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode.Uri {
+  const base = config.serverUrl.trim().replace(/\/+$/, '');
+  const url = new URL(`${base}/project/issues`);
+  url.searchParams.set('id', issue.project || config.projectKey);
+  url.searchParams.set('open', issue.key);
+  if (config.branch?.trim()) {
+    url.searchParams.set('branch', config.branch.trim());
+  }
+  return vscode.Uri.parse(url.toString());
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
   issueDecorations = new IssueDecorationManager(context.extensionUri);
@@ -864,6 +947,142 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
         await dashboardPanel?.showIssueDetail(issue);
+      }
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.showRuleDetail,
+      async (issueKey: string) => {
+        const issue = issueDecorations.getIssue(issueKey);
+        if (!issue) {
+          await vscode.window.showWarningMessage(
+            getDashboardLanguage() === 'es'
+              ? 'El issue ya no está disponible. Actualiza los datos de SonarQube.'
+              : 'The issue is no longer available. Refresh the SonarQube data.'
+          );
+          return;
+        }
+        await dashboardPanel?.showRuleDetail(issue);
+      }
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.acceptIssue,
+      async (issueKey: string) => {
+        const spanish = getDashboardLanguage() === 'es';
+        const issue = issueDecorations.getIssue(issueKey);
+        if (!issue) {
+          await vscode.window.showWarningMessage(
+            spanish
+              ? 'El issue ya no está disponible. Actualiza los datos de SonarQube.'
+              : 'The issue is no longer available. Refresh the SonarQube data.'
+          );
+          return;
+        }
+        try {
+          const connection = await issueConnection(context, issue);
+          if (!connection) return;
+          const detail = await fetchIssueLifecycle(connection.config, issue);
+          const transition = acceptTransitionKey(detail.transitions);
+          if (!transition) {
+            await vscode.window.showWarningMessage(
+              spanish
+                ? 'SonarQube no permite marcar este issue como aceptado con el usuario actual.'
+                : 'SonarQube does not allow the current user to mark this issue as accepted.'
+            );
+            return;
+          }
+          const confirmLabel = spanish ? 'Marcar como aceptado' : 'Mark as accepted';
+          const confirmation = await vscode.window.showWarningMessage(
+            spanish
+              ? `¿Marcar como aceptado el issue “${issue.ruleName || issue.rule}”?`
+              : `Mark the “${issue.ruleName || issue.rule}” issue as accepted?`,
+            { modal: true },
+            confirmLabel
+          );
+          if (confirmation !== confirmLabel) return;
+          await mutateIssue(connection.config, {
+            kind: 'transition',
+            issueKey: issue.key,
+            folderUri: connection.folder.uri.toString(),
+            transition
+          });
+          await refreshAfterIssueMutation(
+            context,
+            'Issue marcado como aceptado en SonarQube.',
+            'Issue marked as accepted in SonarQube.'
+          );
+        } catch (error) {
+          await vscode.window.showErrorMessage(
+            `${spanish ? 'No se pudo actualizar el issue' : 'Could not update the issue'}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.assignIssueToMe,
+      async (issueKey: string) => {
+        const spanish = getDashboardLanguage() === 'es';
+        const issue = issueDecorations.getIssue(issueKey);
+        if (!issue) {
+          await vscode.window.showWarningMessage(
+            spanish
+              ? 'El issue ya no está disponible. Actualiza los datos de SonarQube.'
+              : 'The issue is no longer available. Refresh the SonarQube data.'
+          );
+          return;
+        }
+        try {
+          const connection = await issueConnection(context, issue);
+          if (!connection) return;
+          const [currentUser, detail] = await Promise.all([
+            fetchCurrentUser(connection.config),
+            fetchIssueLifecycle(connection.config, issue)
+          ]);
+          if (!detail.canAssign) {
+            await vscode.window.showWarningMessage(
+              spanish
+                ? 'SonarQube no permite asignar este issue con el usuario actual.'
+                : 'SonarQube does not allow the current user to assign this issue.'
+            );
+            return;
+          }
+          if (detail.issue.assignee === currentUser.login) {
+            await vscode.window.showInformationMessage(
+              spanish
+                ? 'Este issue ya está asignado a tu usuario.'
+                : 'This issue is already assigned to you.'
+            );
+            return;
+          }
+          await mutateIssue(connection.config, {
+            kind: 'assign',
+            issueKey: issue.key,
+            folderUri: connection.folder.uri.toString(),
+            assignee: currentUser.login
+          });
+          await refreshAfterIssueMutation(
+            context,
+            `Issue asignado a ${currentUser.name || currentUser.login}.`,
+            `Issue assigned to ${currentUser.name || currentUser.login}.`
+          );
+        } catch (error) {
+          await vscode.window.showErrorMessage(
+            `${spanish ? 'No se pudo asignar el issue' : 'Could not assign the issue'}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.openIssueInSonarQube,
+      async (issueKey: string) => {
+        const issue = issueDecorations.getIssue(issueKey);
+        if (!issue) return;
+        const connection = await issueConnection(context, issue);
+        if (!connection) return;
+        await vscode.env.openExternal(sonarIssueUri(connection.config, issue));
       }
     ),
     vscode.commands.registerCommand(

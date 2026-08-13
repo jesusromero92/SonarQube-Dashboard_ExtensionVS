@@ -8,13 +8,13 @@ const read = (relativePath: string): string => readFileSync(
   'utf8'
 );
 
-test('la versión 1.2.1 aplica la plantilla al seleccionarla y elimina el botón Aplicar', () => {
+test('la versión 1.2.2 mantiene la aplicación inmediata de plantillas de la 1.2.1', () => {
   const packageManifest = JSON.parse(read('package.json')) as { version?: string };
   const modal = read('src/dashboard/webview/modals/analysisConfirmationDialog.ts');
   const events = read('src/dashboard/webview/scripts/events/dialogs.ts');
   const pipelineEditor = read('src/dashboard/webview/scripts/pipelineEditor.ts');
 
-  assert.equal(packageManifest.version, '1.2.1');
+  assert.equal(packageManifest.version, '1.2.2');
   assert.doesNotMatch(modal, /applyAnalysisPipelineTemplate/);
   assert.doesNotMatch(modal, /Aplicar plantilla/);
   assert.match(

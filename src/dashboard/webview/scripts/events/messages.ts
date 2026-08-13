@@ -297,6 +297,12 @@ export const MESSAGE_EVENTS_SCRIPT = `
           }
           break;
 
+        case 'showRuleDetail':
+          if (message.issue) {
+            showRuleDialog(message.issue);
+          }
+          break;
+
         case 'showCoverageView':
           currentDataView = 'coverage';
           renderCoverageView();

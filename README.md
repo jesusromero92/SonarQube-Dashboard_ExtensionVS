@@ -181,7 +181,10 @@ When a file containing findings is opened, the extension marks the affected line
 - the affected line is highlighted with the corresponding finding-type color and a marker is added to the editor overview ruler;
 - a CodeLens above the affected line shows severity, rule, and direct access to the details;
 - hovering over the icon displays the description, rule, type, severity or priority, status, resolution, file, line, project, component, identifier, and available impacts;
-- the tooltip link opens the complete issue or Security Hotspot details in **SonarQube Dashboard & Pipeline**.
+- the tooltip link opens the complete issue or Security Hotspot details in **SonarQube Dashboard & Pipeline**;
+- for SonarQube issues, the native VS Code light bulb exposes Quick Fix actions to **View rule**, **Mark as accepted**, **Assign issue to me**, **Open in SonarQube**, and **Manage issue in Dashboard**;
+
+Remote Quick Fix actions use the SonarQube permissions associated with the configured token. If the current user cannot accept or assign an issue, the extension leaves it unchanged and reports that the operation is unavailable.
 
 Indicators are only created for findings whose SonarQube path matches a real file in the linked folder. They are refreshed when dashboard data is synchronized and removed when its data is cleared.
 

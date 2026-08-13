@@ -376,39 +376,77 @@ export class SonarIssueCodeActionProvider implements vscode.CodeActionProvider {
 
   constructor(private readonly decorations: IssueDecorationManager) {}
 
-  provideCodeActions(
+  async provideCodeActions(
     document: vscode.TextDocument,
     range: vscode.Range | vscode.Selection,
     context: vscode.CodeActionContext
-  ): vscode.CodeAction[] {
+  ): Promise<vscode.CodeAction[]> {
     const spanish = getDashboardLanguage() === 'es';
-    const issueActions = context.diagnostics
-      .filter(diagnostic =>
+    const diagnosticsByIssue = new Map<string, vscode.Diagnostic>();
+
+    for (const diagnostic of context.diagnostics) {
+      if (
         diagnostic.source === 'SonarQube Dashboard' &&
         typeof diagnostic.code === 'string'
-      )
-      .map(diagnostic => {
-        const action = new vscode.CodeAction(
-          spanish
-            ? 'Gestionar defecto en SonarQube Dashboard'
-            : 'Manage issue in SonarQube Dashboard',
-          vscode.CodeActionKind.QuickFix
-        );
-        action.diagnostics = [diagnostic];
-        action.command = {
-          command: DASHBOARD_COMMANDS.showIssueDetail,
-          title: action.title,
-          arguments: [diagnostic.code]
-        };
-        return action;
-      });
+      ) {
+        diagnosticsByIssue.set(diagnostic.code, diagnostic);
+      }
+    }
+
+    const issueActions = [...diagnosticsByIssue.entries()].flatMap(
+      ([issueKey, diagnostic]) => {
+        const issue = this.decorations.getIssue(issueKey);
+        if (!issue) {
+          return [];
+        }
+
+        const actions: vscode.CodeAction[] = [
+          issueCodeAction(
+            spanish ? 'SonarQube: Ver regla' : 'SonarQube: View rule',
+            DASHBOARD_COMMANDS.showRuleDetail,
+            issue.key,
+            diagnostic
+          ),
+          issueCodeAction(
+            spanish ? 'SonarQube: Marcar como aceptado' : 'SonarQube: Mark as accepted',
+            DASHBOARD_COMMANDS.acceptIssue,
+            issue.key,
+            diagnostic
+          ),
+          issueCodeAction(
+            spanish ? 'SonarQube: Asignarme issue' : 'SonarQube: Assign issue to me',
+            DASHBOARD_COMMANDS.assignIssueToMe,
+            issue.key,
+            diagnostic
+          ),
+          issueCodeAction(
+            spanish ? 'SonarQube: Abrir en SonarQube' : 'SonarQube: Open in SonarQube',
+            DASHBOARD_COMMANDS.openIssueInSonarQube,
+            issue.key,
+            diagnostic
+          ),
+          issueCodeAction(
+            spanish
+              ? 'SonarQube: Gestionar defecto en Dashboard'
+              : 'SonarQube: Manage issue in Dashboard',
+            DASHBOARD_COMMANDS.showIssueDetail,
+            issue.key,
+            diagnostic
+          )
+        ];
+
+
+        return actions;
+      }
+    );
+
     const hotspotActions = this.decorations
       .getHotspotsAt(document.uri, range)
       .map(hotspot => {
         const action = new vscode.CodeAction(
           spanish
-            ? 'Ver detalle del Security Hotspot'
-            : 'View Security Hotspot details',
+            ? 'SonarQube: Ver detalle del Security Hotspot'
+            : 'SonarQube: View Security Hotspot details',
           vscode.CodeActionKind.QuickFix
         );
         action.command = {
@@ -418,6 +456,23 @@ export class SonarIssueCodeActionProvider implements vscode.CodeActionProvider {
         };
         return action;
       });
+
     return [...issueActions, ...hotspotActions];
   }
+}
+
+function issueCodeAction(
+  title: string,
+  command: string,
+  issueKey: string,
+  diagnostic: vscode.Diagnostic
+): vscode.CodeAction {
+  const action = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
+  action.diagnostics = [diagnostic];
+  action.command = {
+    command,
+    title,
+    arguments: [issueKey]
+  };
+  return action;
 }
