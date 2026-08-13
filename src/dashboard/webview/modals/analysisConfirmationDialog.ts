@@ -30,7 +30,6 @@ ${getSelectDropdownMarkup({
   selectedValue: ''
 })}
         </div>
-        <button id="applyAnalysisPipelineTemplate" class="secondary" type="button" disabled>Aplicar plantilla</button>
       </div>
       <div class="analysis-run-heading">
         <div>

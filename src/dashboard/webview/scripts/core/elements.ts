@@ -248,7 +248,6 @@ const DASHBOARD_ELEMENT_IDS = [
   'analysisConfirmationScanner',
   'analysisRunSteps',
   'analysisPipelineTemplate',
-  'applyAnalysisPipelineTemplate',
   'analysisAddStep',
   'createComponentDialog',
   'createComponentTitle',

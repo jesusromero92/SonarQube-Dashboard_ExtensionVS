@@ -4,6 +4,14 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.2.1] - 2026-08-13
+
+### Changed
+
+- Selecting a pipeline template in **Template for this run** now applies its steps immediately. The separate **Apply template** button has been removed, and selecting **No template** restores the run to the required SonarQube analysis step for manual customization.
+
+  *Al seleccionar una plantilla de pipeline en **Plantilla para esta ejecución**, sus pasos se aplican ahora de forma inmediata. Se ha eliminado el botón independiente **Aplicar plantilla** y seleccionar **Sin plantilla** devuelve la ejecución al paso obligatorio de análisis de SonarQube para poder personalizarla manualmente.*
+
 ## [1.2.0] - 2026-08-09
 
 ### Added

@@ -414,6 +414,8 @@ Reusable steps are created first under **Pipeline steps**. The template editor t
 
 Built-in templates adapt to the commands and tools detected in the folder. **Save changes** updates the selected template for the workspace, including built-in templates, without creating duplicates. Custom templates are deleted with confirmation; deleting a workspace override for a built-in template restores its default definition. Templates can also be imported and exported as `.sonarqube-dashboard.yml` or another YAML file.
 
+When starting a repository analysis, choosing a template in **Template for this run** applies its steps immediately; there is no separate **Apply template** action. Selecting **No template** restores the run to the required SonarQube analysis step so the execution can be adjusted manually.
+
 The exported format uses `version: 1` and preserves step order, including steps placed after SonarQube:
 
 ```yaml

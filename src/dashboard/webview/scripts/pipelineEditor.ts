@@ -962,8 +962,6 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
       elements.savePipelineTemplate.textContent = selected
         ? translateLocalizationValue('Guardar cambios')
         : translateLocalizationValue('Guardar plantilla');
-      elements.applyAnalysisPipelineTemplate.disabled =
-        !pipelineTemplateById(elements.analysisPipelineTemplate.value);
     }
 
     function applyTemplateToConfiguration(template) {
@@ -992,11 +990,17 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
     }
 
     function applyTemplateToAnalysis(template) {
-      if (!template) return;
       elements.analysisRunSteps.textContent = '';
       analysisStepTemplates = new Map(
         availableAnalysisStepTemplates().map(step => [step.templateId, step])
       );
+      if (!template) {
+        elements.analysisRunSteps.appendChild(
+          createAnalysisRunStepRow(sonarAnalysisRunStep())
+        );
+        updateAnalysisConfirmAvailability();
+        return;
+      }
       for (const templateStep of template.steps || []) {
         const step = {
           ...templateStep,

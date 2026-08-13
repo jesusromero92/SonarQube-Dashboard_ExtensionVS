@@ -414,6 +414,8 @@ Los pasos reutilizables se crean primero en **Pasos del pipeline**. Después, el
 
 Las plantillas integradas se adaptan a los comandos y herramientas detectados en la carpeta. **Guardar cambios** actualiza la plantilla seleccionada para ese workspace, incluidas las plantillas predeterminadas, sin crear duplicados. Las plantillas personalizadas pueden eliminarse con confirmación; al eliminar una personalización de una plantilla integrada se recupera su definición predeterminada. También se pueden importar y exportar plantillas como `.sonarqube-dashboard.yml` o YAML equivalente.
 
+Al iniciar un análisis del repositorio, seleccionar una plantilla en **Plantilla para esta ejecución** aplica sus pasos inmediatamente; ya no existe una acción independiente **Aplicar plantilla**. Seleccionar **Sin plantilla** devuelve la ejecución al paso obligatorio de análisis de SonarQube para poder ajustarla manualmente.
+
 El archivo exportado utiliza `version: 1` y conserva el orden de los pasos, incluido cualquier paso situado después de SonarQube:
 
 ```yaml
