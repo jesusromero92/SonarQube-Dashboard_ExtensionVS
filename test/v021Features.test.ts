@@ -249,8 +249,8 @@ test('la página de pipeline muestra solo la ejecución seleccionada y actualiza
   assert.match(HISTORY_SCRIPT, /history\.find\(item => item\.id === currentHistoryEntryId\)/);
   assert.doesNotMatch(HISTORY_SCRIPT, /for \(const entry of history\)/);
   assert.match(HISTORY_SCRIPT, /pipeline-execution-step/);
-  assert.match(HISTORY_SCRIPT, /container\.textContent === nextText/);
-  assert.match(HISTORY_SCRIPT, /distanceFromBottom <= 24/);
+  assert.match(HISTORY_SCRIPT, /renderPipelineHistoryLog\(elements\.historyLog, entry\.log\)/);
+  assert.match(readFileSync(path.resolve(process.cwd(), 'src/dashboard/webview/scripts/terminal.ts'), 'utf8'), /distanceFromBottom <= 24/);
 });
 
 test('la vista nativa conserva la identidad y no se refresca por cada línea del log', () => {

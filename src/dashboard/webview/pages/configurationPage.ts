@@ -168,6 +168,32 @@ ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'a
                   </div>
                 </div>
               </details>
+
+              <details class="configuration-disclosure">
+                <summary>Integración con el editor</summary>
+                <div class="configuration-disclosure-content">
+                  <div class="configuration-section-intro">
+                    <strong>Remediación en vivo</strong>
+                    <p class="hint">Mantén el estado local de los defectos sincronizado mientras editas el código, sin marcar como corregido en SonarQube nada que el servidor todavía no haya confirmado.</p>
+                  </div>
+                  <div class="form-grid advanced-grid">
+                    <div class="field full-width-field checkbox-field">
+                      <label>
+                        <input id="liveRemediationEnabled" type="checkbox" checked>
+                        Activar seguimiento de remediación en vivo
+                      </label>
+                      <div class="hint">Los defectos tocados pasan a pendiente de validación. Si SonarQube for IDE también está activo y deja de detectar el mismo defecto, se oculta de Problems como corregido localmente hasta el siguiente análisis del repositorio.</div>
+                    </div>
+                    <div id="sonarIdeStatus" class="live-remediation-analyzer-status live-remediation-analyzer-status--missing" role="status" aria-live="polite">
+                      <span id="sonarIdeStatusIcon" class="live-remediation-analyzer-icon" aria-hidden="true">—</span>
+                      <div class="live-remediation-analyzer-copy">
+                        <strong id="sonarIdeStatusTitle">SonarQube for IDE no detectado</strong>
+                        <div id="sonarIdeStatusHint" class="hint">No es obligatorio. Los defectos modificados permanecerán pendientes de validación hasta el siguiente análisis del repositorio.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
               </section>
 
               <section id="configurationPipelinePanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationPipelineTab" hidden>

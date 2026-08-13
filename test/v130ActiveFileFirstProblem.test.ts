@@ -32,3 +32,16 @@ test('README y changelog documentan el salto al primer problema del archivo acti
   assert.match(read('README.es.md'), /muestra automáticamente el primer defecto de SonarQube/);
   assert.match(read('CHANGELOG.md'), /automatically reveals the first SonarQube problem/);
 });
+
+
+test('al restaurar la ventana Problems recibe el archivo activo en una actualización separada', () => {
+  const source = read('src/liveRemediation.ts');
+  const navigation = read('src/issueNavigation.ts');
+
+  assert.match(source, /ACTIVE_PROBLEMS_REVEAL_DELAY_MS = 120/);
+  assert.match(source, /getConfiguration\('problems'\)[\s\S]*get<boolean>\('autoReveal', true\)/);
+  assert.match(source, /this\.activeProblemsRevealTimer = setTimeout\([\s\S]*this\.publishUri\(uri\)/);
+  assert.match(source, /cancelActiveProblemsReveal/);
+  assert.match(navigation, /vscode\.languages\.onDidChangeDiagnostics\(event =>/);
+  assert.match(navigation, /event\.uris\.some\(uri => uri\.toString\(\) === activeUri\)/);
+});

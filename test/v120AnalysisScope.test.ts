@@ -93,7 +93,7 @@ test('manifest 1.3.0, traducciones y documentación mantienen la configuración 
     contributes?: { configuration?: { properties?: Record<string, unknown> } };
   };
   const properties = packageManifest.contributes?.configuration?.properties ?? {};
-  assert.equal(packageManifest.version, '1.3.0');
+  assert.equal(packageManifest.version, '1.4.0');
   assert.ok(properties['sonarQubeDashboard.sonar.analysisInclusions']);
   assert.ok(properties['sonarQubeDashboard.sonar.analysisExclusions']);
 

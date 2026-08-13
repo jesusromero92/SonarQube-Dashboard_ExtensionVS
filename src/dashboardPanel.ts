@@ -3,7 +3,8 @@ import * as vscode from 'vscode';
 import {
   DASHBOARD_CONFIGURATION_KEYS,
   DASHBOARD_CONFIGURATION_SECTION,
-  DASHBOARD_PANEL_VIEW_TYPE
+  DASHBOARD_PANEL_VIEW_TYPE,
+  SONARQUBE_FOR_IDE_EXTENSION_ID
 } from './constants';
 import {
   DashboardLanguage,
@@ -370,6 +371,9 @@ export class DashboardPanel {
           this.runBackgroundTask(this.handleMessage(message));
         }
       ),
+      vscode.extensions.onDidChange(() => {
+        this.runBackgroundTask(this.sendState());
+      }),
       panel.onDidDispose(() => {
         this.disposePanelListeners();
         this.panel = undefined;
@@ -420,6 +424,15 @@ export class DashboardPanel {
         break;
       case 'setLanguage':
         await this.changeLanguage(normalizeDashboardLanguage(message.language));
+        break;
+      case 'setLiveRemediation':
+        await vscode.workspace
+          .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
+          .update(
+            DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled,
+            message.liveRemediationEnabled !== false,
+            vscode.ConfigurationTarget.Global
+          );
         break;
       case 'scopeChanged':
         if (message.scope) {
@@ -529,6 +542,14 @@ export class DashboardPanel {
     return folders.find(folder => folder.uri.toString() === folderUri);
   }
 
+  private sonarIdeIntegrationState(): { installed: boolean; active: boolean } {
+    const extension = vscode.extensions.getExtension(SONARQUBE_FOR_IDE_EXTENSION_ID);
+    return {
+      installed: Boolean(extension),
+      active: extension?.isActive === true
+    };
+  }
+
   private async sendState(): Promise<void> {
     if (!this.panel) {
       return;
@@ -563,6 +584,8 @@ export class DashboardPanel {
           preAnalysisCommands: '',
           postAnalysisCommands: '',
           notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
+          liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled, true),
+          sonarIdeIntegration: this.sonarIdeIntegrationState(),
           significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
           significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
         }
@@ -629,6 +652,8 @@ export class DashboardPanel {
         analysisExclusions: connectionDraftDirty ? '' : config.analysisExclusions,
         analysisPermission,
         notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
+        liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled, true),
+        sonarIdeIntegration: this.sonarIdeIntegrationState(),
         significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
         significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
       }
@@ -1331,6 +1356,7 @@ ${selected.name}`,
       const dashboardConfiguration = vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION);
       await Promise.all([
         dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, message.notificationsEnabled !== false, vscode.ConfigurationTarget.Global),
+        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled, message.liveRemediationEnabled !== false, vscode.ConfigurationTarget.Global),
         dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, Math.max(1, Number(message.significantIncreasePercent) || 20), vscode.ConfigurationTarget.Global),
         dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, Math.max(1, Number(message.significantIncreaseMinimum) || 5), vscode.ConfigurationTarget.Global)
       ]);
@@ -1395,6 +1421,7 @@ ${selected.name}`,
           postAnalysisCommands: message.postAnalysisCommands ?? '',
           sonarCompatibility,
           notificationsEnabled: message.notificationsEnabled !== false,
+          liveRemediationEnabled: message.liveRemediationEnabled !== false,
           significantIncreasePercent: Math.max(1, Number(message.significantIncreasePercent) || 20),
           significantIncreaseMinimum: Math.max(1, Number(message.significantIncreaseMinimum) || 5)
         }

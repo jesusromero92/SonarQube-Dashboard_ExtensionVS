@@ -15,7 +15,7 @@ test('v1.3.0 usa un asistente de dos pasos antes de iniciar el análisis', () =>
   const events = read('src/dashboard/webview/scripts/events/dialogs.ts');
   const elements = read('src/dashboard/webview/scripts/core/elements.ts');
 
-  assert.equal(manifest.version, '1.3.0');
+  assert.equal(manifest.version, '1.4.0');
   assert.match(modal, /Seleccionar plantilla/);
   assert.match(modal, /Confirmación/);
   assert.match(modal, /analysisConfirmationTemplateStep/);

@@ -279,7 +279,7 @@ test('los modales de análisis y creación usan una distribución compacta', () 
   );
   assert.match(
     ANALYSIS_CONFIRMATION_DIALOG_MARKUP,
-    /<dl class="confirmation-details">[\s\S]*<div><dt>Proyecto/
+    /<dl class="confirmation-details[^"]*">[\s\S]*<div><dt>Proyecto/
   );
   assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="create-component-grid"/);
   assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="field field--wide"/);

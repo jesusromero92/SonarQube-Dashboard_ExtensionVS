@@ -11,6 +11,7 @@ import {
   DASHBOARD_PANEL_VIEW_TYPE,
   ISSUE_TREE_GROUPS,
   ISSUE_TREE_VIEW_ID,
+  LOCALLY_FIXED_ISSUES_TREE_VIEW_ID,
   PIPELINE_EXECUTION_TREE_VIEW_ID,
   QUALITY_GATE_STATUS_RANKS,
   RATING_GRADE_RANKS,
@@ -42,7 +43,9 @@ import {
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { IssueNavigationManager } from './issueNavigation';
+import { LiveRemediationManager } from './liveRemediation';
 import { IssueTreeProvider } from './issueTreeView';
+import { LocallyFixedIssuesTreeProvider } from './locallyFixedIssuesTreeView';
 import { PipelineExecutionTreeProvider } from './pipelineExecutionTreeView';
 import {
   NotificationManager,
@@ -76,7 +79,9 @@ let issueDecorations: IssueDecorationManager;
 let coverageDecorations: CoverageDecorationManager;
 let flowController: IssueFlowController;
 let issueNavigation: IssueNavigationManager;
+let liveRemediation: LiveRemediationManager;
 let issueTree: IssueTreeProvider;
+let locallyFixedIssuesTree: LocallyFixedIssuesTreeProvider;
 let pipelineExecutionTree: PipelineExecutionTreeProvider;
 let notifications: NotificationManager;
 
@@ -325,7 +330,7 @@ function runAsync(task: Promise<unknown> | undefined, operation: string): void {
 }
 
 function clearWorkspaceData(summary: RefreshSummary): RefreshSummary {
-  diagnostics.clear();
+  liveRemediation.clear();
   issueDecorations.clear();
   coverageDecorations.clear();
   issueNavigation.clear();
@@ -583,25 +588,31 @@ function prepareRefreshSummary(summary: RefreshSummary): void {
   summary.newHotspots.sort(compareHotspots);
 }
 
-function publishPendingDiagnostics(
-  pendingDiagnostics: vscode.DiagnosticCollection
-): void {
-  diagnostics.clear();
-  pendingDiagnostics.forEach((uri, fileDiagnostics) => {
-    diagnostics.set(uri, fileDiagnostics);
-  });
-  pendingDiagnostics.dispose();
+function applyLiveRemediationState(): void {
+  issueDecorations.setLocalRemediation(
+    liveRemediation.getStates(),
+    liveRemediation.getRanges()
+  );
+  issueNavigation.setLocallyFixedIssueKeys(
+    liveRemediation.getLocallyFixedIssueKeys()
+  );
+  issueTree.refresh();
 }
 
 function applyRefreshSummary(
   summary: RefreshSummary,
-  operation: RefreshOperation
-): void {
-  publishPendingDiagnostics(operation.pendingDiagnostics);
+  operation: RefreshOperation,
+  source: 'sync' | 'analysis'
+): number {
   issueDecorations.setIssues(summary.issues, summary.hotspots);
+  const confirmedLocallyFixedCount = liveRemediation.applyServerSnapshot(
+    summary.issues,
+    operation.pendingDiagnostics,
+    source === 'analysis'
+  );
   coverageDecorations.setCoverage(summary.coverage);
   issueNavigation.setIssues(summary.issues, summary.newIssues);
-  issueTree.refresh();
+  applyLiveRemediationState();
   dashboardPanel?.setRefreshSummary(
     summary,
     summary.configuredFolders > 0
@@ -610,6 +621,8 @@ function applyRefreshSummary(
   if (activeRefresh === operation.controller) {
     dashboardPanel?.setLoading(false);
   }
+
+  return confirmedLocallyFixedCount;
 }
 
 function showSuccessfulRefreshStatus(summary: RefreshSummary): void {
@@ -666,9 +679,9 @@ async function refreshAll(
     }
 
     prepareRefreshSummary(summary);
-    applyRefreshSummary(summary, operation);
+    const confirmedLocallyFixedCount = applyRefreshSummary(summary, operation, source);
     runAsync(
-      notifications.evaluate(notificationScopes, source),
+      notifications.evaluate(notificationScopes, source, confirmedLocallyFixedCount),
       'notification evaluation'
     );
     showSuccessfulRefreshStatus(summary);
@@ -819,28 +832,33 @@ function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode
 
 export function activate(context: vscode.ExtensionContext): void {
   diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
+  liveRemediation = new LiveRemediationManager(context, diagnostics);
   issueDecorations = new IssueDecorationManager(context.extensionUri);
   coverageDecorations = new CoverageDecorationManager(context, context.extensionUri);
   flowController = new IssueFlowController();
   issueNavigation = new IssueNavigationManager();
   issueTree = new IssueTreeProvider(issueNavigation);
+  locallyFixedIssuesTree = new LocallyFixedIssuesTreeProvider(liveRemediation);
   notifications = new NotificationManager(context);
   const issueCodeLensProvider = new SonarIssueCodeLensProvider(issueDecorations);
   context.subscriptions.push(
     diagnostics,
+    liveRemediation,
     issueDecorations,
     coverageDecorations,
     flowController,
     issueNavigation,
     issueTree,
-    issueCodeLensProvider
+    locallyFixedIssuesTree,
+    issueCodeLensProvider,
+    liveRemediation.onDidChange(() => applyLiveRemediationState())
   );
 
   dashboardPanel = new DashboardPanel(
     context,
     source => refreshAll(context, source),
     () => {
-      diagnostics.clear();
+      liveRemediation.clear();
       issueDecorations.clear();
       coverageDecorations.clear();
       issueNavigation.clear();
@@ -865,6 +883,10 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(ISSUE_TREE_VIEW_ID, issueTree),
     vscode.window.registerTreeDataProvider(
+      LOCALLY_FIXED_ISSUES_TREE_VIEW_ID,
+      locallyFixedIssuesTree
+    ),
+    vscode.window.registerTreeDataProvider(
       PIPELINE_EXECUTION_TREE_VIEW_ID,
       pipelineExecutionTree
     ),
@@ -884,6 +906,10 @@ export function activate(context: vscode.ExtensionContext): void {
       {
         deserializeWebviewPanel: panel => dashboardPanel?.revive(panel) ?? Promise.resolve()
       }
+    ),
+    vscode.commands.registerCommand(
+      DASHBOARD_COMMANDS.openLocallyFixedIssue,
+      (issueKey: string) => liveRemediation.revealLocallyFixedIssue(issueKey)
     ),
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.getStarted,
@@ -911,7 +937,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.clear,
       () => {
-        diagnostics.clear();
+        liveRemediation.clear();
         issueDecorations.clear();
         coverageDecorations.clear();
         issueNavigation.clear();
@@ -1184,6 +1210,7 @@ export function activate(context: vscode.ExtensionContext): void {
               'language refresh'
             );
             issueDecorations.refreshLanguage();
+            liveRemediation.refreshLanguage();
             coverageDecorations.refreshLanguage();
             flowController.refreshLanguage();
             issueNavigation.refreshLanguage();

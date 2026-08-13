@@ -775,13 +775,13 @@ export class AnalysisService implements vscode.Disposable {
       throw new Error('Selecciona otro scanner o configura un comando personalizado.');
     }
     const command = template
-      .replace(/\$\{workspaceFolder\}/g, scanner.rootPath)
-      .replace(/\$\{projectKey\}/g, request.config.projectKey)
-      .replace(/\$\{projectName\}/g, request.config.projectName || request.config.projectKey)
-      .replace(/\$\{serverUrl\}/g, request.config.serverUrl)
-      .replace(/\$\{branch\}/g, request.config.branch ?? '')
-      .replace(/\$\{analysisInclusions\}/g, normalizeAnalysisPatterns(request.config.analysisInclusions))
-      .replace(/\$\{analysisExclusions\}/g, normalizeAnalysisPatterns(request.config.analysisExclusions));
+      .replaceAll(/\$\{workspaceFolder\}/g, scanner.rootPath)
+      .replaceAll(/\$\{projectKey\}/g, request.config.projectKey)
+      .replaceAll(/\$\{projectName\}/g, request.config.projectName || request.config.projectKey)
+      .replaceAll(/\$\{serverUrl\}/g, request.config.serverUrl)
+      .replaceAll(/\$\{branch\}/g, request.config.branch ?? '')
+      .replaceAll(/\$\{analysisInclusions\}/g, normalizeAnalysisPatterns(request.config.analysisInclusions))
+      .replaceAll(/\$\{analysisExclusions\}/g, normalizeAnalysisPatterns(request.config.analysisExclusions));
 
     this.update('scanning', 'Ejecutando el comando de análisis personalizado…');
     await this.execute({

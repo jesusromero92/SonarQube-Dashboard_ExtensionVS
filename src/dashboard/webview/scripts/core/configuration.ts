@@ -24,11 +24,38 @@ export const CONFIGURATION_CORE_SCRIPT = `
         preAnalysisCommands: elements.preAnalysisCommands.value.trim(),
         postAnalysisCommands: elements.postAnalysisCommands.value.trim(),
         notificationsEnabled: elements.notificationsEnabled.checked,
+        liveRemediationEnabled: elements.liveRemediationEnabled.checked,
         significantIncreasePercent: Number(elements.significantIncreasePercent.value) || 20,
         significantIncreaseMinimum: Number(elements.significantIncreaseMinimum.value) || 5
       };
     }
 
+
+    function renderSonarIdeIntegrationStatus(status) {
+      const installed = Boolean(status?.installed);
+      const active = Boolean(status?.active);
+      elements.sonarIdeStatus.classList.toggle('live-remediation-analyzer-status--active', active);
+      elements.sonarIdeStatus.classList.toggle('live-remediation-analyzer-status--inactive', installed && !active);
+      elements.sonarIdeStatus.classList.toggle('live-remediation-analyzer-status--missing', !installed);
+
+      if (active) {
+        elements.sonarIdeStatusIcon.textContent = '✓';
+        elements.sonarIdeStatusTitle.textContent = 'SonarQube for IDE detectado y activo';
+        elements.sonarIdeStatusHint.textContent = 'Sus diagnósticos locales pueden confirmar de forma independiente que un defecto modificado ya no se reproduce antes del siguiente análisis del servidor.';
+        return;
+      }
+
+      if (installed) {
+        elements.sonarIdeStatusIcon.textContent = '○';
+        elements.sonarIdeStatusTitle.textContent = 'SonarQube for IDE instalado, todavía no activo';
+        elements.sonarIdeStatusHint.textContent = 'Abre o guarda un archivo compatible para activar su análisis local. Hasta entonces, los cambios permanecerán pendientes de validación.';
+        return;
+      }
+
+      elements.sonarIdeStatusIcon.textContent = '—';
+      elements.sonarIdeStatusTitle.textContent = 'SonarQube for IDE no detectado';
+      elements.sonarIdeStatusHint.textContent = 'No es obligatorio. Los defectos modificados permanecerán pendientes de validación hasta el siguiente análisis del repositorio.';
+    }
 
     function effectiveProjectCommand(manualCommand, detectedCommand) {
       return String(manualCommand || detectedCommand || '').trim();
@@ -594,6 +621,8 @@ export const CONFIGURATION_CORE_SCRIPT = `
       renderPipelineConfigurationFromFields();
       renderPipelineTemplates(currentConfig.pipelineTemplates || []);
       elements.notificationsEnabled.checked = currentConfig.notificationsEnabled !== false;
+      elements.liveRemediationEnabled.checked = currentConfig.liveRemediationEnabled !== false;
+      renderSonarIdeIntegrationStatus(currentConfig.sonarIdeIntegration);
       elements.significantIncreasePercent.value = String(
         currentConfig.significantIncreasePercent || 20
       );

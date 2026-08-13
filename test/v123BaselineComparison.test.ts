@@ -64,7 +64,7 @@ test('v1.3.0 distingue la primera medición de una comparación contra cero', ()
 
 test('v1.3.0 mantiene la comparación exclusivamente en el historial del pipeline', () => {
   const manifest = JSON.parse(read('package.json')) as { version?: string };
-  assert.equal(manifest.version, '1.3.0');
+  assert.equal(manifest.version, '1.4.0');
 
   const control = read('src/dashboard/webview/components/analysisControl.ts');
   const dialog = read('src/dashboard/webview/modals/analysisDialog.ts');

@@ -165,6 +165,13 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       clearAnalysisScopeSaveStatus();
     });
 
+    elements.liveRemediationEnabled.addEventListener('change', () => {
+      vscode.postMessage({
+        type: 'setLiveRemediation',
+        liveRemediationEnabled: elements.liveRemediationEnabled.checked
+      });
+    });
+
     elements.saveAnalysisScope.addEventListener('click', () => {
       setAnalysisScopeSaveStatus(
         'loading',

@@ -104,7 +104,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
       type: 'state',
       loading: this.dashboardPanel.isLoading(),
       page: this.dashboardPanel.getCurrentPage(),
-      summary,
+      summary
     });
   }
 

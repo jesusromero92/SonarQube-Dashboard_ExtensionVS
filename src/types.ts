@@ -551,6 +551,8 @@ export interface DashboardIssueFlow {
   locations: DashboardIssueLocation[];
 }
 
+export type IssueLocalRemediationState = 'server' | 'modified' | 'locallyFixed';
+
 export interface DashboardIssue {
   key: string;
   rule: string;

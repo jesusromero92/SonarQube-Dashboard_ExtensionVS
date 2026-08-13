@@ -18,6 +18,7 @@
   "configuration.sonar_baseDir.description": "Subcarpeta local asociada a la raíz del proyecto. Se gestiona desde el dashboard.",
   "configuration.autoRefresh.description": "Actualiza los defectos automáticamente al abrir o cambiar el workspace.",
   "configuration.refreshIntervalMinutes.description": "Intervalo de actualización. 0 desactiva la actualización periódica.",
+  "configuration.liveRemediation.enabled.description": "Sigue las ediciones locales de los defectos sincronizados. SonarQube for IDE es opcional: si está activo, sus diagnósticos independientes pueden marcar un defecto como corregido localmente; sin él, los cambios quedan pendientes de validación hasta el siguiente análisis del servidor.",
   "configuration.sonar_scannerMode.description": "Método empleado por el botón Analizar repositorio.",
   "configuration.scannerMode.auto": "Detecta Maven, Gradle y .NET; usa NPM con package.json o Docker para proyectos genéricos.",
   "configuration.scannerMode.maven": "Usa SonarScanner for Maven.",
@@ -65,5 +66,7 @@
   "walkthrough.results.description": "Utiliza el dashboard, Problems, el explorador de issues, Security Hotspots, cobertura, duplicación y el historial de ejecuciones para revisar los resultados sincronizados. Abre un hallazgo para navegar directamente a su archivo.",
   "walkthrough.results.alt": "Dashboard con Quality Gate, ratings, issues y métricas del proyecto",
   "viewsWelcome.issues": "No hay issues de SonarQube cargadas para este workspace.\n[Abrir configuración](command:sonarQubeDashboard.configure)\n[Actualizar datos de SonarQube](command:sonarQubeDashboard.refresh)",
-  "viewsWelcome.pipeline": "Todavía no hay ejecuciones del pipeline.\n[Abrir configuración del pipeline](command:sonarQubeDashboard.configure)\n[Analizar repositorio](command:sonarQubeDashboard.analyze)"
+  "viewsWelcome.pipeline": "Todavía no hay ejecuciones del pipeline.\n[Abrir configuración del pipeline](command:sonarQubeDashboard.configure)\n[Analizar repositorio](command:sonarQubeDashboard.analyze)",
+  "views.locallyFixedIssues.name": "Issues corregidos localmente",
+  "viewsWelcome.locallyFixedIssues": "No hay issues corregidos localmente pendientes de confirmación de SonarQube."
 }

@@ -55,6 +55,7 @@ export interface DashboardWebviewMessage {
   locationIndex?: number;
   groupIndex?: number;
   notificationsEnabled?: boolean;
+  liveRemediationEnabled?: boolean;
   significantIncreasePercent?: number;
   significantIncreaseMinimum?: number;
   componentKind?: SonarCreatableComponentKind;

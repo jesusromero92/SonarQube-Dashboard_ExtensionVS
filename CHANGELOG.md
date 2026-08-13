@@ -4,6 +4,74 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [1.4.0] - 2026-08-13
+
+### Added
+
+- Added **Live remediation state** for synchronized SonarQube issues. Editing the range of a published issue immediately changes its local state to **Modified locally · pending validation** instead of presenting the stale server severity as if the file had not changed.
+
+  *Se ha añadido el **estado de remediación en vivo** para los issues sincronizados de SonarQube. Al editar el rango de un defecto publicado, su estado local cambia inmediatamente a **Modificado localmente · pendiente de validación**, evitando mostrar la severidad antigua del servidor como si el archivo no hubiese cambiado.*
+
+- When the official **SonarQube for IDE** extension has independently reported the same rule and location, SonarQube Dashboard observes its real-time diagnostics. If that local diagnostic disappears after the edit, the server issue becomes **Fixed locally · awaiting SonarQube confirmation**, remains in **Problems** as an informational pending-confirmation entry, is excluded from normal issue navigation, and keeps an explicit green marker in the editor until the next repository analysis confirms the server state.
+
+  *Cuando la extensión oficial **SonarQube for IDE** ha informado de forma independiente de la misma regla y ubicación, SonarQube Dashboard observa sus diagnósticos en tiempo real. Si ese diagnóstico local desaparece después de editar, el issue del servidor pasa a **Corregido localmente · pendiente de confirmación de SonarQube**, permanece en **Problems** como una entrada informativa pendiente de confirmación, se excluye de la navegación normal de defectos y mantiene un marcador verde explícito en el editor hasta que el siguiente análisis del repositorio confirme el estado del servidor.*
+
+- A dedicated status-bar indicator summarizes locally modified and locally fixed findings. Selecting it opens the repository-analysis flow so the pending local state can be confirmed by SonarQube Server.
+
+  *Un indicador específico de la barra de estado resume los defectos modificados y corregidos localmente. Al seleccionarlo se abre el flujo de análisis del repositorio para poder confirmar en SonarQube Server el estado local pendiente.*
+
+- Added the `sonarQubeDashboard.liveRemediation.enabled` setting, enabled by default, plus an **Editor integration** toggle in the SonarQube configuration page. The behavior can be enabled or disabled immediately without affecting normal SonarQube synchronization.
+
+  *Se ha añadido el ajuste `sonarQubeDashboard.liveRemediation.enabled`, activado de forma predeterminada, junto con un interruptor de **Integración con el editor** en la configuración de SonarQube. El comportamiento puede activarse o desactivarse inmediatamente sin afectar a la sincronización normal con SonarQube.*
+
+- The Activity Bar container now exposes **Issues fixed locally** as its own native collapsible view, alongside **Pipeline executions** and **Issue explorer**, instead of embedding that list inside the summary webview. Each pending finding shows its rule, file and tracked line with a green fixed icon, and selecting it opens the exact location in the editor.
+
+  *El contenedor de la barra de actividad expone ahora **Issues corregidos localmente** como una vista nativa desplegable independiente, al mismo nivel que **Ejecuciones del pipeline** y **Explorador de issues**, en lugar de incrustar la lista dentro del webview de Resumen. Cada hallazgo pendiente muestra su regla, archivo y línea seguida con un icono verde de corrección, y al seleccionarlo se abre la ubicación exacta en el editor.*
+
+- Repository-analysis completion notifications now report how many **Fixed locally** findings were confirmed by SonarQube Server and therefore removed from the pending-remediation view. The confirmation is included in the same bottom-right notification used for a completed analysis, avoiding an additional popup.
+
+  *Las notificaciones de finalización del análisis del repositorio indican ahora cuántos defectos **Corregidos localmente** han sido confirmados por SonarQube Server y, por tanto, eliminados de la vista de remediación pendiente. La confirmación se incluye en la misma notificación inferior derecha utilizada al finalizar el análisis, evitando mostrar un aviso adicional.*
+
+### Changed
+
+- Live remediation now explicitly detects the official **SonarQube for IDE** VS Code extension and shows its installed/active state in **Configuration → SonarQube → Editor integration**. SonarQube for IDE remains optional: without an active local analyzer, edited findings stay pending validation until the next server analysis.
+
+  *La remediación en vivo detecta ahora explícitamente la extensión oficial **SonarQube for IDE** para VS Code y muestra su estado instalado/activo en **Configuración → SonarQube → Integración con el editor**. SonarQube for IDE sigue siendo opcional: sin un analizador local activo, los defectos editados permanecen pendientes de validación hasta el siguiente análisis del servidor.*
+
+- Local edits now keep issue ranges aligned as text is inserted, removed, or replaced. A modified issue is temporarily published as an informational diagnostic while it awaits local/server validation, rather than keeping the original Error/Warning severity unchanged.
+
+  *Las ediciones locales mantienen ahora alineados los rangos de los issues cuando se inserta, elimina o reemplaza texto. Un defecto modificado se publica temporalmente como diagnóstico informativo mientras espera validación local/del servidor, en lugar de conservar sin cambios la severidad Error/Warning original.*
+
+- Server analysis remains authoritative, while ordinary dashboard refreshes preserve pending local-remediation states. **Locally fixed** findings therefore keep their green **awaiting SonarQube confirmation** marker until a repository analysis confirms the new server state; issues still returned after that analysis become open again, while issues no longer returned disappear permanently.
+
+  *El análisis del servidor sigue siendo autoritativo, mientras que las actualizaciones normales del dashboard conservan los estados locales pendientes. Por ello, los defectos **corregidos localmente** mantienen su marcador verde de **pendiente de confirmación de SonarQube** hasta que un análisis del repositorio confirma el nuevo estado del servidor; los issues que sigan apareciendo después de ese análisis vuelven a estado abierto y los que ya no se devuelvan desaparecen definitivamente.*
+
+- The integration with SonarQube for IDE is intentionally conservative: an issue is only classified as locally fixed when the same rule/location had previously been observed from an external Sonar diagnostic. If no independent local analyzer confirmation exists, the extension keeps the safer **Modified locally · pending validation** state.
+
+  *La integración con SonarQube for IDE es deliberadamente conservadora: un issue solo se clasifica como corregido localmente cuando la misma regla/ubicación se había observado previamente mediante un diagnóstico Sonar externo. Si no existe confirmación independiente del analizador local, la extensión mantiene el estado más seguro **Modificado localmente · pendiente de validación**.*
+
+### Fixed
+
+- Pending **Modified locally** and **Fixed locally · awaiting SonarQube confirmation** states are now persisted in workspace state. Reloading or restarting VS Code restores the pending state, tracked range, and local-analyzer evidence instead of publishing the stale server issue as open again. A completed repository analysis remains authoritative and clears or restores the persisted state according to the new SonarQube result.
+
+  *Los estados pendientes **Modificado localmente** y **Corregido localmente · pendiente de confirmación de SonarQube** se guardan ahora en el estado del workspace. Al recargar o reiniciar VS Code se restauran el estado pendiente, el rango seguido y la evidencia del analizador local, en lugar de volver a publicar como abierto el issue antiguo del servidor. Un análisis completo del repositorio sigue siendo autoritativo y limpia o restaura el estado persistido según el nuevo resultado de SonarQube.*
+
+- When VS Code restores a window with a source file already active, SonarQube Dashboard now republishes that file in a separate delayed diagnostic update and keeps locally-fixed pending entries in **Problems**. This gives the native `problems.autoReveal` behavior a distinct active-resource marker change after startup synchronization, so the restored active file is revealed instead of an earlier file whenever auto-reveal is enabled.
+
+  *Cuando VS Code restaura una ventana con un archivo de código ya activo, SonarQube Dashboard vuelve a publicar ese archivo mediante una actualización de diagnósticos separada y retrasada y mantiene en **Problems** las entradas pendientes corregidas localmente. Así, el comportamiento nativo `problems.autoReveal` recibe un cambio de marcadores específico del recurso activo tras la sincronización inicial y revela el archivo restaurado en lugar de uno anterior siempre que el auto-reveal esté activado.*
+
+- Fixed Live Remediation losing **Modified locally** when an edit is made immediately next to a narrow Sonar diagnostic range (for example while changing an escaped token). Adjacent token edits, Quick Fix replacements, Undo and Redo now keep the finding in the local-modified state, and SonarQube for IDE continuing to report the issue no longer resets it to the stale server state; only a new repository analysis can do that authoritatively.
+
+  *Corregida la pérdida del estado **Modificado localmente** cuando una edición se realiza justo al lado de un rango estrecho de diagnóstico de Sonar (por ejemplo al cambiar un token escapado). Las ediciones adyacentes, los Quick Fix, Undo y Redo mantienen ahora el defecto como modificado localmente, y que SonarQube for IDE siga detectándolo ya no lo devuelve al estado antiguo del servidor; solo un nuevo análisis del repositorio puede hacerlo de forma autoritativa.*
+
+- Disabling or removing SonarQube for IDE can no longer be mistaken for a locally fixed issue: promotion to **Fixed locally** is evaluated only while the official extension is active.
+
+  *Desactivar o eliminar SonarQube for IDE ya no puede confundirse con un defecto corregido localmente: la promoción a **Corregido localmente** solo se evalúa mientras la extensión oficial está activa.*
+
+- Fixed the **Locally fixed** editor state being cleared by ordinary synchronization before a new SonarQube analysis had actually confirmed the result. The pending-confirmation message now remains visible and is rendered with an explicit green success color until server confirmation.
+
+  *Corregido el estado **Corregido localmente** del editor para que una sincronización normal no lo elimine antes de que un nuevo análisis de SonarQube confirme realmente el resultado. El mensaje pendiente de confirmación permanece ahora visible y se representa con un color verde de éxito explícito hasta la confirmación del servidor.*
+
 ## [1.3.0] - 2026-08-13
 
 ### Added

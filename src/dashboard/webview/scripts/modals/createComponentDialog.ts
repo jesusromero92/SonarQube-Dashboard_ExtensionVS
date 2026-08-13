@@ -9,7 +9,7 @@ export const CREATE_COMPONENT_DIALOG_SCRIPT = `
       if (!normalized) {
         return '';
       }
-      if (/^\d+$/.test(normalized)) {
+      if (/^\\d+$/.test(normalized)) {
         return 'project-' + normalized;
       }
       return normalized;
@@ -107,7 +107,7 @@ export const CREATE_COMPONENT_DIALOG_SCRIPT = `
         showCreateComponentError('Introduce el nombre del componente.');
         return;
       }
-      if (!key || /^\d+$/.test(key) || !/^[A-Za-z0-9_.:-]+$/.test(key)) {
+      if (!key || /^d+$/.test(key) || !/^[A-Za-z0-9_.:-]+$/.test(key)) {
         showCreateComponentError('Introduce una clave válida que contenga al menos una letra.');
         return;
       }

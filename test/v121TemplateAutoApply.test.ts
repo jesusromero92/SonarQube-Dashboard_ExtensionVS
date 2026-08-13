@@ -14,7 +14,7 @@ test('la versión 1.3.0 mantiene la aplicación inmediata de plantillas de la 1.
   const events = read('src/dashboard/webview/scripts/events/dialogs.ts');
   const pipelineEditor = read('src/dashboard/webview/scripts/pipelineEditor.ts');
 
-  assert.equal(packageManifest.version, '1.3.0');
+  assert.equal(packageManifest.version, '1.4.0');
   assert.doesNotMatch(modal, /applyAnalysisPipelineTemplate/);
   assert.doesNotMatch(modal, /Aplicar plantilla/);
   assert.match(
