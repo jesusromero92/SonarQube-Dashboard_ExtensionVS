@@ -544,7 +544,9 @@ export const CONFIGURATION_CORE_SCRIPT = `
           pipelineTemplates: [],
           customScannerCommand: '',
           preAnalysisCommands: '',
-          postAnalysisCommands: ''
+          postAnalysisCommands: '',
+          pipelineModuleEnabled: true,
+          liveRemediationModuleEnabled: true
         };
         connectionDraftDirty = false;
         connectionDraftFolderUri = '';
@@ -620,6 +622,11 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
       renderPipelineConfigurationFromFields();
       renderPipelineTemplates(currentConfig.pipelineTemplates || []);
+      elements.pipelineModuleEnabled.checked =
+        currentConfig.pipelineModuleEnabled !== false;
+      elements.liveRemediationModuleEnabled.checked =
+        currentConfig.liveRemediationModuleEnabled !== false;
+      updateModuleConfigurationVisibility();
       elements.notificationsEnabled.checked = currentConfig.notificationsEnabled !== false;
       elements.liveRemediationEnabled.checked = currentConfig.liveRemediationEnabled !== false;
       renderSonarIdeIntegrationStatus(currentConfig.sonarIdeIntegration);
@@ -692,6 +699,14 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.postAnalysisCommands.value = config.postAnalysisCommands || '';
       renderPipelineConfigurationFromFields();
       renderPipelineTemplates(config.pipelineTemplates || currentConfig.pipelineTemplates || []);
+      if (typeof config.pipelineModuleEnabled === 'boolean') {
+        elements.pipelineModuleEnabled.checked = config.pipelineModuleEnabled;
+      }
+      if (typeof config.liveRemediationModuleEnabled === 'boolean') {
+        elements.liveRemediationModuleEnabled.checked =
+          config.liveRemediationModuleEnabled;
+      }
+      updateModuleConfigurationVisibility();
       elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       refreshConfigurationDropdowns(true);
       renderSonarCompatibility(config.sonarCompatibility, false);

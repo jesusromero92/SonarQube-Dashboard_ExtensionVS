@@ -510,7 +510,7 @@ function quoteShellArgument(value: string): string {
   if (!/\s/.test(value)) {
     return value;
   }
-  return `"${value.replace(/"/g, '\\"')}"`;
+  return `"${value.replaceAll('"', '\\"')}"`;
 }
 
 async function exists(file: string): Promise<boolean> {

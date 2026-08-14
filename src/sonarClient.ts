@@ -295,7 +295,7 @@ async function requestCompatibleSearch<T>(
   ) => URLSearchParams,
   signal?: AbortSignal
 ): Promise<T> {
-  const signature = Object.keys(canonicalParameters).sort().join(',');
+  const signature = Object.keys(canonicalParameters).sort((a, b) => a.localeCompare(b)).join(',');
   const overrideKey = [
     normalizeServerUrl(config.serverUrl),
     endpoint,

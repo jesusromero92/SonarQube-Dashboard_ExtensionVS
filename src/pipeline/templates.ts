@@ -1,8 +1,7 @@
 import type * as vscode from 'vscode';
 import { DetectedProjectActions } from './projectActions';
-import { AnalysisExecutionStep } from './types';
-
-const TEMPLATE_KEY_PREFIX = 'sonarQubeDashboard.pipelineTemplates:';
+import { PIPELINE_TEMPLATE_STORAGE_KEY_PREFIX } from './constants';
+import { AnalysisExecutionStep } from './models';
 
 export interface PipelineTemplate {
   id: string;
@@ -288,7 +287,7 @@ function compact(values: Array<AnalysisExecutionStep | undefined>): AnalysisExec
 }
 
 function templateKey(folderUri: string): string {
-  return `${TEMPLATE_KEY_PREFIX}${folderUri}`;
+  return `${PIPELINE_TEMPLATE_STORAGE_KEY_PREFIX}${folderUri}`;
 }
 
 function yamlScalar(value: string): string {

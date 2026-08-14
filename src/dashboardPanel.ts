@@ -3,9 +3,12 @@ import * as vscode from 'vscode';
 import {
   DASHBOARD_CONFIGURATION_KEYS,
   DASHBOARD_CONFIGURATION_SECTION,
-  DASHBOARD_PANEL_VIEW_TYPE,
-  SONARQUBE_FOR_IDE_EXTENSION_ID
+  DASHBOARD_PANEL_VIEW_TYPE
 } from './constants';
+import {
+  LIVE_REMEDIATION_CONFIGURATION_KEY,
+  SONARQUBE_FOR_IDE_EXTENSION_ID
+} from './liveRemediation';
 import {
   DashboardLanguage,
   getDashboardLanguage,
@@ -15,6 +18,11 @@ import {
   setDashboardLanguage
 } from './i18n';
 import { getWebviewLocalizationBundle } from './i18n/runtimeWebview';
+import {
+  getDashboardModuleState,
+  isDashboardModuleEnabled,
+  setDashboardModuleEnabled
+} from './modules';
 import {
   getFolderConfig,
   getFolderFormConfig,
@@ -40,29 +48,28 @@ import {
   ExtensionDiagnosticsSnapshot,
   formatDiagnosticsReport
 } from './dashboard/diagnostics';
-import { AnalysisService } from './scanner/analysisService';
 import {
+  AnalysisService,
   compareAnalysisBaselines,
-  createAnalysisBaselineSnapshot
-} from './scanner/baseline';
-import { detectProjectActions } from './scanner/projectActions';
-import { parseAnalysisPipeline } from './scanner/pipeline';
-import {
+  createAnalysisBaselineSnapshot,
   createBuiltinPipelineTemplates,
+  createDefaultPipelineSteps,
+  createRunningPipelineHistoryEntry,
+  detectProjectActions,
   mergePipelineTemplates,
+  normalizeRequestedPipelineSteps,
   parsePipelineTemplateYaml,
-  PipelineTemplate,
   PipelineTemplateStore,
   serializePipelineTemplateYaml
-} from './scanner/pipelineTemplates';
-import {
+} from './pipeline';
+import type {
   AnalysisBaselineSnapshot,
   AnalysisExecutionOptions,
-  AnalysisExecutionStep,
   AnalysisRequest,
   AnalysisState,
-  PipelineRunHistoryEntry
-} from './scanner/types';
+  PipelineRunHistoryEntry,
+  PipelineTemplate
+} from './pipeline';
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { DuplicationComparisonPanel } from './dashboard/duplicationComparisonPanel';
@@ -241,6 +248,7 @@ export class DashboardPanel {
   }
 
   async getPipelineExecutions(): Promise<PipelineRunHistoryEntry[]> {
+    if (!isDashboardModuleEnabled('pipeline')) return [];
     const folder = this.getWorkspaceFolder(this.selectedFolderUri) ??
       vscode.workspace.workspaceFolders?.[0];
     if (!folder) return [];
@@ -252,6 +260,7 @@ export class DashboardPanel {
   }
 
   async showPipelineExecution(executionId: string): Promise<void> {
+    if (!isDashboardModuleEnabled('pipeline')) return;
     this.pendingHistoryEntryId = executionId;
     await this.show('history');
   }
@@ -265,6 +274,16 @@ export class DashboardPanel {
   }
 
   async analyze(): Promise<void> {
+    if (!isDashboardModuleEnabled('pipeline')) {
+      await vscode.window.showInformationMessage(
+        localizeRuntimeText(
+          'El módulo Pipeline está desactivado. Actívalo en Configuración > Módulos para analizar el repositorio.',
+          this.language
+        )
+      );
+      await this.showPage('configuration');
+      return;
+    }
     const confirmed = await vscode.window.showWarningMessage(
       localizeRuntimeText(
         'El análisis puede ejecutar herramientas, compilaciones y scripts del repositorio. ¿Quieres continuar?',
@@ -425,11 +444,23 @@ export class DashboardPanel {
       case 'setLanguage':
         await this.changeLanguage(normalizeDashboardLanguage(message.language));
         break;
+      case 'setModule':
+        if (message.moduleId) {
+          const moduleState = await setDashboardModuleEnabled(
+            message.moduleId,
+            message.moduleEnabled !== false
+          );
+          if (message.moduleId === 'pipeline' && !moduleState.pipeline) {
+            this.analysisService.cancel();
+          }
+          await this.sendState();
+        }
+        break;
       case 'setLiveRemediation':
         await vscode.workspace
           .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
           .update(
-            DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled,
+            LIVE_REMEDIATION_CONFIGURATION_KEY,
             message.liveRemediationEnabled !== false,
             vscode.ConfigurationTarget.Global
           );
@@ -512,7 +543,7 @@ export class DashboardPanel {
         break;
       case 'analyze':
         await this.analyzeRepository(message.folderUri, {
-          steps: this.normalizeRequestedAnalysisSteps(message.analysisSteps)
+          steps: normalizeRequestedPipelineSteps(message.analysisSteps)
         });
         break;
       case 'cancelAnalysis':
@@ -556,6 +587,7 @@ export class DashboardPanel {
     }
 
     const folders = vscode.workspace.workspaceFolders ?? [];
+    const moduleState = getDashboardModuleState();
     await this.refreshConfiguredFolderCount(folders);
     if (folders.length === 0) {
       this.postMessage({
@@ -583,8 +615,10 @@ export class DashboardPanel {
           customScannerCommand: '',
           preAnalysisCommands: '',
           postAnalysisCommands: '',
+          pipelineModuleEnabled: moduleState.pipeline,
+          liveRemediationModuleEnabled: moduleState.liveRemediation,
           notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
-          liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled, true),
+          liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(LIVE_REMEDIATION_CONFIGURATION_KEY, true),
           sonarIdeIntegration: this.sonarIdeIntegrationState(),
           significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
           significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
@@ -604,18 +638,19 @@ export class DashboardPanel {
 
     const config = await getFolderFormConfig(this.context, selectedFolder);
     const configuredRoot = this.analysisRoot(selectedFolder, config.baseDir) ?? selectedFolder.uri.fsPath;
-    const detectedProjectActions = await detectProjectActions(configuredRoot);
-    const customPipelineTemplates = await this.pipelineTemplateStore.list(
-      selectedFolder.uri.toString()
-    );
-    const pipelineTemplates = mergePipelineTemplates(
-      createBuiltinPipelineTemplates(
-        detectedProjectActions,
-        firstNonEmpty(config.buildCommand, detectedProjectActions.buildCommand),
-        firstNonEmpty(config.testCommand, detectedProjectActions.testCommand)
-      ),
-      customPipelineTemplates
-    );
+    const detectedProjectActions = moduleState.pipeline
+      ? await detectProjectActions(configuredRoot)
+      : { integrations: [] };
+    const pipelineTemplates = moduleState.pipeline
+      ? mergePipelineTemplates(
+          createBuiltinPipelineTemplates(
+            detectedProjectActions,
+            firstNonEmpty(config.buildCommand, detectedProjectActions.buildCommand),
+            firstNonEmpty(config.testCommand, detectedProjectActions.testCommand)
+          ),
+          await this.pipelineTemplateStore.list(selectedFolder.uri.toString())
+        )
+      : [];
     const connectionDraftDirty = this.dirtyConnectionFolders.has(
       selectedFolderUri
     );
@@ -651,8 +686,10 @@ export class DashboardPanel {
         analysisInclusions: connectionDraftDirty ? '' : config.analysisInclusions,
         analysisExclusions: connectionDraftDirty ? '' : config.analysisExclusions,
         analysisPermission,
+        pipelineModuleEnabled: moduleState.pipeline,
+        liveRemediationModuleEnabled: moduleState.liveRemediation,
         notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
-        liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled, true),
+        liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(LIVE_REMEDIATION_CONFIGURATION_KEY, true),
         sonarIdeIntegration: this.sonarIdeIntegrationState(),
         significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
         significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
@@ -1208,24 +1245,15 @@ ${selected.name}`,
     const state = this.analysisService.getState();
     if (!state.running) return saved;
 
-    const startedAt = state.startedAt ?? new Date().toISOString();
-    const active: PipelineRunHistoryEntry = {
-      id: 'running-analysis',
-      rootPath,
-      projectKey: config.projectKey,
-      projectName: config.projectName || config.projectKey || folder.name,
-      branch: config.branch ?? '',
-      scanner: state.scanner,
-      status: 'running',
-      message: state.message,
-      startedAt,
-      completedAt: '',
-      durationMs: Math.max(0, Date.now() - new Date(startedAt).getTime()),
-      steps: state.steps.map(step => ({ ...step })),
-      log: [...state.log],
-      comparison: state.comparison
-    };
-    return [active, ...saved];
+    return [
+      createRunningPipelineHistoryEntry(
+        rootPath,
+        config,
+        folder.name,
+        state
+      ),
+      ...saved
+    ];
   }
 
   private async sendPipelineHistory(folderUri?: string): Promise<void> {
@@ -1356,7 +1384,7 @@ ${selected.name}`,
       const dashboardConfiguration = vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION);
       await Promise.all([
         dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, message.notificationsEnabled !== false, vscode.ConfigurationTarget.Global),
-        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.liveRemediationEnabled, message.liveRemediationEnabled !== false, vscode.ConfigurationTarget.Global),
+        dashboardConfiguration.update(LIVE_REMEDIATION_CONFIGURATION_KEY, message.liveRemediationEnabled !== false, vscode.ConfigurationTarget.Global),
         dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, Math.max(1, Number(message.significantIncreasePercent) || 20), vscode.ConfigurationTarget.Global),
         dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, Math.max(1, Number(message.significantIncreaseMinimum) || 5), vscode.ConfigurationTarget.Global)
       ]);
@@ -1386,16 +1414,20 @@ ${selected.name}`,
         : ['unknown' as const, undefined];
       this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
       const savedRoot = this.analysisRoot(folder, message.baseDir ?? '') ?? folder.uri.fsPath;
-      const detectedProjectActions = await detectProjectActions(savedRoot);
-      const customTemplates = await this.pipelineTemplateStore.list(folder.uri.toString());
-      const pipelineTemplates = mergePipelineTemplates(
-        createBuiltinPipelineTemplates(
-          detectedProjectActions,
-          message.buildCommand ?? detectedProjectActions.buildCommand ?? '',
-          message.testCommand ?? detectedProjectActions.testCommand ?? ''
-        ),
-        customTemplates
-      );
+      const moduleState = getDashboardModuleState();
+      const detectedProjectActions = moduleState.pipeline
+        ? await detectProjectActions(savedRoot)
+        : { integrations: [] };
+      const pipelineTemplates = moduleState.pipeline
+        ? mergePipelineTemplates(
+            createBuiltinPipelineTemplates(
+              detectedProjectActions,
+              message.buildCommand ?? detectedProjectActions.buildCommand ?? '',
+              message.testCommand ?? detectedProjectActions.testCommand ?? ''
+            ),
+            await this.pipelineTemplateStore.list(folder.uri.toString())
+          )
+        : [];
 
       const configurationSavedMessage = {
         type: 'configurationSaved',
@@ -1420,6 +1452,8 @@ ${selected.name}`,
           preAnalysisCommands: message.preAnalysisCommands ?? '',
           postAnalysisCommands: message.postAnalysisCommands ?? '',
           sonarCompatibility,
+          pipelineModuleEnabled: moduleState.pipeline,
+          liveRemediationModuleEnabled: moduleState.liveRemediation,
           notificationsEnabled: message.notificationsEnabled !== false,
           liveRemediationEnabled: message.liveRemediationEnabled !== false,
           significantIncreasePercent: Math.max(1, Number(message.significantIncreasePercent) || 20),
@@ -1453,6 +1487,13 @@ ${selected.name}`,
     folderUri?: string,
     requestedActions?: Partial<AnalysisExecutionOptions>
   ): Promise<void> {
+    if (!isDashboardModuleEnabled('pipeline')) {
+      this.postStatus(
+        'error',
+        'El módulo Pipeline está desactivado. Actívalo en Configuración > Módulos para analizar el repositorio.'
+      );
+      return;
+    }
     if (this.analysisService.isRunning()) {
       this.postMessage({ type: 'showAnalysisDialog' });
       return;
@@ -1516,89 +1557,6 @@ ${selected.name}`,
     return false;
   }
 
-  private normalizeRequestedAnalysisSteps(
-    steps: AnalysisExecutionStep[] | undefined
-  ): AnalysisExecutionStep[] {
-    if (!Array.isArray(steps)) {
-      return [];
-    }
-
-    return steps.slice(0, 50).map((step, index) => {
-      const kind = ['build', 'test', 'custom', 'sonar'].includes(step?.kind)
-        ? step.kind
-        : 'custom';
-      const failurePolicy = step?.kind === 'sonar' ||
-        step?.failurePolicy !== 'continue'
-        ? 'stop'
-        : 'continue';
-
-      return {
-        id: firstNonEmpty(step?.id, `step-${index + 1}`).slice(0, 120),
-        name: firstNonEmpty(step?.name, `Paso ${index + 1}`)
-          .trim()
-          .slice(0, 160),
-        kind,
-        command: typeof step?.command === 'string'
-          ? step.command.trim().slice(0, 8000)
-          : undefined,
-        failurePolicy,
-        enabled: step?.enabled !== false
-      };
-    });
-  }
-
-  private defaultAnalysisSteps(
-    config: FolderSonarConfig,
-    buildCommand: string,
-    testCommand: string
-  ): AnalysisExecutionStep[] {
-    const before = parseAnalysisPipeline(
-      config.preAnalysisCommands,
-      'Acción previa'
-    );
-    const after = parseAnalysisPipeline(
-      config.postAnalysisCommands,
-      'Acción posterior'
-    );
-
-    return [
-      ...(buildCommand ? [{
-        id: 'build',
-        name: 'Compilar el proyecto',
-        kind: 'build' as const,
-        command: buildCommand,
-        failurePolicy: 'stop' as const,
-        enabled: true
-      }] : []),
-      ...(testCommand ? [{
-        id: 'tests',
-        name: 'Ejecutar tests',
-        kind: 'test' as const,
-        command: testCommand,
-        failurePolicy: 'stop' as const,
-        enabled: true
-      }] : []),
-      ...before.map(stage => ({
-        ...stage,
-        kind: 'custom' as const,
-        enabled: true
-      })),
-      {
-        id: 'sonarqube-analysis',
-        name: 'Análisis SonarQube',
-        kind: 'sonar' as const,
-        failurePolicy: 'stop' as const,
-        enabled: true
-      },
-      ...after.map(stage => ({
-        ...stage,
-        id: `post-${stage.id}`,
-        kind: 'custom' as const,
-        enabled: true
-      }))
-    ];
-  }
-
   private async prepareAnalysis(
     folder: vscode.WorkspaceFolder,
     requestedActions?: Partial<AnalysisExecutionOptions>
@@ -1640,7 +1598,7 @@ ${selected.name}`,
     const requestedSteps = requestedActions?.steps ?? [];
     const steps = requestedSteps.length > 0
       ? requestedSteps
-      : this.defaultAnalysisSteps(config, buildCommand, testCommand);
+      : createDefaultPipelineSteps(config, buildCommand, testCommand);
 
     return { config, rootPath, actions: { steps }, baseline };
   }
@@ -1729,7 +1687,7 @@ ${selected.name}`,
       .split('/')
       .map(segment => segment.trim())
       .filter(Boolean);
-    if (segments.some(segment => segment === '..')) {
+    if (segments.includes('..')) {
       return undefined;
     }
     const root = path.resolve(folder.uri.fsPath, ...segments);

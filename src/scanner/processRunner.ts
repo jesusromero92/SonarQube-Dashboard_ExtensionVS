@@ -164,7 +164,7 @@ export class ProcessRunner {
   }
 
   private windowsCommandLine(command: string, args: string[]): string {
-    const quote = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+    const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
     const executable = /[\s&()^|<>]/.test(command) ? quote(command) : command;
     const commandLine = [executable, ...args.map(quote)].join(' ');
 

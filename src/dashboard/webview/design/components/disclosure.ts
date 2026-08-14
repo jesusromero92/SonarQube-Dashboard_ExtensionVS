@@ -58,6 +58,19 @@ export const DISCLOSURE_STYLES = `
     .configuration-disclosure-content {
       padding-top: 14px;
     }
+    .module-settings-grid {
+      gap: 12px;
+    }
+    .module-setting {
+      padding: 12px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-editorWidget-background);
+    }
+    .module-setting .hint {
+      margin-top: 6px;
+      padding-left: 24px;
+    }
     .analysis-scope-note {
       margin-top: 10px;
     }

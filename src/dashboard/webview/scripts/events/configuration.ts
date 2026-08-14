@@ -5,8 +5,16 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
         panel: elements.configurationSonarPanel
       },
       {
+        button: elements.configurationModulesTab,
+        panel: elements.configurationModulesPanel
+      },
+      {
         button: elements.configurationPipelineTab,
         panel: elements.configurationPipelinePanel
+      },
+      {
+        button: elements.configurationLiveRemediationTab,
+        panel: elements.configurationLiveRemediationPanel
       },
       {
         button: elements.configurationNotificationsTab,
@@ -14,9 +22,20 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       }
     ];
 
+    function visibleConfigurationTabs() {
+      return configurationTabs.filter(entry => !entry.button.hidden);
+    }
+
     function activateConfigurationTab(button, focus = false) {
+      const requestedEntry = configurationTabs.find(
+        entry => entry.button === button
+      );
+      const targetButton = requestedEntry && !requestedEntry.button.hidden
+        ? button
+        : elements.configurationModulesTab;
+
       for (const entry of configurationTabs) {
-        const active = entry.button === button;
+        const active = entry.button === targetButton && !entry.button.hidden;
         entry.button.classList.toggle('active', active);
         entry.button.setAttribute('aria-selected', String(active));
         entry.button.tabIndex = active ? 0 : -1;
@@ -24,30 +43,55 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       }
 
       if (focus) {
-        button.focus();
+        targetButton.focus();
       }
     }
 
-    for (const [index, entry] of configurationTabs.entries()) {
+    function updateModuleConfigurationVisibility() {
+      const pipelineEnabled = elements.pipelineModuleEnabled.checked;
+      const liveRemediationEnabled =
+        elements.liveRemediationModuleEnabled.checked;
+
+      elements.configurationPipelineTab.hidden = !pipelineEnabled;
+      elements.configurationLiveRemediationTab.hidden =
+        !liveRemediationEnabled;
+
+      const activeEntry = configurationTabs.find(
+        entry => entry.button.classList.contains('active')
+      );
+      if (activeEntry?.button.hidden) {
+        activateConfigurationTab(elements.configurationModulesTab);
+      }
+    }
+
+    for (const entry of configurationTabs) {
       entry.button.addEventListener('click', () => {
-        activateConfigurationTab(entry.button);
+        if (!entry.button.hidden) {
+          activateConfigurationTab(entry.button);
+        }
       });
       entry.button.addEventListener('keydown', event => {
+        const visibleTabs = visibleConfigurationTabs();
+        const index = visibleTabs.findIndex(
+          candidate => candidate.button === entry.button
+        );
+        if (index < 0) return;
+
         let nextIndex = index;
         if (event.key === 'ArrowRight') {
-          nextIndex = (index + 1) % configurationTabs.length;
+          nextIndex = (index + 1) % visibleTabs.length;
         } else if (event.key === 'ArrowLeft') {
-          nextIndex = (index - 1 + configurationTabs.length) % configurationTabs.length;
+          nextIndex = (index - 1 + visibleTabs.length) % visibleTabs.length;
         } else if (event.key === 'Home') {
           nextIndex = 0;
         } else if (event.key === 'End') {
-          nextIndex = configurationTabs.length - 1;
+          nextIndex = visibleTabs.length - 1;
         } else {
           return;
         }
 
         event.preventDefault();
-        activateConfigurationTab(configurationTabs[nextIndex].button, true);
+        activateConfigurationTab(visibleTabs[nextIndex].button, true);
       });
     }
 
@@ -163,6 +207,30 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
 
     elements.analysisExclusions.addEventListener('input', () => {
       clearAnalysisScopeSaveStatus();
+    });
+
+    elements.pipelineModuleEnabled.addEventListener('change', () => {
+      currentConfig.pipelineModuleEnabled =
+        elements.pipelineModuleEnabled.checked;
+      updateModuleConfigurationVisibility();
+      renderAnalysisState(currentAnalysisState);
+      renderEmptyState();
+      vscode.postMessage({
+        type: 'setModule',
+        moduleId: 'pipeline',
+        moduleEnabled: elements.pipelineModuleEnabled.checked
+      });
+    });
+
+    elements.liveRemediationModuleEnabled.addEventListener('change', () => {
+      currentConfig.liveRemediationModuleEnabled =
+        elements.liveRemediationModuleEnabled.checked;
+      updateModuleConfigurationVisibility();
+      vscode.postMessage({
+        type: 'setModule',
+        moduleId: 'liveRemediation',
+        moduleEnabled: elements.liveRemediationModuleEnabled.checked
+      });
     });
 
     elements.liveRemediationEnabled.addEventListener('change', () => {

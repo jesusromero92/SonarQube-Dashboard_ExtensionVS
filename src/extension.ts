@@ -11,8 +11,6 @@ import {
   DASHBOARD_PANEL_VIEW_TYPE,
   ISSUE_TREE_GROUPS,
   ISSUE_TREE_VIEW_ID,
-  LOCALLY_FIXED_ISSUES_TREE_VIEW_ID,
-  PIPELINE_EXECUTION_TREE_VIEW_ID,
   QUALITY_GATE_STATUS_RANKS,
   RATING_GRADE_RANKS,
   SONAR_CONFIGURATION_SECTION
@@ -43,10 +41,22 @@ import {
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { IssueNavigationManager } from './issueNavigation';
-import { LiveRemediationManager } from './liveRemediation';
+import {
+  LiveRemediationManager,
+  LocallyModifiedIssuesTreeProvider,
+  LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
+  OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND
+} from './liveRemediation';
 import { IssueTreeProvider } from './issueTreeView';
-import { LocallyFixedIssuesTreeProvider } from './locallyFixedIssuesTreeView';
-import { PipelineExecutionTreeProvider } from './pipelineExecutionTreeView';
+import {
+  MODULE_CONFIGURATION_KEYS,
+  updateDashboardModuleContexts
+} from './modules';
+import {
+  PIPELINE_COMMANDS,
+  PIPELINE_EXECUTION_TREE_VIEW_ID,
+  PipelineExecutionTreeProvider
+} from './pipeline';
 import {
   NotificationManager,
   NotificationScope
@@ -81,7 +91,7 @@ let flowController: IssueFlowController;
 let issueNavigation: IssueNavigationManager;
 let liveRemediation: LiveRemediationManager;
 let issueTree: IssueTreeProvider;
-let locallyFixedIssuesTree: LocallyFixedIssuesTreeProvider;
+let locallyModifiedIssuesTree: LocallyModifiedIssuesTreeProvider;
 let pipelineExecutionTree: PipelineExecutionTreeProvider;
 let notifications: NotificationManager;
 
@@ -593,9 +603,6 @@ function applyLiveRemediationState(): void {
     liveRemediation.getStates(),
     liveRemediation.getRanges()
   );
-  issueNavigation.setLocallyFixedIssueKeys(
-    liveRemediation.getLocallyFixedIssueKeys()
-  );
   issueTree.refresh();
 }
 
@@ -605,7 +612,7 @@ function applyRefreshSummary(
   source: 'sync' | 'analysis'
 ): number {
   issueDecorations.setIssues(summary.issues, summary.hotspots);
-  const confirmedLocallyFixedCount = liveRemediation.applyServerSnapshot(
+  const confirmedLocallyModifiedCount = liveRemediation.applyServerSnapshot(
     summary.issues,
     operation.pendingDiagnostics,
     source === 'analysis'
@@ -622,7 +629,7 @@ function applyRefreshSummary(
     dashboardPanel?.setLoading(false);
   }
 
-  return confirmedLocallyFixedCount;
+  return confirmedLocallyModifiedCount;
 }
 
 function showSuccessfulRefreshStatus(summary: RefreshSummary): void {
@@ -679,9 +686,9 @@ async function refreshAll(
     }
 
     prepareRefreshSummary(summary);
-    const confirmedLocallyFixedCount = applyRefreshSummary(summary, operation, source);
+    const confirmedLocallyModifiedCount = applyRefreshSummary(summary, operation, source);
     runAsync(
-      notifications.evaluate(notificationScopes, source, confirmedLocallyFixedCount),
+      notifications.evaluate(notificationScopes, source, confirmedLocallyModifiedCount),
       'notification evaluation'
     );
     showSuccessfulRefreshStatus(summary);
@@ -830,7 +837,8 @@ function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode
   return vscode.Uri.parse(url.toString());
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  await updateDashboardModuleContexts();
   diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
   liveRemediation = new LiveRemediationManager(context, diagnostics);
   issueDecorations = new IssueDecorationManager(context.extensionUri);
@@ -838,7 +846,7 @@ export function activate(context: vscode.ExtensionContext): void {
   flowController = new IssueFlowController();
   issueNavigation = new IssueNavigationManager();
   issueTree = new IssueTreeProvider(issueNavigation);
-  locallyFixedIssuesTree = new LocallyFixedIssuesTreeProvider(liveRemediation);
+  locallyModifiedIssuesTree = new LocallyModifiedIssuesTreeProvider(liveRemediation);
   notifications = new NotificationManager(context);
   const issueCodeLensProvider = new SonarIssueCodeLensProvider(issueDecorations);
   context.subscriptions.push(
@@ -849,7 +857,7 @@ export function activate(context: vscode.ExtensionContext): void {
     flowController,
     issueNavigation,
     issueTree,
-    locallyFixedIssuesTree,
+    locallyModifiedIssuesTree,
     issueCodeLensProvider,
     liveRemediation.onDidChange(() => applyLiveRemediationState())
   );
@@ -883,8 +891,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(ISSUE_TREE_VIEW_ID, issueTree),
     vscode.window.registerTreeDataProvider(
-      LOCALLY_FIXED_ISSUES_TREE_VIEW_ID,
-      locallyFixedIssuesTree
+      LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
+      locallyModifiedIssuesTree
     ),
     vscode.window.registerTreeDataProvider(
       PIPELINE_EXECUTION_TREE_VIEW_ID,
@@ -908,8 +916,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     ),
     vscode.commands.registerCommand(
-      DASHBOARD_COMMANDS.openLocallyFixedIssue,
-      (issueKey: string) => liveRemediation.revealLocallyFixedIssue(issueKey)
+      OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,
+      (issueKey: string) => liveRemediation.revealLocallyModifiedIssue(issueKey)
     ),
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.getStarted,
@@ -954,7 +962,7 @@ export function activate(context: vscode.ExtensionContext): void {
       () => dashboardPanel?.cancelAnalysis()
     ),
     vscode.commands.registerCommand(
-      DASHBOARD_COMMANDS.openPipelineExecution,
+      PIPELINE_COMMANDS.openExecution,
       async (executionId: string) => {
         if (!dashboardPanel) return;
         await dashboardPanel.showPipelineExecution(executionId);
@@ -1204,6 +1212,21 @@ export function activate(context: vscode.ExtensionContext): void {
           event.affectsConfiguration(SONAR_CONFIGURATION_SECTION)
         ) {
           configureRefreshTimer(context);
+          if (
+            event.affectsConfiguration(
+              `${DASHBOARD_CONFIGURATION_SECTION}.${MODULE_CONFIGURATION_KEYS.pipeline}`
+            ) ||
+            event.affectsConfiguration(
+              `${DASHBOARD_CONFIGURATION_SECTION}.${MODULE_CONFIGURATION_KEYS.liveRemediation}`
+            )
+          ) {
+            runAsync(
+              updateDashboardModuleContexts(),
+              'module context refresh'
+            );
+            pipelineExecutionTree.refresh();
+            locallyModifiedIssuesTree.refresh();
+          }
           if (event.affectsConfiguration(`${DASHBOARD_CONFIGURATION_SECTION}.${DASHBOARD_CONFIGURATION_KEYS.language}`)) {
             runAsync(
               dashboardPanel?.refreshLanguage(),

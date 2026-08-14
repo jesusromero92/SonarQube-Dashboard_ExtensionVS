@@ -2,7 +2,7 @@
   "name": "vscode-sonarqube-dashboard-pipeline",
   "displayName": "SonarQube Dashboard & Pipeline",
   "description": "%extension.description%",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "publisher": "jesusromero",
   "license": "SEE LICENSE IN LICENSE",
   "icon": "media/sonarqube-dashboard.png",
@@ -68,7 +68,7 @@
         {
           "id": "sonarQubeDashboard.pipelineExecutions",
           "name": "%views.pipelineExecutions.name%",
-          "when": "workspaceFolderCount > 0"
+          "when": "workspaceFolderCount > 0 && sonarQubeDashboard.module.pipeline.enabled"
         },
         {
           "id": "sonarQubeDashboard.issueTree",
@@ -76,9 +76,9 @@
           "when": "workspaceFolderCount > 0"
         },
         {
-          "id": "sonarQubeDashboard.locallyFixedIssues",
-          "name": "%views.locallyFixedIssues.name%",
-          "when": "workspaceFolderCount > 0"
+          "id": "sonarQubeDashboard.locallyModifiedIssues",
+          "name": "%views.locallyModifiedIssues.name%",
+          "when": "workspaceFolderCount > 0 && sonarQubeDashboard.module.liveRemediation.enabled"
         }
       ]
     },
@@ -228,6 +228,18 @@
           "minimum": 0,
           "scope": "window",
           "description": "%configuration.refreshIntervalMinutes.description%"
+        },
+        "sonarQubeDashboard.modules.pipeline.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%configuration.modules.pipeline.enabled.description%"
+        },
+        "sonarQubeDashboard.modules.liveRemediation.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%configuration.modules.liveRemediation.enabled.description%"
         },
         "sonarQubeDashboard.liveRemediation.enabled": {
           "type": "boolean",
@@ -429,8 +441,8 @@
         "contents": "%viewsWelcome.pipeline%"
       },
       {
-        "view": "sonarQubeDashboard.locallyFixedIssues",
-        "contents": "%viewsWelcome.locallyFixedIssues%"
+        "view": "sonarQubeDashboard.locallyModifiedIssues",
+        "contents": "%viewsWelcome.locallyModifiedIssues%"
       }
     ]
   },

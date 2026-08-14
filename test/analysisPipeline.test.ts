@@ -5,9 +5,9 @@ import {
   expandAnalysisPipelineCommand,
   parseAnalysisPipeline,
   serializeAnalysisPipeline
-} from '../src/scanner/pipeline';
-import { PIPELINE_EDITOR_SCRIPT } from '../src/dashboard/webview/scripts/pipelineEditor';
-import { ANALYSIS_STYLES } from '../src/dashboard/webview/styles/analysis';
+} from '../src/pipeline/parser';
+import { PIPELINE_EDITOR_SCRIPT } from '../src/pipeline/webview/editor';
+import { PIPELINE_STYLES } from '../src/pipeline/webview/styles';
 
 test('parseAnalysisPipeline crea etapas nombradas, condiciones y omite comentarios', () => {
   const stages = parseAnalysisPipeline(
@@ -137,8 +137,8 @@ test('el stepper usa iconos SVG y no símbolos de texto para los estados', () =>
   assert.match(PIPELINE_EDITOR_SCRIPT, /createAnalysisStepStatusIcon/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /data-codicon|dataset\.codicon/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /createElementNS\('http:\/\/www\.w3\.org\/2000\/svg', 'svg'\)/);
-  assert.doesNotMatch(ANALYSIS_STYLES, /content:\s*["'](?:✓|×|!|–)["']/);
-  assert.match(ANALYSIS_STYLES, /\.analysis-step-status-icon/);
+  assert.doesNotMatch(PIPELINE_STYLES, /content:\s*["'](?:✓|×|!|–)["']/);
+  assert.match(PIPELINE_STYLES, /\.analysis-step-status-icon/);
 });
 
 test('el stepper se oculta cuando el pipeline solo tiene un paso', () => {

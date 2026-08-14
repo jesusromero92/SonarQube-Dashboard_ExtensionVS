@@ -3,12 +3,12 @@ import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import { detectProjectActions } from '../src/scanner/projectActions';
-import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisConfirmationDialog';
-import { ANALYSIS_SCRIPT } from '../src/dashboard/webview/scripts/analysis';
-import { PIPELINE_EDITOR_SCRIPT } from '../src/dashboard/webview/scripts/pipelineEditor';
+import { detectProjectActions } from '../src/pipeline/projectActions';
+import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/pipeline/webview/modals/analysisConfirmationDialog';
+import { ANALYSIS_SCRIPT } from '../src/pipeline/webview/analysis';
+import { PIPELINE_EDITOR_SCRIPT } from '../src/pipeline/webview/editor';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
-import { ANALYSIS_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisDialog';
+import { ANALYSIS_DIALOG_MARKUP } from '../src/pipeline/webview/modals/analysisDialog';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
 

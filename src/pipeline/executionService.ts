@@ -1,27 +1,29 @@
 import { Dirent, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { detectScanner } from './detector';
+import { detectScanner } from '../scanner/detector';
 import {
   analysisScopeProperties,
   hasExplicitAnalysisScope,
   normalizeAnalysisPatterns
-} from './analysisScope';
+} from '../scanner/analysisScope';
 import {
   expandAnalysisPipelineCommand,
   parseAnalysisPipeline
-} from './pipeline';
+} from './parser';
 import { PipelineHistoryStore } from './history';
-import { ProcessRunner } from './processRunner';
+import { ProcessRunner } from '../scanner/processRunner';
 import {
   AnalysisBaselineComparison,
   AnalysisExecutionStep,
   AnalysisRequest,
-  AnalysisState,
+  AnalysisState
+} from './models';
+import {
   DetectedScanner,
   ProcessSpec,
   SonarCeTaskResponse
-} from './types';
+} from '../scanner/types';
 
 const MAX_LOG_CHUNKS = 4000;
 const MAX_LOG_CHARACTERS = 400_000;

@@ -10,11 +10,11 @@ const read = (relativePath: string): string => readFileSync(
 
 test('la versión 1.3.0 mantiene la aplicación inmediata de plantillas de la 1.2.1', () => {
   const packageManifest = JSON.parse(read('package.json')) as { version?: string };
-  const modal = read('src/dashboard/webview/modals/analysisConfirmationDialog.ts');
+  const modal = read('src/pipeline/webview/modals/analysisConfirmationDialog.ts');
   const events = read('src/dashboard/webview/scripts/events/dialogs.ts');
-  const pipelineEditor = read('src/dashboard/webview/scripts/pipelineEditor.ts');
+  const pipelineEditor = read('src/pipeline/webview/editor.ts');
 
-  assert.equal(packageManifest.version, '1.4.0');
+  assert.equal(packageManifest.version, '2.0.0');
   assert.doesNotMatch(modal, /applyAnalysisPipelineTemplate/);
   assert.doesNotMatch(modal, /Aplicar plantilla/);
   assert.match(

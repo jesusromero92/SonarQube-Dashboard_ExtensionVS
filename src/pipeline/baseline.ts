@@ -2,7 +2,7 @@ import type { SonarAnalysisBaselineData } from '../types';
 import type {
   AnalysisBaselineComparison,
   AnalysisBaselineSnapshot
-} from './types';
+} from './models';
 
 export function createAnalysisBaselineSnapshot(
   data: SonarAnalysisBaselineData,

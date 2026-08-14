@@ -9,15 +9,15 @@ import { RULE_DIALOG_SCRIPT } from './modals/ruleDialog';
 import { HOTSPOTS_TABLE_SCRIPT } from './tables/hotspotsTable';
 import { ISSUES_TABLE_SCRIPT } from './tables/issuesTable';
 import { RANKING_TABLES_SCRIPT } from './tables/rankingTables';
-import { PIPELINE_EDITOR_SCRIPT } from './pipelineEditor';
-import { ANALYSIS_SCRIPT } from './analysis';
+import { PIPELINE_EDITOR_SCRIPT } from '../../../pipeline/webview/editor';
+import { ANALYSIS_SCRIPT } from '../../../pipeline/webview/analysis';
 import { ISSUE_MANAGEMENT_SCRIPT } from './features/issues';
 import { COVERAGE_SCRIPT } from './coverage';
 import { SELECT_DROPDOWN_SCRIPT } from './ui/selectDropdown';
 import { CREATE_COMPONENT_DIALOG_SCRIPT } from './modals/createComponentDialog';
 import { DIAGNOSTICS_SCRIPT } from './diagnostics';
-import { HISTORY_SCRIPT } from './history';
-import { BASELINE_SCRIPT } from './baseline';
+import { HISTORY_SCRIPT } from '../../../pipeline/webview/history';
+import { BASELINE_SCRIPT } from '../../../pipeline/webview/baseline';
 import { TERMINAL_SCRIPT } from './terminal';
 
 export function getDashboardScript(language: DashboardLanguage): string {

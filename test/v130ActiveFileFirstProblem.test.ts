@@ -35,7 +35,7 @@ test('README y changelog documentan el salto al primer problema del archivo acti
 
 
 test('al restaurar la ventana Problems recibe el archivo activo en una actualización separada', () => {
-  const source = read('src/liveRemediation.ts');
+  const source = read('src/liveRemediation/manager.ts') + read('src/liveRemediation/constants.ts');
   const navigation = read('src/issueNavigation.ts');
 
   assert.match(source, /ACTIVE_PROBLEMS_REVEAL_DELAY_MS = 120/);

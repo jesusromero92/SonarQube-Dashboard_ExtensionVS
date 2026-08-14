@@ -47,7 +47,9 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
             <div class="panel-body configuration-panel-body">
               <nav class="configuration-tabs" role="tablist" aria-label="Secciones de configuración">
                 <button id="configurationSonarTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="configurationSonarPanel" tabindex="0">SonarQube</button>
-                <button id="configurationPipelineTab" type="button" role="tab" aria-selected="false" aria-controls="configurationPipelinePanel" tabindex="-1">Pipeline</button>
+                <button id="configurationModulesTab" type="button" role="tab" aria-selected="false" aria-controls="configurationModulesPanel" tabindex="-1">Módulos</button>
+                <button id="configurationPipelineTab" type="button" role="tab" aria-selected="false" aria-controls="configurationPipelinePanel" tabindex="-1" hidden>Pipeline</button>
+                <button id="configurationLiveRemediationTab" type="button" role="tab" aria-selected="false" aria-controls="configurationLiveRemediationPanel" tabindex="-1" hidden>Live Remediation</button>
                 <button id="configurationNotificationsTab" type="button" role="tab" aria-selected="false" aria-controls="configurationNotificationsPanel" tabindex="-1">Notificaciones</button>
               </nav>
 
@@ -169,31 +171,34 @@ ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'a
                 </div>
               </details>
 
-              <details class="configuration-disclosure">
-                <summary>Integración con el editor</summary>
-                <div class="configuration-disclosure-content">
-                  <div class="configuration-section-intro">
-                    <strong>Remediación en vivo</strong>
-                    <p class="hint">Mantén el estado local de los defectos sincronizado mientras editas el código, sin marcar como corregido en SonarQube nada que el servidor todavía no haya confirmado.</p>
-                  </div>
-                  <div class="form-grid advanced-grid">
-                    <div class="field full-width-field checkbox-field">
-                      <label>
-                        <input id="liveRemediationEnabled" type="checkbox" checked>
-                        Activar seguimiento de remediación en vivo
-                      </label>
-                      <div class="hint">Los defectos tocados pasan a pendiente de validación. Si SonarQube for IDE también está activo y deja de detectar el mismo defecto, se oculta de Problems como corregido localmente hasta el siguiente análisis del repositorio.</div>
+              </section>
+
+              <section id="configurationModulesPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationModulesTab" hidden>
+                <details class="configuration-disclosure" open>
+                  <summary>Módulos</summary>
+                  <div class="configuration-disclosure-content">
+                    <div class="configuration-section-intro">
+                      <strong>Activa solo las funciones que necesitas</strong>
+                      <p class="hint">Cada módulo habilita su lógica, su vista lateral y su pestaña de configuración. Los cambios se aplican inmediatamente.</p>
                     </div>
-                    <div id="sonarIdeStatus" class="live-remediation-analyzer-status live-remediation-analyzer-status--missing" role="status" aria-live="polite">
-                      <span id="sonarIdeStatusIcon" class="live-remediation-analyzer-icon" aria-hidden="true">—</span>
-                      <div class="live-remediation-analyzer-copy">
-                        <strong id="sonarIdeStatusTitle">SonarQube for IDE no detectado</strong>
-                        <div id="sonarIdeStatusHint" class="hint">No es obligatorio. Los defectos modificados permanecerán pendientes de validación hasta el siguiente análisis del repositorio.</div>
+                    <div class="form-grid advanced-grid module-settings-grid">
+                      <div class="field full-width-field checkbox-field module-setting">
+                        <label>
+                          <input id="pipelineModuleEnabled" type="checkbox" checked>
+                          Pipeline
+                        </label>
+                        <div class="hint">Análisis del repositorio, pasos y plantillas, integraciones, historial de ejecuciones y comparación antes/después.</div>
+                      </div>
+                      <div class="field full-width-field checkbox-field module-setting">
+                        <label>
+                          <input id="liveRemediationModuleEnabled" type="checkbox" checked>
+                          Live Remediation
+                        </label>
+                        <div class="hint">Seguimiento de cambios locales sobre issues sincronizados, validación opcional con SonarQube for IDE y vista de issues modificados localmente.</div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </details>
+                </details>
               </section>
 
               <section id="configurationPipelinePanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationPipelineTab" hidden>
@@ -305,6 +310,34 @@ ${configurationDropdown('pipelineTemplate', 'Plantilla de pipeline', [{ value: '
                       <p class="hint">Añade al pipeline herramientas compatibles detectadas en el proyecto.</p>
                     </div>
                     <div id="detectedIntegrations" class="detected-integrations" aria-label="Integraciones predefinidas detectadas"></div>
+                  </div>
+                </details>
+              </section>
+
+              <section id="configurationLiveRemediationPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationLiveRemediationTab" hidden>
+                <details class="configuration-disclosure" open>
+                  <summary>Integración con el editor</summary>
+                  <div class="configuration-disclosure-content">
+                    <div class="configuration-section-intro">
+                      <strong>Remediación en vivo</strong>
+                      <p class="hint">Mantén el estado local de los defectos sincronizado mientras editas el código, sin marcar como corregido en SonarQube nada que el servidor todavía no haya confirmado.</p>
+                    </div>
+                    <div class="form-grid advanced-grid">
+                      <div class="field full-width-field checkbox-field">
+                        <label>
+                          <input id="liveRemediationEnabled" type="checkbox" checked>
+                          Activar seguimiento de remediación en vivo
+                        </label>
+                        <div class="hint">Los defectos tocados pasan a modificado localmente y pendiente de validación. Si SonarQube for IDE deja de detectar el mismo defecto, sigue siendo modificado localmente y pasa a pendiente de confirmación de SonarQube; solo el análisis del servidor puede confirmar que está resuelto.</div>
+                      </div>
+                      <div id="sonarIdeStatus" class="live-remediation-analyzer-status live-remediation-analyzer-status--missing" role="status" aria-live="polite">
+                        <span id="sonarIdeStatusIcon" class="live-remediation-analyzer-icon" aria-hidden="true">—</span>
+                        <div class="live-remediation-analyzer-copy">
+                          <strong id="sonarIdeStatusTitle">SonarQube for IDE no detectado</strong>
+                          <div id="sonarIdeStatusHint" class="hint">No es obligatorio. Los defectos modificados permanecerán pendientes de validación hasta el siguiente análisis del repositorio.</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </details>
               </section>

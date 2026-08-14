@@ -1,5 +1,5 @@
 import { getBaselineComparisonMarkup } from '../components/baselineComparison';
-import { getAccordionMarkup } from '../components/ui/accordion';
+import { getAccordionMarkup } from '../../../dashboard/webview/components/ui/accordion';
 
 const STEPS_ACCORDION_MARKUP = getAccordionMarkup({
   label: 'Pasos de la ejecución',

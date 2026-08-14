@@ -30,6 +30,7 @@ export const NAVIGATION_CORE_SCRIPT = `
     }
 
     function canAnalyze() {
-      return currentConfig.analysisPermission !== 'denied';
+      return currentConfig.pipelineModuleEnabled !== false &&
+        currentConfig.analysisPermission !== 'denied';
     }
 `;

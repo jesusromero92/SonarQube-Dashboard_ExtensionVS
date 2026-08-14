@@ -1,5 +1,5 @@
 import { DashboardLanguage } from '../i18n';
-import { AnalysisExecutionStep } from '../scanner/types';
+import type { AnalysisExecutionStep } from '../pipeline';
 import {
   IssueMutationKind,
   RefreshSummary,
@@ -56,6 +56,8 @@ export interface DashboardWebviewMessage {
   groupIndex?: number;
   notificationsEnabled?: boolean;
   liveRemediationEnabled?: boolean;
+  moduleId?: 'pipeline' | 'liveRemediation';
+  moduleEnabled?: boolean;
   significantIncreasePercent?: number;
   significantIncreaseMinimum?: number;
   componentKind?: SonarCreatableComponentKind;

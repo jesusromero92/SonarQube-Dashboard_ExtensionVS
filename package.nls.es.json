@@ -18,7 +18,9 @@
   "configuration.sonar_baseDir.description": "Subcarpeta local asociada a la raíz del proyecto. Se gestiona desde el dashboard.",
   "configuration.autoRefresh.description": "Actualiza los defectos automáticamente al abrir o cambiar el workspace.",
   "configuration.refreshIntervalMinutes.description": "Intervalo de actualización. 0 desactiva la actualización periódica.",
-  "configuration.liveRemediation.enabled.description": "Sigue las ediciones locales de los defectos sincronizados. SonarQube for IDE es opcional: si está activo, sus diagnósticos independientes pueden marcar un defecto como corregido localmente; sin él, los cambios quedan pendientes de validación hasta el siguiente análisis del servidor.",
+  "configuration.modules.pipeline.enabled.description": "Activa el módulo Pipeline. Al desactivarlo, el análisis por pipeline, el historial, su vista lateral y su pestaña de configuración dejan de estar disponibles.",
+  "configuration.modules.liveRemediation.enabled.description": "Activa el módulo Live Remediation. Al desactivarlo, el seguimiento local de issues, su vista lateral, su estado en la barra y su pestaña de configuración dejan de estar disponibles.",
+  "configuration.liveRemediation.enabled.description": "Sigue las ediciones locales de los defectos sincronizados. SonarQube for IDE es opcional: cuando está activo, sus diagnósticos independientes ayudan a distinguir entre cambios pendientes de validación y cambios pendientes de confirmación del servidor, sin declarar un defecto como corregido antes del análisis de SonarQube.",
   "configuration.sonar_scannerMode.description": "Método empleado por el botón Analizar repositorio.",
   "configuration.scannerMode.auto": "Detecta Maven, Gradle y .NET; usa NPM con package.json o Docker para proyectos genéricos.",
   "configuration.scannerMode.maven": "Usa SonarScanner for Maven.",
@@ -67,6 +69,6 @@
   "walkthrough.results.alt": "Dashboard con Quality Gate, ratings, issues y métricas del proyecto",
   "viewsWelcome.issues": "No hay issues de SonarQube cargadas para este workspace.\n[Abrir configuración](command:sonarQubeDashboard.configure)\n[Actualizar datos de SonarQube](command:sonarQubeDashboard.refresh)",
   "viewsWelcome.pipeline": "Todavía no hay ejecuciones del pipeline.\n[Abrir configuración del pipeline](command:sonarQubeDashboard.configure)\n[Analizar repositorio](command:sonarQubeDashboard.analyze)",
-  "views.locallyFixedIssues.name": "Issues corregidos localmente",
-  "viewsWelcome.locallyFixedIssues": "No hay issues corregidos localmente pendientes de confirmación de SonarQube."
+  "views.locallyModifiedIssues.name": "Issues modificados localmente",
+  "viewsWelcome.locallyModifiedIssues": "No hay issues modificados localmente pendientes de validación o confirmación de SonarQube."
 }

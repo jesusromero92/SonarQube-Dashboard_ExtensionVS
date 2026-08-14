@@ -4,8 +4,8 @@ import { getFolderFormConfig, tokenKey } from '../configuration';
 import { detectScanner } from '../scanner/detector';
 import {
   detectProjectActions,
-  DetectedProjectIntegration
-} from '../scanner/projectActions';
+  type DetectedProjectIntegration
+} from '../pipeline';
 import {
   fetchSonarCompatibilityInfo,
   probeSonarServer

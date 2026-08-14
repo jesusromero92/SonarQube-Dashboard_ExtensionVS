@@ -1,17 +1,16 @@
 import * as vscode from 'vscode';
 import {
-  DASHBOARD_COMMANDS,
+  PIPELINE_COMMANDS,
   PIPELINE_EXECUTION_TREE_VIEW_ID
 } from './constants';
-import { DashboardPanel } from './dashboardPanel';
-import { getDashboardLanguage } from './i18n';
+import { DashboardLanguage, getDashboardLanguage } from '../i18n';
 import {
   AnalysisState,
   AnalysisStepProgress,
   PipelineRunHistoryEntry,
   PipelineRunHistoryStatus,
   PipelineRunHistoryStep
-} from './scanner/types';
+} from './models';
 
 type PipelineExecutionTreeNode = ExecutionNode | StepNode;
 
@@ -29,6 +28,14 @@ interface StepNode {
 
 const RUNNING_EXECUTION_ID = 'running-analysis';
 
+export interface PipelineExecutionDashboard {
+  onDidChangeAnalysis: vscode.Event<AnalysisState>;
+  onDidChangeLanguage: vscode.Event<DashboardLanguage>;
+  getPipelineExecutions(): Promise<PipelineRunHistoryEntry[]>;
+  showPipelineExecution(executionId: string): Promise<void>;
+}
+
+
 export class PipelineExecutionTreeProvider
 implements vscode.TreeDataProvider<PipelineExecutionTreeNode>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<
@@ -40,7 +47,7 @@ implements vscode.TreeDataProvider<PipelineExecutionTreeNode>, vscode.Disposable
 
   readonly onDidChangeTreeData = this.emitter.event;
 
-  constructor(private readonly dashboardPanel: DashboardPanel) {
+  constructor(private readonly dashboardPanel: PipelineExecutionDashboard) {
     this.subscriptions = [
       dashboardPanel.onDidChangeAnalysis(state => {
         const signature = analysisStateTreeSignature(state);
@@ -126,7 +133,7 @@ implements vscode.TreeDataProvider<PipelineExecutionTreeNode>, vscode.Disposable
       ? 'sonarPipelineExecutionRunning'
       : 'sonarPipelineExecution';
     item.command = {
-      command: DASHBOARD_COMMANDS.openPipelineExecution,
+      command: PIPELINE_COMMANDS.openExecution,
       title: spanish ? 'Abrir ejecución' : 'Open execution',
       arguments: [entry.id]
     };

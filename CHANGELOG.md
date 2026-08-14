@@ -4,6 +4,36 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
+## [2.0.0] - 2026-08-14
+
+### Added
+
+- Added a new **Configuration → Modules** area that independently enables or disables the **Pipeline** and **Live Remediation** modules. Module-specific configuration tabs are only shown while their module is active.
+
+  *Se ha añadido una nueva sección **Configuración → Módulos** que permite activar o desactivar de forma independiente los módulos **Pipeline** y **Live Remediation**. Las pestañas de configuración específicas de cada módulo solo se muestran mientras el módulo está activo.*
+
+- Added centralized module state management under `src/modules/`, including VS Code context keys so native sidebar views react immediately when a module is toggled.
+
+  *Se ha añadido la gestión centralizada del estado de módulos bajo `src/modules/`, incluyendo context keys de VS Code para que las vistas nativas de la barra lateral reaccionen inmediatamente al activar o desactivar un módulo.*
+
+### Changed
+
+- **Pipeline** is now an optional module. Disabling it hides its configuration tab and native execution view, removes repository-analysis actions from the dashboard, blocks pipeline commands, cancels an active pipeline, and skips project-action/template discovery while the module is off.
+
+  ***Pipeline** pasa a ser un módulo opcional. Al desactivarlo se ocultan su pestaña de configuración y la vista nativa de ejecuciones, desaparecen las acciones de análisis del repositorio, se bloquean los comandos de pipeline, se cancela una ejecución activa y se evita detectar acciones/plantillas mientras el módulo está apagado.*
+
+- **Live Remediation** is now an optional module independent from its own tracking switch. Disabling the module hides its configuration tab and native locally-modified view and disables local remediation tracking while normal SonarQube diagnostics remain available.
+
+  ***Live Remediation** pasa a ser un módulo opcional independiente de su interruptor interno de seguimiento. Al desactivar el módulo se ocultan su pestaña de configuración y la vista nativa de issues modificados localmente y se desactiva el seguimiento de remediación, manteniendo disponibles los diagnósticos normales de SonarQube.*
+
+- The extension version is now **2.0.0**, reflecting the new modular architecture. Pipeline remains centralized in `src/pipeline/` and Live Remediation in `src/liveRemediation/`, with shared module lifecycle/configuration logic isolated in `src/modules/`.
+
+  *La versión de la extensión pasa a ser **2.0.0**, reflejando la nueva arquitectura modular. Pipeline continúa centralizado en `src/pipeline/` y Live Remediation en `src/liveRemediation/`, mientras la lógica compartida de ciclo de vida/configuración de módulos queda aislada en `src/modules/`.*
+
+- Live Remediation no longer labels a local analyzer disappearance as **Fixed locally**. Until a repository analysis confirms the server result, every edited server issue remains **Modified locally**: first **pending validation**, then optionally **awaiting SonarQube confirmation** when SonarQube for IDE stops reporting the previously matched finding. The native view is renamed to **Issues modified locally**, uses a modified/edit indicator instead of a green pass icon, and pending findings remain available in normal issue navigation.
+
+  *Live Remediation deja de etiquetar como **Corregido localmente** la desaparición de un diagnóstico del analizador local. Hasta que un análisis del repositorio confirme el resultado del servidor, todo issue editado permanece **Modificado localmente**: primero **pendiente de validación** y, opcionalmente, **pendiente de confirmación de SonarQube** cuando SonarQube for IDE deja de informar del hallazgo previamente correlacionado. La vista nativa pasa a llamarse **Issues modificados localmente**, utiliza un indicador de edición/modificación en lugar del check verde y los hallazgos pendientes siguen disponibles en la navegación normal de issues.*
+
 ## [1.4.0] - 2026-08-13
 
 ### Added
@@ -34,6 +64,18 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 ### Changed
 
+- Live remediation is now fully migrated to `src/liveRemediation/` and split into focused modules for state management, persistence, range tracking, SonarQube for IDE diagnostic correlation, diagnostics, shared models/constants, and the native locally-fixed tree view. The previous root-level compatibility facades have been removed; all internal consumers now import the dedicated module directly.
+
+  *La remediación en vivo queda migrada por completo a `src/liveRemediation/` y se divide en módulos específicos para gestión de estado, persistencia, seguimiento de rangos, correlación de diagnósticos con SonarQube for IDE, diagnósticos, modelos/constantes compartidos y la vista nativa de issues corregidos localmente. Se eliminan las antiguas fachadas de compatibilidad de la raíz y todos los consumidores internos importan directamente el módulo dedicado.*
+
+- Pipeline functionality is now centralized under `src/pipeline/`. Execution orchestration, history, templates, project-action detection, baseline comparison, pipeline models/constants, the native execution tree, and pipeline-specific webview scripts/pages/modals now live behind the pipeline module instead of being scattered across the root, `scanner/`, and dashboard webview folders.
+
+  *La funcionalidad de pipeline queda ahora centralizada bajo `src/pipeline/`. La orquestación de ejecuciones, historial, plantillas, detección de acciones del proyecto, comparación de línea base, modelos/constantes del pipeline, la vista nativa de ejecuciones y los scripts/páginas/modales específicos del pipeline pasan a vivir detrás del módulo de pipeline en lugar de estar repartidos entre la raíz, `scanner/` y las carpetas del webview del dashboard.*
+
+- Pending-remediation persistence is now debounced instead of writing `workspaceState` on every keystroke, and external Sonar diagnostic snapshots are deduplicated so dashboard-owned marker updates do not schedule unnecessary SonarQube for IDE reevaluations.
+
+  *La persistencia de la remediación pendiente se agrupa ahora mediante debounce en lugar de escribir `workspaceState` en cada pulsación, y los snapshots de diagnósticos Sonar externos se deduplican para que las actualizaciones de marcadores del propio dashboard no programen reevaluaciones innecesarias de SonarQube for IDE.*
+
 - Live remediation now explicitly detects the official **SonarQube for IDE** VS Code extension and shows its installed/active state in **Configuration → SonarQube → Editor integration**. SonarQube for IDE remains optional: without an active local analyzer, edited findings stay pending validation until the next server analysis.
 
   *La remediación en vivo detecta ahora explícitamente la extensión oficial **SonarQube for IDE** para VS Code y muestra su estado instalado/activo en **Configuración → SonarQube → Integración con el editor**. SonarQube for IDE sigue siendo opcional: sin un analizador local activo, los defectos editados permanecen pendientes de validación hasta el siguiente análisis del servidor.*
@@ -51,6 +93,14 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
   *La integración con SonarQube for IDE es deliberadamente conservadora: un issue solo se clasifica como corregido localmente cuando la misma regla/ubicación se había observado previamente mediante un diagnóstico Sonar externo. Si no existe confirmación independiente del analizador local, la extensión mantiene el estado más seguro **Modificado localmente · pendiente de validación**.*
 
 ### Fixed
+
+- Fixed a modularization regression where `src/constants.ts` had been accidentally replaced with Live Remediation constants, breaking imports across configuration, diagnostics, dashboard, issue navigation, notifications, and SonarQube API code. Pipeline history previews now also accept the token-free form configuration they actually consume instead of requiring a full `FolderSonarConfig` containing the secret token.
+
+  *Corregida una regresión de la modularización por la que `src/constants.ts` había sido sustituido accidentalmente por constantes de Live Remediation, rompiendo imports de configuración, diagnósticos, dashboard, navegación de issues, notificaciones y API de SonarQube. Las previsualizaciones del historial del pipeline aceptan además la configuración de formulario sin token que realmente consumen, en lugar de exigir un `FolderSonarConfig` completo que contenga el token secreto.*
+
+- SonarQube for IDE correlation now performs one-to-one nearest-position matching for findings that share the same rule, preventing a single local IDE diagnostic from being associated with multiple nearby server issues. Persisted `Modified locally` findings also require fresh SonarQube for IDE evidence after a VS Code restart before they can become `Fixed locally`, avoiding false local fixes caused by stale pre-restart evidence. Persisted `Fixed locally` findings are also downgraded immediately to `Modified locally` if the official IDE analyzer already reports the same finding again when the workspace is restored.
+
+  *La correlación con SonarQube for IDE realiza ahora una asignación uno-a-uno por posición más cercana para defectos que comparten la misma regla, evitando que un único diagnóstico local se asocie a varios issues de servidor próximos. Además, los defectos `Modificado localmente` persistidos requieren evidencia nueva de SonarQube for IDE después de reiniciar VS Code antes de poder pasar a `Corregido localmente`, evitando falsos positivos provocados por evidencia obsoleta de la sesión anterior. Los defectos `Corregido localmente` persistidos también vuelven inmediatamente a `Modificado localmente` si el analizador oficial del IDE ya vuelve a informar del mismo defecto al restaurar el workspace.*
 
 - Pending **Modified locally** and **Fixed locally · awaiting SonarQube confirmation** states are now persisted in workspace state. Reloading or restarting VS Code restores the pending state, tracked range, and local-analyzer evidence instead of publishing the stale server issue as open again. A completed repository analysis remains authoritative and clears or restores the persisted state according to the new SonarQube result.
 

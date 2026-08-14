@@ -1,4 +1,4 @@
-import { getSelectDropdownMarkup } from '../components/ui/selectDropdown';
+import { getSelectDropdownMarkup } from '../../../dashboard/webview/components/ui/selectDropdown';
 
 const TEMPLATE_OPTIONS = [
   { value: '', label: 'Sin plantilla' }

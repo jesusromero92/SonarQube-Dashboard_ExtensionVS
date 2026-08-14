@@ -1,4 +1,4 @@
-import { AnalysisFailurePolicy } from './types';
+import { AnalysisFailurePolicy } from './models';
 
 export interface AnalysisPipelineStage {
   id: string;

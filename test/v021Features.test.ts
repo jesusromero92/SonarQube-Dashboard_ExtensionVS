@@ -7,13 +7,13 @@ import {
   mergePipelineTemplates,
   parsePipelineTemplateYaml,
   serializePipelineTemplateYaml
-} from '../src/scanner/pipelineTemplates';
+} from '../src/pipeline/templates';
 import { DIAGNOSTICS_PAGE_MARKUP } from '../src/dashboard/webview/pages/diagnosticsPage';
-import { HISTORY_PAGE_MARKUP } from '../src/dashboard/webview/pages/historyPage';
+import { HISTORY_PAGE_MARKUP } from '../src/pipeline/webview/pages/historyPage';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
 import { DIAGNOSTICS_SCRIPT } from '../src/dashboard/webview/scripts/diagnostics';
-import { HISTORY_SCRIPT } from '../src/dashboard/webview/scripts/history';
-import { PIPELINE_EDITOR_SCRIPT } from '../src/dashboard/webview/scripts/pipelineEditor';
+import { HISTORY_SCRIPT } from '../src/pipeline/webview/history';
+import { PIPELINE_EDITOR_SCRIPT } from '../src/pipeline/webview/editor';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
 import { NAVIGATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/navigation';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
@@ -217,7 +217,7 @@ test('la lista de ejecuciones usa una vista nativa de VS Code', () => {
     'utf8'
   );
   const treeSource = readFileSync(
-    path.resolve(process.cwd(), 'src/pipelineExecutionTreeView.ts'),
+    path.resolve(process.cwd(), 'src/pipeline/executionTreeView.ts'),
     'utf8'
   );
   const packageManifest = JSON.parse(readFileSync(
@@ -232,7 +232,7 @@ test('la lista de ejecuciones usa una vista nativa de VS Code', () => {
   assert.match(treeSource, /implements\s+vscode\.TreeDataProvider/);
   assert.match(treeSource, /loading~spin/);
   assert.match(treeSource, /RUNNING_EXECUTION_ID/);
-  assert.match(treeSource, /openPipelineExecution/);
+  assert.match(treeSource, /PIPELINE_COMMANDS\.openExecution/);
   assert.ok(
     packageManifest.contributes?.views?.sonarQubeDashboardContainer?.some(
       view => view.id === 'sonarQubeDashboard.pipelineExecutions'
@@ -255,7 +255,7 @@ test('la página de pipeline muestra solo la ejecución seleccionada y actualiza
 
 test('la vista nativa conserva la identidad y no se refresca por cada línea del log', () => {
   const treeSource = readFileSync(
-    path.resolve(process.cwd(), 'src/pipelineExecutionTreeView.ts'),
+    path.resolve(process.cwd(), 'src/pipeline/executionTreeView.ts'),
     'utf8'
   );
 
@@ -282,13 +282,13 @@ test('la ejecución activa abre la misma página de detalle que las ejecuciones 
     'utf8'
   );
   const treeSource = readFileSync(
-    path.resolve(process.cwd(), 'src/pipelineExecutionTreeView.ts'),
+    path.resolve(process.cwd(), 'src/pipeline/executionTreeView.ts'),
     'utf8'
   );
 
   assert.match(
     extensionSource,
-    /openPipelineExecution,[\s\S]*await dashboardPanel\.showPipelineExecution\(executionId\)/
+    /PIPELINE_COMMANDS\.openExecution,[\s\S]*await dashboardPanel\.showPipelineExecution\(executionId\)/
   );
   assert.doesNotMatch(extensionSource, /showRunningPipelineExecution/);
   assert.doesNotMatch(dashboardSource, /pendingAnalysisDialog|showRunningPipelineExecution/);

@@ -43,7 +43,7 @@ test('la versión 1.3.0 elimina el Quick Fix específico de IA', () => {
   const extension = read('src/extension.ts');
   const packageManifest = JSON.parse(read('package.json')) as { version?: string };
 
-  assert.equal(packageManifest.version, '1.4.0');
+  assert.equal(packageManifest.version, '2.0.0');
   assert.doesNotMatch(extension, /fixIssueWithAi/);
   assert.doesNotMatch(extension, /aiFixPrompt/);
   assert.doesNotMatch(extension, /vscode\.editorChat\.start/);

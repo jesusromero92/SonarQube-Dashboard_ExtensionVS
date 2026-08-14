@@ -1,0 +1,9 @@
+export const SONARQUBE_FOR_IDE_EXTENSION_ID = 'SonarSource.sonarlint-vscode';
+export const LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID = 'sonarQubeDashboard.locallyModifiedIssues';
+export const OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND = 'sonarQubeDashboard.openLocallyModifiedIssue';
+export const LIVE_REMEDIATION_CONFIGURATION_KEY = 'liveRemediation.enabled';
+export const DASHBOARD_DIAGNOSTIC_SOURCE = 'SonarQube Dashboard';
+export const EXTERNAL_EVALUATION_DELAY_MS = 1400;
+export const ACTIVE_PROBLEMS_REVEAL_DELAY_MS = 120;
+export const LIVE_REMEDIATION_STORAGE_KEY = 'sonarQubeDashboard.liveRemediation.pending.v2';
+export const PERSISTENCE_DEBOUNCE_MS = 150;

@@ -6,7 +6,7 @@ import {
   compareAnalysisBaselines,
   createAnalysisBaselineSnapshot,
   numericBaselineDelta
-} from '../src/scanner/baseline';
+} from '../src/pipeline/baseline';
 import type { SonarAnalysisBaselineData } from '../src/types';
 
 const read = (relativePath: string): string => readFileSync(
@@ -64,25 +64,25 @@ test('v1.3.0 distingue la primera medición de una comparación contra cero', ()
 
 test('v1.3.0 mantiene la comparación exclusivamente en el historial del pipeline', () => {
   const manifest = JSON.parse(read('package.json')) as { version?: string };
-  assert.equal(manifest.version, '1.4.0');
+  assert.equal(manifest.version, '2.0.0');
 
   const control = read('src/dashboard/webview/components/analysisControl.ts');
-  const dialog = read('src/dashboard/webview/modals/analysisDialog.ts');
-  const history = read('src/dashboard/webview/pages/historyPage.ts');
-  const analysisScript = read('src/dashboard/webview/scripts/analysis.ts');
-  const historyScript = read('src/dashboard/webview/scripts/history.ts');
-  const historyStore = read('src/scanner/history.ts');
-  const analysisService = read('src/scanner/analysisService.ts');
+  const dialog = read('src/pipeline/webview/modals/analysisDialog.ts');
+  const history = read('src/pipeline/webview/pages/historyPage.ts');
+  const analysisScript = read('src/pipeline/webview/analysis.ts');
+  const historyScript = read('src/pipeline/webview/history.ts');
+  const historyStore = read('src/pipeline/history.ts');
+  const analysisService = read('src/pipeline/executionService.ts');
   const sonarClient = read('src/sonarClient.ts');
   const dashboardPanel = read('src/dashboardPanel.ts');
-  const analysisStyles = read('src/dashboard/webview/styles/analysis.ts');
+  const analysisStyles = read('src/pipeline/webview/styles.ts');
 
   assert.doesNotMatch(control, /analysisComparisonPanel/);
   assert.doesNotMatch(dialog, /analysisDialogComparison/);
   assert.match(history, /historyComparison/);
   assert.doesNotMatch(analysisScript, /renderCurrentAnalysisBaselineComparisons/);
   assert.match(historyScript, /renderBaselineComparison/);
-  const baselineScript = read('src/dashboard/webview/scripts/baseline.ts');
+  const baselineScript = read('src/pipeline/webview/baseline.ts');
   assert.match(baselineScript, /snapshot\.newIssues/);
   assert.match(baselineScript, /snapshot\.newCoverage/);
   assert.match(baselineScript, /delta\.hidden = deltaText === ''/);

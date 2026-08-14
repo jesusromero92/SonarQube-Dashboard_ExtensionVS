@@ -1,5 +1,5 @@
-import { ANALYSIS_DIALOG_MARKUP } from './analysisDialog';
-import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from './analysisConfirmationDialog';
+import { ANALYSIS_DIALOG_MARKUP } from '../../../pipeline/webview/modals/analysisDialog';
+import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../../../pipeline/webview/modals/analysisConfirmationDialog';
 import { CREATE_COMPONENT_DIALOG_MARKUP } from './createComponentDialog';
 import { COVERAGE_DIALOG_MARKUP } from './coverageDialog';
 import { HOTSPOT_DIALOG_MARKUP } from './hotspotDialog';

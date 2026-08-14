@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
-import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/dashboard/webview/modals/analysisConfirmationDialog';
+import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/pipeline/webview/modals/analysisConfirmationDialog';
 import { CREATE_COMPONENT_DIALOG_MARKUP } from '../src/dashboard/webview/modals/createComponentDialog';
 import { ANALYSIS_STYLES } from '../src/dashboard/webview/styles/analysis';
+import { PIPELINE_STYLES } from '../src/pipeline/webview/styles';
 import { DISCLOSURE_STYLES } from '../src/dashboard/webview/design/components/disclosure';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
 import { ELEMENT_REGISTRY_SCRIPT } from '../src/dashboard/webview/scripts/core/elements';
@@ -283,7 +284,7 @@ test('los modales de análisis y creación usan una distribución compacta', () 
   );
   assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="create-component-grid"/);
   assert.match(CREATE_COMPONENT_DIALOG_MARKUP, /class="field field--wide"/);
-  assert.match(ANALYSIS_STYLES, /\.confirmation-dialog \{/);
+  assert.match(PIPELINE_STYLES, /\.confirmation-dialog \{/);
   assert.match(
     ANALYSIS_STYLES,
     /\.create-component-grid \{[\s\S]*display: grid;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
@@ -293,11 +294,11 @@ test('los modales de análisis y creación usan una distribución compacta', () 
     /@media \(max-width: 760px\)[\s\S]*\.create-component-grid \{ grid-template-columns: 1fr; \}/
   );
   assert.match(
-    ANALYSIS_STYLES,
+    PIPELINE_STYLES,
     /\.pipeline-step-list \{[\s\S]*display: grid;/
   );
   assert.match(
-    ANALYSIS_STYLES,
+    PIPELINE_STYLES,
     /\.analysis-stepper \{[\s\S]*display: flex;/
   );
 });

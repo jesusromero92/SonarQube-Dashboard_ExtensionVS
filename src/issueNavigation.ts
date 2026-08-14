@@ -10,7 +10,6 @@ export class IssueNavigationManager implements vscode.Disposable {
   private scope: 'overall' | 'newCode' = 'overall';
   private lastIssueKey: string | undefined;
   private currentFileOnly = false;
-  private locallyFixedIssueKeys = new Set<string>();
   private activeEditorEntryUri: string | undefined;
   private revealedForActiveEditorUri: string | undefined;
   private explicitNavigation = false;
@@ -79,7 +78,6 @@ export class IssueNavigationManager implements vscode.Disposable {
     this.overallIssues = [];
     this.newCodeIssues = [];
     this.issues = [];
-    this.locallyFixedIssueKeys.clear();
     this.lastIssueKey = undefined;
     this.changedEmitter.fire();
     this.updateStatus();
@@ -87,15 +85,6 @@ export class IssueNavigationManager implements vscode.Disposable {
 
   getIssues(): DashboardIssue[] {
     return [...this.filteredIssues()];
-  }
-
-  setLocallyFixedIssueKeys(keys: ReadonlySet<string>): void {
-    this.locallyFixedIssueKeys = new Set(keys);
-    if (this.lastIssueKey && this.locallyFixedIssueKeys.has(this.lastIssueKey)) {
-      this.lastIssueKey = undefined;
-    }
-    this.changedEmitter.fire();
-    this.updateStatus();
   }
 
   setScope(scope: 'overall' | 'newCode'): void {
@@ -228,12 +217,11 @@ export class IssueNavigationManager implements vscode.Disposable {
   }
 
   private filteredIssues(): DashboardIssue[] {
-    const pending = this.issues.filter(issue => !this.locallyFixedIssueKeys.has(issue.key));
     if (!this.currentFileOnly) {
-      return pending;
+      return this.issues;
     }
     const uri = vscode.window.activeTextEditor?.document.uri.toString();
-    return uri ? pending.filter(issue => issue.fileUri === uri) : [];
+    return uri ? this.issues.filter(issue => issue.fileUri === uri) : [];
   }
 
   private currentIssue(): DashboardIssue | undefined {

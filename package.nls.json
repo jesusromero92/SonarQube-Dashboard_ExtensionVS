@@ -18,7 +18,9 @@
   "configuration.sonar_baseDir.description": "Local subfolder associated with the project root. Managed from the dashboard.",
   "configuration.autoRefresh.description": "Automatically refresh issues when the workspace is opened or changed.",
   "configuration.refreshIntervalMinutes.description": "Refresh interval. 0 disables periodic refresh.",
-  "configuration.liveRemediation.enabled.description": "Track local edits to synchronized SonarQube issues. SonarQube for IDE is optional: when it is active, its independent diagnostics can mark a finding as locally fixed; without it, changes stay pending validation until the next server analysis.",
+  "configuration.modules.pipeline.enabled.description": "Enable the Pipeline module. When disabled, pipeline analysis, history, the sidebar view, and its configuration tab are unavailable.",
+  "configuration.modules.liveRemediation.enabled.description": "Enable the Live Remediation module. When disabled, local issue tracking, its sidebar view, status bar state, and its configuration tab are unavailable.",
+  "configuration.liveRemediation.enabled.description": "Track local edits to synchronized SonarQube issues. SonarQube for IDE is optional: when active, its independent diagnostics help distinguish changes pending validation from changes awaiting server confirmation, without declaring an issue fixed before SonarQube analysis.",
   "configuration.sonar_scannerMode.description": "Method used by the Analyze repository button.",
   "configuration.scannerMode.auto": "Detects Maven, Gradle, and .NET; uses NPM with package.json or Docker for generic projects.",
   "configuration.scannerMode.maven": "Uses SonarScanner for Maven.",
@@ -67,6 +69,6 @@
   "walkthrough.results.alt": "Dashboard with Quality Gate, ratings, issues, and project metrics",
   "viewsWelcome.issues": "No SonarQube issues are loaded for this workspace.\n[Open configuration](command:sonarQubeDashboard.configure)\n[Refresh SonarQube data](command:sonarQubeDashboard.refresh)",
   "viewsWelcome.pipeline": "No pipeline executions are available yet.\n[Open pipeline configuration](command:sonarQubeDashboard.configure)\n[Analyze repository](command:sonarQubeDashboard.analyze)",
-  "views.locallyFixedIssues.name": "Issues fixed locally",
-  "viewsWelcome.locallyFixedIssues": "No locally fixed issues are awaiting SonarQube confirmation."
+  "views.locallyModifiedIssues.name": "Issues modified locally",
+  "viewsWelcome.locallyModifiedIssues": "No locally modified issues are pending validation or SonarQube confirmation."
 }

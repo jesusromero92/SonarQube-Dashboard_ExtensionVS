@@ -2,7 +2,7 @@ import { getDashboardModalsMarkup } from './modals';
 import { CONFIGURATION_PAGE_MARKUP } from './pages/configurationPage';
 import { getDataPageMarkup } from './pages/dataPage';
 import { DIAGNOSTICS_PAGE_MARKUP } from './pages/diagnosticsPage';
-import { HISTORY_PAGE_MARKUP } from './pages/historyPage';
+import { HISTORY_PAGE_MARKUP } from '../../pipeline/webview/pages/historyPage';
 
 export function getDashboardBody(): string {
   return [

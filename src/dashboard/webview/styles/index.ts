@@ -1,5 +1,6 @@
 import { DashboardWebviewAssets } from '../assets';
 import { getDashboardDesignStyles } from '../design';
+import { PIPELINE_STYLES } from '../../../pipeline/webview/styles';
 import { ANALYSIS_STYLES } from './analysis';
 import { getBaseStyles } from './base';
 import { CHART_STYLES } from './charts';
@@ -12,6 +13,7 @@ export function getDashboardStyles(assets: DashboardWebviewAssets): string {
     getBaseStyles(assets),
     getTableStyles(assets),
     CHART_STYLES,
+    PIPELINE_STYLES,
     ANALYSIS_STYLES,
     HISTORY_DIAGNOSTICS_STYLES,
     getDashboardDesignStyles(),

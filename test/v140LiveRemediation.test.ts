@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import test from 'node:test';
 
@@ -8,14 +8,18 @@ const read = (relativePath: string): string => readFileSync(
   'utf8'
 );
 
-test('v1.4.0 incorpora seguimiento conservador de remediación local', () => {
+test('v2.0.0 mantiene seguimiento conservador de remediación local', () => {
   const manifest = JSON.parse(read('package.json')) as {
     version?: string;
     contributes?: { configuration?: { properties?: Record<string, unknown> } };
   };
-  const source = read('src/liveRemediation.ts');
+  const source = read('src/liveRemediation/manager.ts')
+    + read('src/liveRemediation/sonarIde.ts')
+    + read('src/liveRemediation/diagnostics.ts')
+    + read('src/liveRemediation/rangeTracking.ts')
+    + read('src/liveRemediation/persistence.ts');
 
-  assert.equal(manifest.version, '1.4.0');
+  assert.equal(manifest.version, '2.0.0');
   assert.ok(
     manifest.contributes?.configuration?.properties?.[
       'sonarQubeDashboard.liveRemediation.enabled'
@@ -23,53 +27,50 @@ test('v1.4.0 incorpora seguimiento conservador de remediación local', () => {
   );
   assert.match(source, /onDidChangeTextDocument/);
   assert.match(source, /onDidChangeDiagnostics/);
-  assert.match(source, /: 'server'/);
   assert.match(source, /tracked\.state = 'modified'/);
-  assert.match(source, /tracked\.state = 'locallyFixed'/);
+  assert.match(source, /state = 'awaitingConfirmation'/);
   assert.match(source, /observedBySonarIde/);
-  assert.match(source, /isExternalSonarDiagnostic/);
   assert.match(source, /SONARQUBE_FOR_IDE_EXTENSION_ID/);
-  assert.match(source, /isSonarIdeActive/);
-  assert.match(source, /rangesNear/);
+  assert.match(source, /matchExternalDiagnostics/);
+  assert.doesNotMatch(source, /locallyFixed/);
 });
 
-test('los issues localmente corregidos permanecen informativos en Problems hasta confirmación', () => {
-  const source = read('src/liveRemediation.ts');
-  const navigation = read('src/issueNavigation.ts');
+test('Live Remediation nunca presenta un issue como fixed antes del análisis de servidor', () => {
+  const diagnostics = read('src/liveRemediation/diagnostics.ts');
   const decorations = read('src/issueDecorations.ts');
-  const extension = read('src/extension.ts');
+  const navigation = read('src/issueNavigation.ts');
 
-  assert.match(source, /tracked\.state === 'locallyFixed'/);
-  assert.match(source, /✓ Corregido localmente · pendiente de confirmación de SonarQube/);
-  assert.match(source, /✓ Fixed locally · awaiting SonarQube confirmation/);
-  assert.match(source, /tracked\.state === 'server'[\s\S]*DiagnosticSeverity\.Information/);
-  assert.match(source, /diagnostics\.sort\(compareDiagnosticPosition\)/);
-  assert.match(navigation, /locallyFixedIssueKeys/);
-  assert.match(navigation, /!this\.locallyFixedIssueKeys\.has\(issue\.key\)/);
-  assert.match(decorations, /Corregido localmente · pendiente de confirmación de SonarQube/);
-  assert.match(decorations, /locallyFixedDecorationType/);
-  assert.match(extension, /liveRemediation\.applyServerSnapshot/);
-  assert.match(extension, /liveRemediation\.getLocallyFixedIssueKeys/);
+  assert.match(diagnostics, /Modified locally · pending validation/);
+  assert.match(diagnostics, /Modified locally · awaiting SonarQube confirmation/);
+  assert.match(diagnostics, /Modificado localmente · pendiente de confirmación de SonarQube/);
+  assert.doesNotMatch(diagnostics, /Fixed locally|Corregido localmente|✓/);
+  assert.doesNotMatch(decorations, /testing\.iconPassed|pass-filled|qualityGate\.OK/);
+  assert.match(decorations, /gitDecoration\.modifiedResourceForeground/);
+  assert.doesNotMatch(navigation, /locallyFixedIssueKeys|setLocallyFixedIssueKeys/);
 });
 
-test('la remediación local no declara un fix sin señal previa del analizador Sonar externo', () => {
-  const source = read('src/liveRemediation.ts');
+test('la desaparición en SonarQube for IDE solo cambia a pendiente de confirmación', () => {
+  const source = read('src/liveRemediation/manager.ts') + read('src/liveRemediation/sonarIde.ts') + read('src/liveRemediation/diagnostics.ts');
 
   assert.match(
     source,
-    /tracked\.state === 'modified' && tracked\.observedBySonarIde[\s\S]*tracked\.state = 'locallyFixed'/
+    /state === 'modified' && issue\.observedBySonarIde[\s\S]*issue\.state = 'awaitingConfirmation'/
+  );
+  assert.match(
+    source,
+    /issue\.state === 'awaitingConfirmation'[\s\S]*issue\.state = 'modified'/
   );
   assert.match(source, /source\.includes\('sonar'\) \|\| source\.includes\('sonarlint'\)/);
-  assert.match(source, /normalizedRuleCandidates/);
 });
 
-test('README y changelog documentan Live remediation state', () => {
-  assert.match(read('CHANGELOG.md'), /## \[1\.4\.0\] - 2026-08-13/);
-  assert.match(read('CHANGELOG.md'), /Live remediation state/);
-  assert.match(read('README.md'), /### Live remediation state/);
-  assert.match(read('README.es.md'), /### Estado de remediación en vivo/);
-  assert.match(read('package.nls.json'), /liveRemediation\.enabled/);
-  assert.match(read('package.nls.es.json'), /liveRemediation\.enabled/);
+test('los issues modificados siguen visibles en Problems y navegación normal', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+  const navigation = read('src/issueNavigation.ts');
+
+  assert.match(manager, /tracked\.state === 'server'[\s\S]*DiagnosticSeverity\.Information/);
+  assert.match(manager, /diagnostics\.sort\(compareDiagnosticPosition\)/);
+  assert.match(navigation, /return this\.issues/);
+  assert.doesNotMatch(navigation, /filter\(issue => !this\./);
 });
 
 test('la configuración del dashboard permite activar o desactivar la remediación al instante', () => {
@@ -81,108 +82,93 @@ test('la configuración del dashboard permite activar o desactivar la remediaci�
   assert.match(page, /Integración con el editor/);
   assert.match(events, /type: 'setLiveRemediation'/);
   assert.match(panel, /case 'setLiveRemediation'/);
-  assert.match(panel, /DASHBOARD_CONFIGURATION_KEYS\.liveRemediationEnabled/);
+  assert.match(panel, /LIVE_REMEDIATION_CONFIGURATION_KEY/);
 });
 
-
-test('el estado corregido localmente persiste hasta un análisis de servidor y usa verde explícito', () => {
-  const source = read('src/liveRemediation.ts');
-  const extension = read('src/extension.ts');
-  const decorations = read('src/issueDecorations.ts');
-  const changelog = read('CHANGELOG.md');
-
-  assert.match(source, /confirmLocalRemediation = false/);
-  assert.match(source, /preservePendingState/);
-  assert.match(extension, /source === 'analysis'/);
-  assert.match(decorations, /testing\.iconPassed/);
-  assert.match(decorations, /awaiting SonarQube confirmation/);
-  assert.match(changelog, /ordinary synchronization/);
-});
-
-
-test('la UI informa si SonarQube for IDE está disponible pero no lo convierte en dependencia', () => {
-  const constants = read('src/constants.ts');
-  const panel = read('src/dashboardPanel.ts');
-  const page = read('src/dashboard/webview/pages/configurationPage.ts');
-  const configuration = read('src/dashboard/webview/scripts/core/configuration.ts');
-  const source = read('src/liveRemediation.ts');
-
-  assert.match(constants, /SonarSource\.sonarlint-vscode/);
-  assert.match(panel, /sonarIdeIntegrationState/);
-  assert.match(panel, /vscode\.extensions\.getExtension/);
-  assert.match(page, /id="sonarIdeStatus"/);
-  assert.match(configuration, /renderSonarIdeIntegrationStatus/);
-  assert.match(configuration, /SonarQube for IDE no detectado/);
-  assert.match(source, /isSonarIdeActive/);
-  assert.doesNotMatch(read('package.json'), /extensionDependencies/);
-});
-
-
-test('una edición adyacente al rango Sonar mantiene el estado modificado hasta confirmación', () => {
-  const source = read('src/liveRemediation.ts');
+test('una edición adyacente al rango Sonar vuelve a pending validation', () => {
+  const source = read('src/liveRemediation/manager.ts')
+    + read('src/liveRemediation/rangeTracking.ts');
 
   assert.match(source, /horizontalGap\(change\.range, range\) <= 2/);
-  assert.match(source, /tracked\.state === 'locallyFixed'[\s\S]*tracked\.state = 'modified'/);
-  assert.doesNotMatch(
-    source,
-    /if \(tracked\.state !== 'server'\) \{[\s\S]{0,120}tracked\.state = 'server'/
-  );
+  assert.match(source, /touched && tracked\.state !== 'modified'[\s\S]*tracked\.state = 'modified'/);
 });
 
+test('los estados locales pendientes sobreviven a reinicios de VS Code con esquema v2', () => {
+  const persistence = read('src/liveRemediation/persistence.ts');
+  const constants = read('src/liveRemediation/constants.ts');
+  const manager = read('src/liveRemediation/manager.ts');
 
-test('los estados locales pendientes sobreviven a reinicios de VS Code', () => {
-  const source = read('src/liveRemediation.ts');
-  const extension = read('src/extension.ts');
-
-  assert.match(source, /LIVE_REMEDIATION_STORAGE_KEY/);
-  assert.match(source, /context\.workspaceState\.get/);
-  assert.match(source, /context\.workspaceState\.update/);
-  assert.match(source, /restorePersistedState/);
-  assert.match(source, /syncPersistedStateFromTracked/);
-  assert.match(source, /persistedRange/);
-  assert.match(source, /state: Exclude<IssueLocalRemediationState, 'server'>/);
-  assert.match(extension, /new LiveRemediationManager\(context, diagnostics\)/);
+  assert.match(constants, /pending\.v2/);
+  assert.match(persistence, /version: 2/);
+  assert.match(persistence, /snapshot\.version !== 2/);
+  assert.match(persistence, /awaitingConfirmation/);
+  assert.match(manager, /persisted\.state === 'awaitingConfirmation'/);
+  assert.match(manager, /syncPersistedStateFromTracked/);
 });
 
-test('los issues corregidos localmente usan una vista nativa independiente en la barra lateral', () => {
+test('la vista nativa lista todos los issues modificados localmente', () => {
   const manifest = JSON.parse(read('package.json')) as {
     contributes?: { views?: Record<string, Array<{ id?: string }>> };
   };
-  const manager = read('src/liveRemediation.ts');
-  const provider = read('src/locallyFixedIssuesTreeView.ts');
-  const launcher = read('src/dashboard/launcherWebview.ts');
+  const manager = read('src/liveRemediation/manager.ts');
+  const provider = read('src/liveRemediation/treeView.ts');
   const extension = read('src/extension.ts');
   const views = manifest.contributes?.views?.sonarQubeDashboardContainer ?? [];
 
-  assert.ok(views.some(view => view.id === 'sonarQubeDashboard.locallyFixedIssues'));
-  assert.match(manager, /getLocallyFixedIssues\(\)/);
-  assert.match(manager, /revealLocallyFixedIssue/);
-  assert.match(provider, /class LocallyFixedIssuesTreeProvider/);
-  assert.match(provider, /liveRemediation\.onDidChange/);
-  assert.match(provider, /getLocallyFixedIssues\(\)/);
-  assert.match(provider, /testing\.iconPassed/);
-  assert.match(provider, /DASHBOARD_COMMANDS\.openLocallyFixedIssue/);
-  assert.match(extension, /LOCALLY_FIXED_ISSUES_TREE_VIEW_ID/);
-  assert.match(extension, /registerTreeDataProvider\([\s\S]*LOCALLY_FIXED_ISSUES_TREE_VIEW_ID/);
-  assert.match(extension, /revealLocallyFixedIssue/);
-  assert.doesNotMatch(launcher, /fixedLocallyPanel/);
-  assert.doesNotMatch(launcher, /fixed-locally-item/);
-  assert.match(read('README.md'), /dedicated native \*\*Issues fixed locally\*\* view/);
-  assert.match(read('README.es.md'), /vista nativa independiente \*\*Issues corregidos localmente\*\*/);
+  assert.ok(views.some(view => view.id === 'sonarQubeDashboard.locallyModifiedIssues'));
+  assert.match(manager, /getLocallyModifiedIssues\(\)/);
+  assert.match(manager, /filter\(tracked => tracked\.state !== 'server'\)/);
+  assert.match(provider, /class LocallyModifiedIssuesTreeProvider/);
+  assert.match(provider, /new vscode\.ThemeIcon\([\s\S]*'edit'/);
+  assert.match(provider, /OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND/);
+  assert.match(extension, /LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID/);
+  assert.match(extension, /revealLocallyModifiedIssue/);
+  assert.match(read('README.md'), /\*\*Issues modified locally\*\*/);
+  assert.match(read('README.es.md'), /\*\*Issues modificados localmente\*\*/);
 });
 
-test('el análisis notifica los fixes locales confirmados por SonarQube sin duplicar avisos', () => {
-  const remediation = read('src/liveRemediation.ts');
+test('el análisis cuenta cualquier issue modificado que desaparece y lo notifica sin afirmar un fix previo', () => {
+  const remediation = read('src/liveRemediation/manager.ts');
   const extension = read('src/extension.ts');
   const notifications = read('src/notificationManager.ts');
-  const changelog = read('CHANGELOG.md');
 
-  assert.match(remediation, /confirmedLocallyFixedCount/);
-  assert.match(remediation, /pendingLocallyFixedKeys/);
+  assert.match(remediation, /pendingLocallyModifiedKeys/);
+  assert.match(remediation, /tracked\.state !== 'server'/);
+  assert.match(remediation, /confirmedLocallyModifiedCount/);
   assert.match(remediation, /!serverIssueKeys\.has\(key\)/);
-  assert.match(extension, /notifications\.evaluate\(notificationScopes, source, confirmedLocallyFixedCount\)/);
-  assert.match(notifications, /SonarQube confirmó 1 defecto corregido localmente/);
-  assert.match(notifications, /SonarQube confirmed 1 locally fixed issue/);
-  assert.match(notifications, /source === 'analysis'/);
-  assert.match(changelog, /completion notifications now report how many \*\*Fixed locally\*\*/);
+  assert.match(extension, /notifications\.evaluate\(notificationScopes, source, confirmedLocallyModifiedCount\)/);
+  assert.match(notifications, /1 defecto modificado localmente ya no se detecta/);
+  assert.match(notifications, /1 locally modified issue is no longer detected/);
+});
+
+test('Live Remediation permanece completamente encapsulado en su módulo', () => {
+  const index = read('src/liveRemediation/index.ts');
+  const manager = read('src/liveRemediation/manager.ts');
+  const persistence = read('src/liveRemediation/persistence.ts');
+  const sonarIde = read('src/liveRemediation/sonarIde.ts');
+  const rangeTracking = read('src/liveRemediation/rangeTracking.ts');
+  const tree = read('src/liveRemediation/treeView.ts');
+  const constants = read('src/liveRemediation/constants.ts');
+
+  assert.equal(existsSync(path.resolve(process.cwd(), 'src/liveRemediation.ts')), false);
+  assert.equal(existsSync(path.resolve(process.cwd(), 'src/locallyFixedIssuesTreeView.ts')), false);
+  assert.match(index, /LiveRemediationManager/);
+  assert.match(index, /LocallyModifiedIssuesTreeProvider/);
+  assert.match(index, /IssueLocalRemediationState/);
+  assert.match(constants, /OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND/);
+  assert.match(manager, /RemediationStateStore/);
+  assert.match(manager, /SonarIdeDiagnosticsObserver/);
+  assert.match(persistence, /PERSISTENCE_DEBOUNCE_MS/);
+  assert.match(sonarIde, /hasExternalSnapshotChanged/);
+  assert.match(sonarIde, /usedDiagnostics/);
+  assert.match(rangeTracking, /transformRangeAfterChange/);
+  assert.match(tree, /class LocallyModifiedIssuesTreeProvider/);
+});
+
+test('README y changelog documentan la semántica conservadora de v2.0.0', () => {
+  assert.match(read('CHANGELOG.md'), /## \[2\.0\.0\]/);
+  assert.match(read('README.md'), /Modified locally · awaiting SonarQube confirmation/);
+  assert.match(read('README.es.md'), /Modificado localmente · pendiente de confirmación de SonarQube/);
+  assert.doesNotMatch(read('README.md'), /Issues fixed locally/);
+  assert.doesNotMatch(read('README.es.md'), /Issues corregidos localmente/);
 });

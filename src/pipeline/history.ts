@@ -1,17 +1,24 @@
 import { createHash } from 'node:crypto';
 import type * as vscode from 'vscode';
+import type { FolderSonarConfig } from '../types';
+import {
+  PIPELINE_HISTORY_LIMIT,
+  PIPELINE_HISTORY_LOG_CHARACTER_LIMIT,
+  PIPELINE_HISTORY_LOG_CHUNK_LIMIT,
+  PIPELINE_HISTORY_STORAGE_KEY_PREFIX
+} from './constants';
 import {
   AnalysisBaselineComparison,
   AnalysisRequest,
   AnalysisState,
   PipelineRunHistoryEntry,
   PipelineRunHistoryStep
-} from './types';
+} from './models';
 
-const HISTORY_KEY_PREFIX = 'sonarQubeDashboard.pipelineHistory:';
-const HISTORY_LIMIT = 30;
-const HISTORY_LOG_CHUNK_LIMIT = 4_000;
-const HISTORY_LOG_CHARACTER_LIMIT = 250_000;
+type PipelineHistoryProjectConfig = Pick<
+  FolderSonarConfig,
+  'projectKey' | 'projectName' | 'branch'
+>;
 
 export class PipelineHistoryStore {
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -70,7 +77,7 @@ export class PipelineHistoryStore {
     const previous = await this.list(request.rootPath);
     await this.context.workspaceState.update(
       historyKey(request.rootPath),
-      [entry, ...previous].slice(0, HISTORY_LIMIT)
+      [entry, ...previous].slice(0, PIPELINE_HISTORY_LIMIT)
     );
   }
 
@@ -104,13 +111,13 @@ export class PipelineHistoryStore {
 
 function historyKey(rootPath: string): string {
   const digest = createHash('sha256').update(rootPath).digest('hex').slice(0, 24);
-  return `${HISTORY_KEY_PREFIX}${digest}`;
+  return `${PIPELINE_HISTORY_STORAGE_KEY_PREFIX}${digest}`;
 }
 
 
 function compactHistoryLog(chunks: string[]): string[] {
-  const selected = chunks.slice(-HISTORY_LOG_CHUNK_LIMIT);
-  let remaining = HISTORY_LOG_CHARACTER_LIMIT;
+  const selected = chunks.slice(-PIPELINE_HISTORY_LOG_CHUNK_LIMIT);
+  let remaining = PIPELINE_HISTORY_LOG_CHARACTER_LIMIT;
   const result: string[] = [];
   for (let index = selected.length - 1; index >= 0 && remaining > 0; index -= 1) {
     const chunk = selected[index];
@@ -126,4 +133,31 @@ function compactHistoryLog(chunks: string[]): string[] {
     result.unshift('[…] El inicio del registro se ha omitido para limitar el historial.\n');
   }
   return result;
+}
+
+
+export function createRunningPipelineHistoryEntry(
+  rootPath: string,
+  config: PipelineHistoryProjectConfig,
+  fallbackProjectName: string,
+  state: AnalysisState,
+  now = Date.now()
+): PipelineRunHistoryEntry {
+  const startedAt = state.startedAt ?? new Date(now).toISOString();
+  return {
+    id: 'running-analysis',
+    rootPath,
+    projectKey: config.projectKey,
+    projectName: config.projectName || config.projectKey || fallbackProjectName,
+    branch: config.branch ?? '',
+    scanner: state.scanner,
+    status: 'running',
+    message: state.message,
+    startedAt,
+    completedAt: '',
+    durationMs: Math.max(0, now - new Date(startedAt).getTime()),
+    steps: state.steps.map(step => ({ ...step })),
+    log: [...state.log],
+    comparison: state.comparison
+  };
 }

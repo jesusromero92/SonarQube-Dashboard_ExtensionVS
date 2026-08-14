@@ -5,7 +5,8 @@ import {
   DASHBOARD_TYPE_ICON_FILES
 } from './constants';
 import { getDashboardLanguage } from './i18n';
-import { DashboardHotspot, DashboardIssue, IssueLocalRemediationState } from './types';
+import { DashboardHotspot, DashboardIssue } from './types';
+import { localStateLabel, type IssueLocalRemediationState } from './liveRemediation';
 
 type DecoratedIssueType =
   | 'BUG'
@@ -27,12 +28,6 @@ function normalizedIssueType(type: string): DecoratedIssueType | undefined {
 
 function transparent(color: string): string {
   return `${color}1f`;
-}
-
-function locallyFixedLabel(spanish: boolean): string {
-  return spanish
-    ? '✓ Corregido localmente · pendiente de confirmación de SonarQube'
-    : '✓ Fixed locally · awaiting SonarQube confirmation';
 }
 
 function typeLabel(type: DecoratedIssueType, spanish: boolean): string {
@@ -82,9 +77,7 @@ function issueHover(
     appendHoverField(
       hover,
       spanish ? 'Estado local' : 'Local state',
-      localState === 'locallyFixed'
-        ? locallyFixedLabel(spanish).replace(/^✓\s*/, '')
-        : (spanish ? 'Modificado localmente · pendiente de validación' : 'Modified locally · pending validation')
+      localStateLabel(localState, spanish)
     );
   }
   appendHoverField(hover, spanish ? 'Archivo' : 'File', issue.relativePath);
@@ -152,7 +145,6 @@ export class IssueDecorationManager implements vscode.Disposable {
   private readonly localStates = new Map<string, IssueLocalRemediationState>();
   private readonly localRanges = new Map<string, vscode.Range>();
   private readonly modifiedDecorationType: vscode.TextEditorDecorationType;
-  private readonly locallyFixedDecorationType: vscode.TextEditorDecorationType;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly dataChangedEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeData = this.dataChangedEmitter.event;
@@ -165,15 +157,6 @@ export class IssueDecorationManager implements vscode.Disposable {
       borderStyle: 'solid',
       borderWidth: '0 0 0 3px',
       overviewRulerColor: DASHBOARD_COLORS.types.CODE_SMELL,
-      overviewRulerLane: vscode.OverviewRulerLane.Right
-    });
-    this.locallyFixedDecorationType = vscode.window.createTextEditorDecorationType({
-      isWholeLine: true,
-      backgroundColor: transparent(DASHBOARD_COLORS.qualityGate.OK),
-      borderColor: DASHBOARD_COLORS.qualityGate.OK,
-      borderStyle: 'solid',
-      borderWidth: '0 0 0 3px',
-      overviewRulerColor: DASHBOARD_COLORS.qualityGate.OK,
       overviewRulerLane: vscode.OverviewRulerLane.Right
     });
 
@@ -313,7 +296,6 @@ export class IssueDecorationManager implements vscode.Disposable {
       decorationType.dispose();
     }
     this.modifiedDecorationType.dispose();
-    this.locallyFixedDecorationType.dispose();
     this.dataChangedEmitter.dispose();
   }
 
@@ -328,7 +310,6 @@ export class IssueDecorationManager implements vscode.Disposable {
       DECORATED_ISSUE_TYPES.map(type => [type, []])
     );
     const modified: vscode.DecorationOptions[] = [];
-    const locallyFixed: vscode.DecorationOptions[] = [];
     const issues = this.issuesByUri.get(editor.document.uri.toString()) ?? [];
     const hotspots = this.hotspotsByUri.get(editor.document.uri.toString()) ?? [];
     for (const issue of issues) {
@@ -345,19 +326,20 @@ export class IssueDecorationManager implements vscode.Disposable {
       const decoration: vscode.DecorationOptions = {
         range: trackedRange ?? editor.document.lineAt(line).range,
         hoverMessage: issueHover(issue, type, localState),
-        renderOptions: localState === 'locallyFixed'
+        renderOptions: localState !== 'server'
           ? {
               after: {
-                contentText: `  ${locallyFixedLabel(getDashboardLanguage() === 'es')}`,
-                color: new vscode.ThemeColor('testing.iconPassed'),
+                contentText: `  ${localStateLabel(
+                  localState,
+                  getDashboardLanguage() === 'es'
+                )}`,
+                color: new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'),
                 margin: '0 0 0 0.75rem'
               }
             }
           : undefined
       };
-      if (localState === 'locallyFixed') {
-        locallyFixed.push(decoration);
-      } else if (localState === 'modified') {
+      if (localState !== 'server') {
         modified.push(decoration);
       } else {
         grouped.get(type)?.push(decoration);
@@ -384,7 +366,6 @@ export class IssueDecorationManager implements vscode.Disposable {
       }
     }
     editor.setDecorations(this.modifiedDecorationType, modified);
-    editor.setDecorations(this.locallyFixedDecorationType, locallyFixed);
   }
 }
 
@@ -408,11 +389,9 @@ implements vscode.CodeLensProvider, vscode.Disposable {
       const trackedRange = this.decorations.getIssueRange(issue.key, document);
       const line = trackedRange?.start.line ?? clampLine(document, issue.line);
       const spanish = getDashboardLanguage() === 'es';
-      const title = localState === 'locallyFixed'
-        ? `$(pass-filled) ${locallyFixedLabel(spanish).replace(/^✓\s*/, '')}`
-        : localState === 'modified'
-          ? `$(edit) ${spanish ? 'Modificado localmente · pendiente de validación' : 'Modified locally · pending validation'}`
-          : `${severityCodicon(issue.severity)} ${issue.severity} · ${issue.ruleName || issue.rule}`;
+      const title = localState !== 'server'
+        ? `$(edit) ${localStateLabel(localState, spanish)}`
+        : `${severityCodicon(issue.severity)} ${issue.severity} · ${issue.ruleName || issue.rule}`;
       const lens = new vscode.CodeLens(
         new vscode.Range(line, 0, line, 0),
         {

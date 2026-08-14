@@ -18,15 +18,25 @@ For a guided first run, open the Command Palette and execute **SonarQube Dashboa
 
 | Area | Technical behavior |
 |---|---|
+| Modules | Pipeline and Live Remediation can be enabled independently; disabled modules hide their configuration tabs and native views and stop their runtime work. |
 | SonarQube connection | Validates the configured server and token, lists accessible projects, and stores the selected project per workspace folder. |
 | Synchronization | Retrieves issues, Security Hotspots, Quality Gate conditions, ratings, measures, history, coverage, and duplication data. |
 | Local file mapping | Matches SonarQube component paths to files inside the active workspace folder and optional local subfolder. |
 | Repository analysis | Detects Maven, Gradle, .NET, NPM, Docker, or a custom scanner command and executes it in the workspace. |
 | Quality pipeline | Runs build, test, audit, security, SonarQube, and custom commands in the selected order with per-step failure policies. |
 | Editor integration | Publishes Problems entries, gutter decorations, hovers, CodeLens, issue flows, coverage, and duplication indicators. |
-| Live remediation | Tracks edits to synchronized issues, keeps ranges aligned, and can use independent SonarQube for IDE diagnostics to mark findings as locally fixed while server confirmation is pending. |
+| Live remediation | Tracks edits to synchronized issues, keeps ranges aligned, and can use independent SonarQube for IDE diagnostics to distinguish changes pending validation from changes awaiting server confirmation without claiming a fix before server analysis. |
 | Execution history | Stores the latest 30 pipeline executions per analysis folder, including status, duration, steps, bounded log output, and the exact before/after quality baseline for each completed run. |
 | Diagnostics | Reports environment, compatibility, scanner, detected commands, tools, server latency, and the latest failed request with secrets redacted. |
+
+## Modular architecture in 2.0.0
+
+Open **Configuration → Modules** to control optional functionality independently:
+
+- **Pipeline** enables repository analysis, reusable steps/templates, detected integrations, execution history, baseline comparison, and the native **Pipeline executions** view. When disabled, its configuration tab and analysis actions are hidden and pipeline-specific project discovery is skipped.
+- **Live Remediation** enables local issue-state tracking, optional SonarQube for IDE correlation, the pending local-change status bar state, and the native **Issues modified locally** view. Its dedicated configuration tab only exists while the module is active.
+- Module switches are applied immediately and are stored as window-level settings: `sonarQubeDashboard.modules.pipeline.enabled` and `sonarQubeDashboard.modules.liveRemediation.enabled`.
+- The existing `sonarQubeDashboard.liveRemediation.enabled` option remains inside the **Live Remediation** tab as the module's own tracking setting; the module must be enabled for that setting to have an effect.
 
 ## Operating model
 
@@ -84,7 +94,7 @@ When the analyzed code is located inside a workspace subfolder, configure it und
 - Filterable issue table with sortable headers and direct navigation to source code.
 - Issue lifecycle management without leaving VS Code: accept, false positive, reopen, assignment, comments, history, and current assignee.
 - In-editor information through decorations, hovers, quick actions, and CodeLens for issues and Security Hotspots.
-- **Live remediation state** that marks touched findings as locally modified and, when SonarQube for IDE independently confirms the diagnostic has disappeared, keeps them in Problems as informational locally-fixed entries until the next server analysis confirms the result.
+- **Live remediation state** that marks touched findings as locally modified. When SonarQube for IDE stops reporting the same finding, the issue remains **Modified locally** and changes from pending validation to awaiting SonarQube confirmation; only server analysis can confirm that it is resolved.
 - Security execution-flow navigation with source, intermediate steps, sink, secondary locations, and CodeLens.
 - Coverage and duplication view with current Overall/New Code metrics, gutter decorations, duplicated blocks, low-coverage files, and Overall historical trends grouped by day, week, or month.
 - Keyboard navigation, status-bar counter, and an issue explorer grouped by file, rule, or severity.
@@ -195,20 +205,20 @@ When `sonarQubeDashboard.liveRemediation.enabled` is enabled (the default), sync
 
 - editing the tracked issue range changes the CodeLens/hover to **Modified locally · pending validation** and republishes the Problems entry as informational while its exact range continues to follow insertions, removals, and replacements;
 - if the official **SonarQube for IDE** extension has previously reported the same rule at the same location, SonarQube Dashboard observes its independent real-time diagnostics;
-- when that external Sonar diagnostic disappears after the edit, the issue becomes **Fixed locally · awaiting SonarQube confirmation**, remains visible in **Problems** as an informational pending-confirmation entry, is excluded from normal issue navigation, and stays visibly marked in green in the editor until a new repository analysis confirms the server state;
-- if the external analyzer reports an issue again after it had been locally fixed, it returns to **Modified locally · pending validation** until a new repository analysis confirms the server state;
+- when that external Sonar diagnostic disappears after the edit, the issue remains **Modified locally · awaiting SonarQube confirmation**, stays visible in **Problems** and normal issue navigation, and keeps a modified-state marker until a new repository analysis confirms the server state;
+- if the external analyzer reports the issue again while it was awaiting confirmation, it returns to **Modified locally · pending validation** until a new repository analysis confirms the server state;
 - if SonarQube for IDE is not installed, inactive, does not support the file, or never independently reported that exact finding, the extension deliberately stays at **Modified locally · pending validation** instead of guessing that the issue is fixed;
 - ordinary dashboard synchronization preserves pending local-remediation states; a completed repository analysis is authoritative: issues still returned by SonarQube are restored as open, while issues no longer returned disappear normally.
-- pending **Modified locally** and **Fixed locally** states are persisted per workspace, including their tracked range, so reloading or restarting VS Code restores the same pending state until a repository analysis confirms the server result;
-- when the window is restored with a file already active, the extension publishes that file's SonarQube diagnostics in a separate delayed marker update so VS Code's native `problems.autoReveal` behavior can reveal that file in **Problems** after startup synchronization; locally-fixed entries are also retained there so a pending confirmation does not make the active file disappear from the panel.
+- pending **Modified locally · pending validation** and **Modified locally · awaiting SonarQube confirmation** states are persisted per workspace, including their tracked range, so reloading or restarting VS Code restores the same pending state until a repository analysis confirms the server result;
+- when the window is restored with a file already active, the extension publishes that file's SonarQube diagnostics in a separate delayed marker update so VS Code's native `problems.autoReveal` behavior can reveal that file in **Problems** after startup synchronization; locally modified entries are retained there while validation or confirmation is pending.
 
 A status-bar indicator appears only while local remediation state is pending. Selecting it opens **Analyze repository** so the local result can be confirmed by SonarQube Server. The feature can also be toggled immediately from **Configuration → SonarQube → Editor integration**, without synchronizing the project again.
 
-The Activity Bar container now includes a dedicated native **Issues fixed locally** view, alongside **Pipeline executions** and **Issue explorer**. It lists every locally fixed finding that is still awaiting server confirmation, including its rule, file and current tracked line. Selecting an entry opens that pending finding directly in the editor. The list uses VS Code's native collapsible-view behavior instead of embedding the list inside the summary webview.
+The Activity Bar container includes a dedicated native **Issues modified locally** view, alongside **Pipeline executions** and **Issue explorer**. It lists every synchronized finding changed in the editor while validation or server confirmation is pending, including its rule, file and current tracked line. Selecting an entry opens that finding directly in the editor. The list uses VS Code's native collapsible-view behavior instead of embedding the list inside the summary webview.
 
-When a new repository analysis confirms one or more of those locally fixed findings, the normal bottom-right analysis-completed notification also reports how many were confirmed and removes them from the pending native view.
+When a new repository analysis no longer reports one or more locally modified findings, the normal bottom-right analysis-completed notification reports how many are no longer detected and removes them from the pending native view.
 
-The **Editor integration** accordion also reports whether the official **SonarQube for IDE** extension (`SonarSource.sonarlint-vscode`) is detected and active. It is optional: without it, edited findings remain **Modified locally · pending validation** until the next repository analysis; when it is active, only its independent matching diagnostics can promote them to **Fixed locally · awaiting SonarQube confirmation**.
+The **Editor integration** accordion also reports whether the official **SonarQube for IDE** extension (`SonarSource.sonarlint-vscode`) is detected and active. It is optional: without it, edited findings remain **Modified locally · pending validation** until the next repository analysis; when it is active, disappearance of a previously matched diagnostic changes the same issue to **Modified locally · awaiting SonarQube confirmation** without claiming that the server issue is fixed.
 
 Indicators are only created for findings whose SonarQube path matches a real file in the linked folder. They are refreshed when dashboard data is synchronized and removed when its data is cleared.
 
@@ -562,7 +572,7 @@ Analysis can only run in a trusted workspace. The languages that can ultimately 
 
 ![SonarQube issues published in Problems](docs/images/problems-integration.png)
 
-Overall issues are published as native VS Code diagnostics. With live remediation enabled, the Problems list also reflects conservative local state: touched findings become informational, and findings independently confirmed as gone by SonarQube for IDE stay visible as informational **Fixed locally** entries until the next repository analysis confirms the server state.
+Overall issues are published as native VS Code diagnostics. With live remediation enabled, the Problems list also reflects conservative local state: touched findings become informational **Modified locally** entries. SonarQube for IDE may move them from pending validation to awaiting server confirmation, but only the next repository analysis can confirm that the server issue is gone.
 
 - grouped by file;
 - displaying rule and description;

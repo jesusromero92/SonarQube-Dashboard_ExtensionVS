@@ -34,7 +34,7 @@ export class NotificationManager {
   async evaluate(
     scopes: readonly NotificationScope[],
     source: 'sync' | 'analysis' = 'sync',
-    confirmedLocallyFixedCount = 0
+    confirmedLocallyModifiedCount = 0
   ): Promise<void> {
     const configuration = vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION);
     if (!configuration.get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true)) {
@@ -127,14 +127,14 @@ export class NotificationManager {
       );
     }
     if (source === 'analysis') {
-      const confirmedMessage = confirmedLocallyFixedCount > 0
+      const confirmedMessage = confirmedLocallyModifiedCount > 0
         ? spanish
-          ? confirmedLocallyFixedCount === 1
-            ? ' SonarQube confirmó 1 defecto corregido localmente.'
-            : ` SonarQube confirmó ${confirmedLocallyFixedCount} defectos corregidos localmente.`
-          : confirmedLocallyFixedCount === 1
-            ? ' SonarQube confirmed 1 locally fixed issue.'
-            : ` SonarQube confirmed ${confirmedLocallyFixedCount} locally fixed issues.`
+          ? confirmedLocallyModifiedCount === 1
+            ? ' SonarQube confirmó que 1 defecto modificado localmente ya no se detecta.'
+            : ` SonarQube confirmó que ${confirmedLocallyModifiedCount} defectos modificados localmente ya no se detectan.`
+          : confirmedLocallyModifiedCount === 1
+            ? ' SonarQube confirmed that 1 locally modified issue is no longer detected.'
+            : ` SonarQube confirmed that ${confirmedLocallyModifiedCount} locally modified issues are no longer detected.`
         : '';
       await this.notify(
         spanish

@@ -58,7 +58,7 @@ test('las propiedades de alcance usan la sintaxis de cada scanner', () => {
 
 test('los scanners integrados consumen el alcance y conservan los defaults solo sin configuración explícita', () => {
   const analysisService = readFileSync(
-    path.resolve(process.cwd(), 'src/scanner/analysisService.ts'),
+    path.resolve(process.cwd(), 'src/pipeline/executionService.ts'),
     'utf8'
   );
 
@@ -93,7 +93,7 @@ test('manifest 1.3.0, traducciones y documentación mantienen la configuración 
     contributes?: { configuration?: { properties?: Record<string, unknown> } };
   };
   const properties = packageManifest.contributes?.configuration?.properties ?? {};
-  assert.equal(packageManifest.version, '1.4.0');
+  assert.equal(packageManifest.version, '2.0.0');
   assert.ok(properties['sonarQubeDashboard.sonar.analysisInclusions']);
   assert.ok(properties['sonarQubeDashboard.sonar.analysisExclusions']);
 

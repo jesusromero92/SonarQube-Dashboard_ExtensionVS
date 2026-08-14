@@ -6,7 +6,6 @@ export const DASHBOARD_LAUNCHER_VIEW_ID = 'sonarQubeDashboard.launcher';
 export const SONAR_CONFIGURATION_SECTION = 'sonarQubeDashboard.sonar';
 export const DASHBOARD_CONFIGURATION_SECTION = 'sonarQubeDashboard';
 export const SONAR_TOKEN_KEY_PREFIX = 'sonarQubeDashboard.sonar.token:';
-export const SONARQUBE_FOR_IDE_EXTENSION_ID = 'SonarSource.sonarlint-vscode';
 
 export const SONAR_CONFIGURATION_KEYS = {
   serverUrl: 'serverUrl',
@@ -27,7 +26,6 @@ export const DASHBOARD_CONFIGURATION_KEYS = {
   language: 'language',
   autoRefresh: 'autoRefresh',
   refreshIntervalMinutes: 'refreshIntervalMinutes',
-  liveRemediationEnabled: 'liveRemediation.enabled',
   notificationsEnabled: 'notifications.enabled',
   significantIncreasePercent: 'notifications.significantIncreasePercent',
   significantIncreaseMinimum: 'notifications.significantIncreaseMinimum'
@@ -59,9 +57,7 @@ export const DASHBOARD_COMMANDS = {
   nextFlowLocation: 'sonarQubeDashboard.nextFlowLocation',
   openFlowLocation: 'sonarQubeDashboard.openFlowLocation',
   showCoverage: 'sonarQubeDashboard.showCoverage',
-  showDuplications: 'sonarQubeDashboard.showDuplications',
-  openPipelineExecution: 'sonarQubeDashboard.openPipelineExecution',
-  openLocallyFixedIssue: 'sonarQubeDashboard.openLocallyFixedIssue'
+  showDuplications: 'sonarQubeDashboard.showDuplications'
 } as const;
 
 
@@ -221,8 +217,6 @@ export const SONAR_COVERAGE_METRICS = [
 ] as const;
 
 export const ISSUE_TREE_VIEW_ID = 'sonarQubeDashboard.issueTree';
-export const PIPELINE_EXECUTION_TREE_VIEW_ID = 'sonarQubeDashboard.pipelineExecutions';
-export const LOCALLY_FIXED_ISSUES_TREE_VIEW_ID = 'sonarQubeDashboard.locallyFixedIssues';
 export const ISSUE_TREE_GROUPS = ['file', 'rule', 'severity'] as const;
 export type IssueTreeGroup = typeof ISSUE_TREE_GROUPS[number];
 
