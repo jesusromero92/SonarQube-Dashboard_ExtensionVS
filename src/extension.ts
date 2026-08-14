@@ -19,7 +19,10 @@ import {
   createEmptyRefreshSummary,
   preserveRefreshSummaryAfterErrors
 } from './dashboard/summary';
-import { connectionErrorMessage } from './dashboard/connectionValidation';
+import {
+  connectionErrorMessage,
+  normalizeConnectionServerUrl
+} from './dashboard/connectionValidation';
 import {
   getDashboardLanguage,
   localeTag,
@@ -275,8 +278,8 @@ function appendAnalysisComparison(
     summary.analysisComparisonAvailable = false;
     return;
   }
-  const latest = evolution[evolution.length - 1];
-  const previous = evolution[evolution.length - 2];
+  const latest = evolution.at(-1)!;
+  const previous = evolution.at(-2)!;
   if (summary.latestAnalysis) {
     mergeEvolutionPoint(summary.latestAnalysis, latest);
   } else {
@@ -388,38 +391,42 @@ function appendRatings(
   }
 }
 
+interface FolderRefreshData {
+  loaded: LoadedSonarData;
+  publishedCount: number;
+  issues: DashboardIssue[];
+  newIssues: DashboardIssue[];
+  hotspots: DashboardHotspot[];
+  newHotspots: DashboardHotspot[];
+  coverage: CoverageSummary;
+}
+
 function appendFolderData(
   summary: RefreshSummary,
-  loaded: LoadedSonarData,
-  publishedCount: number,
-  issues: DashboardIssue[],
-  newIssues: DashboardIssue[],
-  hotspots: DashboardHotspot[],
-  newHotspots: DashboardHotspot[],
-  coverage: CoverageSummary
+  data: FolderRefreshData
 ): void {
-  summary.published += publishedCount;
-  summary.newPublished += newIssues.length;
-  summary.issues.push(...issues);
-  summary.newIssues.push(...newIssues);
-  summary.hotspots.push(...hotspots);
-  summary.newHotspots.push(...newHotspots);
-  summary.hasAnalysis = summary.hasAnalysis || loaded.hasAnalysis;
-  summary.coverage.files.push(...coverage.files);
+  summary.published += data.publishedCount;
+  summary.newPublished += data.newIssues.length;
+  summary.issues.push(...data.issues);
+  summary.newIssues.push(...data.newIssues);
+  summary.hotspots.push(...data.hotspots);
+  summary.newHotspots.push(...data.newHotspots);
+  summary.hasAnalysis = summary.hasAnalysis || data.loaded.hasAnalysis;
+  summary.coverage.files.push(...data.coverage.files);
 
   if (summary.configuredFolders === 1) {
-    summary.coverage.overall = coverage.overall;
-    summary.coverage.newCode = coverage.newCode;
+    summary.coverage.overall = data.coverage.overall;
+    summary.coverage.newCode = data.coverage.newCode;
   }
 
-  summary.evolution.push(...latestEvolutionByDay(loaded.evolution));
-  appendAnalysisComparison(summary, loaded.evolution);
+  summary.evolution.push(...latestEvolutionByDay(data.loaded.evolution));
+  appendAnalysisComparison(summary, data.loaded.evolution);
   summary.qualityGate.status = worstQualityGateStatus(
     summary.qualityGate.status,
-    loaded.qualityGate.status
+    data.loaded.qualityGate.status
   );
-  summary.qualityGate.conditions.push(...loaded.qualityGate.conditions);
-  appendRatings(summary, loaded);
+  summary.qualityGate.conditions.push(...data.loaded.qualityGate.conditions);
+  appendRatings(summary, data.loaded);
 }
 
 async function refreshWorkspaceFolder(
@@ -455,16 +462,15 @@ async function refreshWorkspaceFolder(
       mapFolderCoverage(folder, config.projectKey, config.baseDir, loaded.coverage)
     ]);
 
-    appendFolderData(
-      summary,
+    appendFolderData(summary, {
       loaded,
-      result.published,
-      result.issues,
+      publishedCount: result.published,
+      issues: result.issues,
       newIssues,
       hotspots,
       newHotspots,
       coverage
-    );
+    });
 
     notificationScopes.push({
       id: [
@@ -834,7 +840,7 @@ async function refreshAfterIssueMutation(
 }
 
 function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode.Uri {
-  const base = config.serverUrl.trim().replace(/\/+$/, '');
+  const base = normalizeConnectionServerUrl(config.serverUrl);
   const url = new URL(`${base}/project/issues`);
   url.searchParams.set('id', issue.project || config.projectKey);
   url.searchParams.set('open', issue.key);

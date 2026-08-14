@@ -162,74 +162,122 @@ export function serializePipelineTemplateYaml(template: PipelineTemplate): strin
   return `${lines.join('\n')}\n`;
 }
 
-export function parsePipelineTemplateYaml(value: string): PipelineTemplate {
-  const lines = value.split(/\r?\n/);
-  let version = 0;
-  let name = '';
-  let description = '';
-  const steps: AnalysisExecutionStep[] = [];
-  let current: Partial<AnalysisExecutionStep> | undefined;
+interface PipelineTemplateParseState {
+  version: number;
+  name: string;
+  description: string;
+  steps: AnalysisExecutionStep[];
+  current?: Partial<AnalysisExecutionStep>;
+}
 
-  const flush = (): void => {
-    if (!current) return;
-    steps.push({
-      id: String(current.id ?? `step-${steps.length + 1}`),
-      name: String(current.name ?? `Paso ${steps.length + 1}`),
-      kind: current.kind === 'build' || current.kind === 'test' || current.kind === 'sonar'
-        ? current.kind
-        : 'custom',
-      command: current.command ? String(current.command) : undefined,
-      failurePolicy: current.failurePolicy === 'continue' ? 'continue' : 'stop',
-      enabled: current.enabled !== false
-    });
-    current = undefined;
-  };
+function parsedStepKind(
+  kind: AnalysisExecutionStep['kind'] | undefined
+): AnalysisExecutionStep['kind'] {
+  if (kind === 'build' || kind === 'test' || kind === 'sonar') return kind;
+  return 'custom';
+}
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#') || line === 'steps:') continue;
-    if (line.startsWith('version:')) {
-      version = Number(parseYamlScalar(line.slice('version:'.length)));
-      continue;
-    }
-    if (line.startsWith('name:') && !current) {
-      name = String(parseYamlScalar(line.slice('name:'.length)));
-      continue;
-    }
-    if (line.startsWith('description:') && !current) {
-      description = String(parseYamlScalar(line.slice('description:'.length)));
-      continue;
-    }
-    if (line.startsWith('- id:')) {
-      flush();
-      current = { id: String(parseYamlScalar(line.slice('- id:'.length))) };
-      continue;
-    }
-    if (!current) continue;
-    const separator = line.indexOf(':');
-    if (separator < 0) continue;
-    const key = line.slice(0, separator).trim();
-    const parsed = parseYamlScalar(line.slice(separator + 1));
-    if (key === 'name') current.name = String(parsed);
-    else if (key === 'kind') current.kind = String(parsed) as AnalysisExecutionStep['kind'];
-    else if (key === 'command') current.command = String(parsed);
-    else if (key === 'failurePolicy') current.failurePolicy = String(parsed) as AnalysisExecutionStep['failurePolicy'];
-    else if (key === 'enabled') current.enabled = parsed !== false && parsed !== 'false';
+function flushParsedStep(state: PipelineTemplateParseState): void {
+  if (!state.current) return;
+  const index = state.steps.length + 1;
+  state.steps.push({
+    id: String(state.current.id ?? `step-${index}`),
+    name: String(state.current.name ?? `Paso ${index}`),
+    kind: parsedStepKind(state.current.kind),
+    command: state.current.command ? String(state.current.command) : undefined,
+    failurePolicy: state.current.failurePolicy === 'continue' ? 'continue' : 'stop',
+    enabled: state.current.enabled !== false
+  });
+  state.current = undefined;
+}
+
+function parseTemplateHeader(
+  line: string,
+  state: PipelineTemplateParseState
+): boolean {
+  if (state.current) return false;
+  if (line.startsWith('version:')) {
+    state.version = Number(parseYamlScalar(line.slice('version:'.length)));
+    return true;
   }
-  flush();
+  if (line.startsWith('name:')) {
+    state.name = String(parseYamlScalar(line.slice('name:'.length)));
+    return true;
+  }
+  if (line.startsWith('description:')) {
+    state.description = String(parseYamlScalar(line.slice('description:'.length)));
+    return true;
+  }
+  return false;
+}
 
-  if (version !== 1) {
+function applyParsedStepProperty(
+  current: Partial<AnalysisExecutionStep>,
+  line: string
+): void {
+  const separator = line.indexOf(':');
+  if (separator < 0) return;
+  const key = line.slice(0, separator).trim();
+  const parsed = parseYamlScalar(line.slice(separator + 1));
+  switch (key) {
+    case 'name':
+      current.name = String(parsed);
+      break;
+    case 'kind':
+      current.kind = String(parsed) as AnalysisExecutionStep['kind'];
+      break;
+    case 'command':
+      current.command = String(parsed);
+      break;
+    case 'failurePolicy':
+      current.failurePolicy = String(parsed) as AnalysisExecutionStep['failurePolicy'];
+      break;
+    case 'enabled':
+      current.enabled = parsed !== false && parsed !== 'false';
+      break;
+  }
+}
+
+function parseTemplateLine(
+  rawLine: string,
+  state: PipelineTemplateParseState
+): void {
+  const line = rawLine.trim();
+  if (!line || line.startsWith('#') || line === 'steps:') return;
+  if (parseTemplateHeader(line, state)) return;
+
+  if (line.startsWith('- id:')) {
+    flushParsedStep(state);
+    state.current = { id: String(parseYamlScalar(line.slice('- id:'.length))) };
+    return;
+  }
+  if (state.current) applyParsedStepProperty(state.current, line);
+}
+
+export function parsePipelineTemplateYaml(value: string): PipelineTemplate {
+  const state: PipelineTemplateParseState = {
+    version: 0,
+    name: '',
+    description: '',
+    steps: []
+  };
+  for (const rawLine of value.split(/\r?\n/)) {
+    parseTemplateLine(rawLine, state);
+  }
+  flushParsedStep(state);
+
+  if (state.version !== 1) {
     throw new Error('La plantilla debe usar version: 1.');
   }
-  if (!name.trim()) {
+  if (!state.name.trim()) {
     throw new Error('La plantilla no contiene un nombre.');
   }
   return {
     id: `custom-${Date.now().toString(36)}`,
-    name: name.trim(),
-    description: description.trim(),
+    name: state.name.trim(),
+    description: state.description.trim(),
     builtin: false,
-    steps: normalizeTemplateSteps(steps)
+    steps: normalizeTemplateSteps(state.steps)
   };
 }
 
@@ -301,7 +349,7 @@ function parseYamlScalar(value: string): string | number | boolean {
   if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
       (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
     if (trimmed.startsWith('"')) return JSON.parse(trimmed);
-    return trimmed.slice(1, -1).replace(/''/g, "'");
+    return trimmed.slice(1, -1).replaceAll("''", "'");
   }
   return trimmed;
 }

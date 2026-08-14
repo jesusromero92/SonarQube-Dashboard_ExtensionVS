@@ -65,7 +65,7 @@ function toImpactSeverities(csv: string): string {
 function toIssueStatuses(csv: string): string {
   const result = new Set<string>();
   for (const value of csv.split(',')) {
-    const normalized = value.trim().toUpperCase().replace(/-/g, '_');
+    const normalized = value.trim().toUpperCase().replaceAll('-', '_');
     if (normalized === 'REOPENED') {
       result.add('OPEN');
     } else if (normalized === 'RESOLVED') {

@@ -426,6 +426,15 @@ export class DashboardPanel {
       return;
     }
 
+    if (await this.handleConfigurationMessage(message)) return;
+    if (await this.handleSonarDataMessage(message)) return;
+    if (await this.handlePipelineWebviewMessage(message)) return;
+    await this.handleUtilityMessage(message);
+  }
+
+  private async handleConfigurationMessage(
+    message: DashboardWebviewMessage
+  ): Promise<boolean> {
     switch (message.type) {
       case 'ready':
         this.validatedConnections.clear();
@@ -434,14 +443,14 @@ export class DashboardPanel {
         this.setRefreshSummary(this.lastSummary);
         this.postMessage({ type: 'loading', loading: this.loading });
         this.postMessage({
-            type: 'analysisState',
-            state: localizeAnalysisState(this.pipelineAnalysisState(), this.language)
-          });
+          type: 'analysisState',
+          state: localizeAnalysisState(this.pipelineAnalysisState(), this.language)
+        });
         this.navigate(this.currentPage);
         this.postPendingIssueDetail();
         this.postPendingRuleDetail();
         this.postPendingHotspotDetail();
-        break;
+        return true;
       case 'selectFolder':
         if (this.selectedFolderUri) {
           this.dirtyConnectionFolders.delete(this.selectedFolderUri);
@@ -449,33 +458,13 @@ export class DashboardPanel {
         }
         this.selectedFolderUri = message.folderUri;
         await this.sendState();
-        break;
+        return true;
       case 'setLanguage':
         await this.changeLanguage(normalizeDashboardLanguage(message.language));
-        break;
+        return true;
       case 'setModule':
-        if (message.moduleId) {
-          const requestedEnabled = message.moduleEnabled !== false;
-          const currentlyEnabled = isDashboardModuleEnabled(message.moduleId);
-          if (
-            currentlyEnabled &&
-            !requestedEnabled &&
-            !(await this.confirmModuleDisable(message.moduleId))
-          ) {
-            await this.sendState();
-            break;
-          }
-
-          const moduleState = await setDashboardModuleEnabled(
-            message.moduleId,
-            requestedEnabled
-          );
-          if (message.moduleId === 'pipeline' && !moduleState.pipeline) {
-            this.deactivatePipelineRuntime();
-          }
-          await this.sendState();
-        }
-        break;
+        await this.handleSetModule(message);
+        return true;
       case 'setLiveRemediation':
         await vscode.workspace
           .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
@@ -484,103 +473,149 @@ export class DashboardPanel {
             message.liveRemediationEnabled !== false,
             vscode.ConfigurationTarget.Global
           );
-        break;
+        return true;
       case 'scopeChanged':
-        if (message.scope) {
-          this.scopeCallback(message.scope);
-        }
-        break;
+        if (message.scope) this.scopeCallback(message.scope);
+        return true;
       case 'navigate':
-        if (message.page) {
-          await this.showPage(message.page);
-        }
-        break;
+        if (message.page) await this.showPage(message.page);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private async handleSetModule(message: DashboardWebviewMessage): Promise<void> {
+    if (!message.moduleId) return;
+
+    const requestedEnabled = message.moduleEnabled !== false;
+    const currentlyEnabled = isDashboardModuleEnabled(message.moduleId);
+    const shouldConfirmDisable = currentlyEnabled && !requestedEnabled;
+    if (shouldConfirmDisable && !(await this.confirmModuleDisable(message.moduleId))) {
+      await this.sendState();
+      return;
+    }
+
+    const moduleState = await setDashboardModuleEnabled(
+      message.moduleId,
+      requestedEnabled
+    );
+    if (message.moduleId === 'pipeline' && !moduleState.pipeline) {
+      this.deactivatePipelineRuntime();
+    }
+    await this.sendState();
+  }
+
+  private async handleSonarDataMessage(
+    message: DashboardWebviewMessage
+  ): Promise<boolean> {
+    switch (message.type) {
       case 'loadHotspotDetail':
         await this.loadHotspotDetail(message);
-        break;
+        return true;
       case 'loadRuleDetail':
         await this.loadRuleDetail(message);
-        break;
+        return true;
       case 'loadIssueLifecycle':
         await this.loadIssueLifecycle(message);
-        break;
+        return true;
       case 'mutateIssue':
         await this.mutateIssue(message);
-        break;
+        return true;
       case 'loadCoverageDetail':
         await this.loadCoverageDetail(message);
-        break;
+        return true;
       case 'openDuplicationComparison':
         await this.openDuplicationComparison(message);
-        break;
+        return true;
       case 'selectFlowLocation':
         await this.selectFlowLocation(message);
-        break;
+        return true;
       case 'loadProjects':
         await this.loadProjects(message);
-        break;
+        return true;
       case 'createComponent':
         await this.createComponent(message);
-        break;
+        return true;
       case 'save':
         await this.save(message);
-        break;
+        return true;
       case 'saveAnalysisScope':
         await this.saveAnalysisScope(message);
-        break;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private async handlePipelineWebviewMessage(
+    message: DashboardWebviewMessage
+  ): Promise<boolean> {
+    switch (message.type) {
       case 'savePipeline':
         await this.savePipeline(message);
-        break;
+        return true;
       case 'savePipelineTemplate':
         await this.savePipelineTemplate(message);
-        break;
+        return true;
       case 'deletePipelineTemplate':
         await this.deletePipelineTemplate(message);
-        break;
+        return true;
       case 'exportPipelineTemplate':
         await this.exportPipelineTemplate(message);
-        break;
+        return true;
       case 'importPipelineTemplate':
         await this.importPipelineTemplate(message);
-        break;
+        return true;
       case 'loadPipelineHistory':
         await this.sendPipelineHistory(message.folderUri);
-        break;
+        return true;
       case 'clearPipelineHistory':
         await this.clearPipelineHistory(message.folderUri);
-        break;
-      case 'loadDiagnostics':
-        await this.sendDiagnostics(message.folderUri);
-        break;
-      case 'copyDiagnostics':
-        await this.copyDiagnostics(message.folderUri);
-        break;
-      case 'copyIssues':
-        await this.copyIssues(message.clipboardText);
-        break;
-      case 'refresh':
-        await this.refreshFromPanel();
-        break;
+        return true;
       case 'analyze':
         await this.analyzeRepository(message.folderUri, {
           steps: normalizeRequestedPipelineSteps(message.analysisSteps)
         });
-        break;
+        return true;
       case 'cancelAnalysis':
         this.pipelineRuntime?.analysisService.cancel();
-        break;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private async handleUtilityMessage(
+    message: DashboardWebviewMessage
+  ): Promise<boolean> {
+    switch (message.type) {
+      case 'loadDiagnostics':
+        await this.sendDiagnostics(message.folderUri);
+        return true;
+      case 'copyDiagnostics':
+        await this.copyDiagnostics(message.folderUri);
+        return true;
+      case 'copyIssues':
+        await this.copyIssues(message.clipboardText);
+        return true;
+      case 'refresh':
+        await this.refreshFromPanel();
+        return true;
       case 'clear':
         this.clearCallback();
         this.lastSummary = createEmptyRefreshSummary();
         this.setRefreshSummary(this.lastSummary);
         this.postStatus('success', 'Se han eliminado los diagnósticos de Problems.');
-        break;
+        return true;
       case 'openIssue':
         await this.openIssue(message);
-        break;
+        return true;
       case 'openProblems':
         await vscode.commands.executeCommand('workbench.actions.view.problems');
-        break;
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -831,7 +866,7 @@ export class DashboardPanel {
     const replacementToken = (message.token ?? '').trim();
     const replaceStoredToken = Boolean(
       replacementToken &&
-      savedConnection.serverUrl.trim().replace(/\/+$/, '') === serverUrl
+      normalizeConnectionServerUrl(savedConnection.serverUrl) === serverUrl
     );
     const token = replacementToken ||
       await this.context.secrets.get(tokenKey(folder));
@@ -1815,7 +1850,7 @@ ${selected.name}`,
   }
 
   private analysisRoot(folder: vscode.WorkspaceFolder, baseDir?: string): string | undefined {
-    const normalized = (baseDir ?? '').trim().replace(/\\/g, '/');
+    const normalized = (baseDir ?? '').trim().replaceAll('\\', '/');
     const segments = normalized
       .split('/')
       .map(segment => segment.trim())

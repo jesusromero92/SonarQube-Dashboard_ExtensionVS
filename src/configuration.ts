@@ -5,6 +5,7 @@ import {
   SONAR_TOKEN_KEY_PREFIX
 } from './constants';
 import { FolderSonarConfig, FolderSonarFormConfig, ScannerMode } from './types';
+import { trimTrailingSlashes } from './textUtils';
 
 export function tokenKey(folder: vscode.WorkspaceFolder): string {
   return `${SONAR_TOKEN_KEY_PREFIX}${folder.uri.toString()}`;
@@ -109,7 +110,7 @@ export async function saveFolderConfig(
 
   await configuration.update(
     SONAR_CONFIGURATION_KEYS.serverUrl,
-    values.serverUrl.trim().replace(/\/+$/, ''),
+    trimTrailingSlashes(values.serverUrl.trim()),
     vscode.ConfigurationTarget.WorkspaceFolder
   );
   await configuration.update(

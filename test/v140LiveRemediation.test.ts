@@ -86,6 +86,22 @@ test('la configuración del dashboard permite activar o desactivar la remediaci�
   assert.match(panel, /LIVE_REMEDIATION_CONFIGURATION_KEY/);
 });
 
+test('los archivos reemplazados fuera del editor también aparecen como modificados localmente', () => {
+  const source = read('src/liveRemediation/manager.ts');
+
+  assert.match(source, /createFileSystemWatcher/);
+  assert.match(source, /trackedFilesWatcher\.onDidChange/);
+  assert.match(source, /trackedFilesWatcher\.onDidCreate/);
+  assert.match(source, /trackedFilesWatcher\.onDidDelete/);
+  assert.match(source, /onTrackedFileSystemChanged/);
+  assert.match(source, /workspace\.fs\.readFile/);
+  assert.match(source, /document\.getText/);
+  assert.match(
+    source,
+    /tracked\.state === 'modified'[\s\S]*tracked\.state = 'modified'/
+  );
+});
+
 test('una edición adyacente al rango Sonar vuelve a pending validation', () => {
   const source = read('src/liveRemediation/manager.ts')
     + read('src/liveRemediation/rangeTracking.ts');

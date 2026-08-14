@@ -228,9 +228,10 @@ export class CoverageDecorationManager implements vscode.Disposable {
             const conditionText = line.conditions > 0
               ? ` · ${line.coveredConditions}/${line.conditions}`
               : '';
+            const hitsText = line.hits === null ? '' : ` · hits: ${line.hits}`;
             return {
               range: editor.document.lineAt(lineIndex).range,
-              hoverMessage: `${statusLabel(status)}${line.hits === null ? '' : ` · hits: ${line.hits}`}${conditionText}`
+              hoverMessage: `${statusLabel(status)}${hitsText}${conditionText}`
             } satisfies vscode.DecorationOptions;
           });
         const decoration = this.decorations.get(status);

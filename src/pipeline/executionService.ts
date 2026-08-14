@@ -13,6 +13,7 @@ import {
 } from './parser';
 import { PipelineHistoryStore } from './history';
 import { ProcessRunner } from '../scanner/processRunner';
+import { trimTrailingSlashes } from '../textUtils';
 import {
   AnalysisBaselineComparison,
   AnalysisExecutionStep,
@@ -735,8 +736,10 @@ export class AnalysisService implements vscode.Disposable {
         scannerArgs.push(`-Dsonar.exclusions=${DEFAULT_EXCLUSIONS}`);
       }
     }
-    scannerArgs.push('-Dsonar.scanner.skipJreProvisioning=true');
-    scannerArgs.push('-Dsonar.working.directory=/usr/src/.scannerwork');
+    scannerArgs.push(
+      '-Dsonar.scanner.skipJreProvisioning=true',
+      '-Dsonar.working.directory=/usr/src/.scannerwork'
+    );
     const args = [
       'run', '--rm',
       '-e', 'SONAR_HOST_URL',
@@ -777,13 +780,13 @@ export class AnalysisService implements vscode.Disposable {
       throw new Error('Selecciona otro scanner o configura un comando personalizado.');
     }
     const command = template
-      .replaceAll(/\$\{workspaceFolder\}/g, scanner.rootPath)
-      .replaceAll(/\$\{projectKey\}/g, request.config.projectKey)
-      .replaceAll(/\$\{projectName\}/g, request.config.projectName || request.config.projectKey)
-      .replaceAll(/\$\{serverUrl\}/g, request.config.serverUrl)
-      .replaceAll(/\$\{branch\}/g, request.config.branch ?? '')
-      .replaceAll(/\$\{analysisInclusions\}/g, normalizeAnalysisPatterns(request.config.analysisInclusions))
-      .replaceAll(/\$\{analysisExclusions\}/g, normalizeAnalysisPatterns(request.config.analysisExclusions));
+      .replaceAll('${workspaceFolder}', scanner.rootPath)
+      .replaceAll('${projectKey}', request.config.projectKey)
+      .replaceAll('${projectName}', request.config.projectName || request.config.projectKey)
+      .replaceAll('${serverUrl}', request.config.serverUrl)
+      .replaceAll('${branch}', request.config.branch ?? '')
+      .replaceAll('${analysisInclusions}', normalizeAnalysisPatterns(request.config.analysisInclusions))
+      .replaceAll('${analysisExclusions}', normalizeAnalysisPatterns(request.config.analysisExclusions));
 
     this.update('scanning', 'Ejecutando el comando de análisis personalizado…');
     await this.execute({
@@ -954,7 +957,7 @@ export class AnalysisService implements vscode.Disposable {
   ): Promise<void> {
     const pollingStartedAt = Date.now();
     const analysisStartedAt = Date.parse(this.state.startedAt ?? '') - 5000;
-    const serverUrl = request.config.serverUrl.replace(/\/+$/, '');
+    const serverUrl = trimTrailingSlashes(request.config.serverUrl);
     while (Date.now() - pollingStartedAt < CE_POLL_TIMEOUT_MS) {
       this.ensureNotCancelled();
       const url = new URL(`${serverUrl}/api/project_analyses/search`);
@@ -1137,7 +1140,7 @@ async function findJavaBinaryDirectories(rootPath: string): Promise<string[]> {
   const candidates = await findDirectoriesNamed(rootPath, new Set(['classes', 'bin']), 6);
   for (const directory of candidates) {
     if (await containsFileWithExtension(directory, '.class', 3)) {
-      directories.push(path.relative(rootPath, directory).replace(/\\/g, '/'));
+      directories.push(path.relative(rootPath, directory).replaceAll('\\', '/'));
     }
   }
   return directories;

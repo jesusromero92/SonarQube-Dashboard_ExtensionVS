@@ -1,4 +1,4 @@
-export const MESSAGE_EVENTS_SCRIPT = `
+export const MESSAGE_EVENTS_SCRIPT = String.raw`
     window.addEventListener('message', event => {
       const message = event.data;
 
@@ -137,8 +137,8 @@ export const MESSAGE_EVENTS_SCRIPT = `
             (!message.folderUri ||
               message.folderUri === currentFolderUri) &&
             (!message.serverUrl ||
-              message.serverUrl.replace(/\\/+$/, '') ===
-                elements.serverUrl.value.trim().replace(/\\/+$/, ''))
+              message.serverUrl.replace(/\/+$/, '') ===
+                elements.serverUrl.value.trim().replace(/\/+$/, ''))
           ) {
             connectionDraftDirty = true;
             connectionDraftFolderUri = currentFolderUri;
@@ -196,8 +196,8 @@ export const MESSAGE_EVENTS_SCRIPT = `
             (!message.folderUri ||
               message.folderUri === currentFolderUri) &&
             (!message.serverUrl ||
-              message.serverUrl.replace(/\\/+$/, '') ===
-                elements.serverUrl.value.trim().replace(/\\/+$/, ''))
+              message.serverUrl.replace(/\/+$/, '') ===
+                elements.serverUrl.value.trim().replace(/\/+$/, ''))
           ) {
             renderSonarUnavailable(message.message);
           }
@@ -209,8 +209,8 @@ export const MESSAGE_EVENTS_SCRIPT = `
             (!message.folderUri ||
               message.folderUri === currentFolderUri) &&
             (!message.serverUrl ||
-              message.serverUrl.replace(/\\/+$/, '') ===
-                elements.serverUrl.value.trim().replace(/\\/+$/, ''))
+              message.serverUrl.replace(/\/+$/, '') ===
+                elements.serverUrl.value.trim().replace(/\/+$/, ''))
           ) {
             currentConfig.sonarCompatibility =
               message.sonarCompatibility;

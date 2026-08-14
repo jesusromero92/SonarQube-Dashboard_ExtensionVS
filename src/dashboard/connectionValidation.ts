@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
+import { stringifyUnknown, trimTrailingSlashes } from '../textUtils';
 
 export function normalizeConnectionServerUrl(serverUrl: string): string {
-  return serverUrl.trim().replace(/\/+$/, '');
+  return trimTrailingSlashes(serverUrl.trim());
 }
 
 export function connectionFingerprint(
@@ -49,10 +50,8 @@ export function connectionErrorMessage(error: unknown): string {
     return 'La URL no corresponde a un servidor SonarQube compatible.';
   }
 
-  const value = error instanceof Error ? error.message : String(error);
-  const cause = error instanceof Error && error.cause
-    ? String(error.cause)
-    : '';
+  const value = error instanceof Error ? error.message : stringifyUnknown(error);
+  const cause = error instanceof Error ? stringifyUnknown(error.cause ?? '') : '';
   if (
     error instanceof TypeError ||
     /fetch failed|network|enotfound|econnrefused|econnreset|etimedout|certificate|ssl|tls/i.test(

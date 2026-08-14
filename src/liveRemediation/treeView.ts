@@ -1,14 +1,11 @@
 import * as vscode from 'vscode';
 import { getDashboardLanguage } from '../i18n';
-import {
-  LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
-  OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND
-} from './constants';
+import { OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND } from './constants';
+export { LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID } from './constants';
 import { localStateLabel } from './diagnostics';
 import { LiveRemediationManager } from './manager';
 import { LocallyModifiedIssueSummary } from './models';
 
-export { LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID };
 
 export class LocallyModifiedIssuesTreeProvider
 implements vscode.TreeDataProvider<LocallyModifiedIssueSummary>, vscode.Disposable {
@@ -71,5 +68,5 @@ implements vscode.TreeDataProvider<LocallyModifiedIssueSummary>, vscode.Disposab
 }
 
 function escapeMarkdown(value: string): string {
-  return String(value).replace(/[\\`*_{}[\]()#+\-.!|>]/g, '\\$&');
+  return String(value).replace(/[\\`*_{}[\]()#+\-.!|>]/g, String.raw`\$&`);
 }

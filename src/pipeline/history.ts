@@ -15,6 +15,16 @@ import {
   PipelineRunHistoryStep
 } from './models';
 
+function historyStatus(
+  state: AnalysisState,
+  steps: readonly PipelineRunHistoryStep[]
+): PipelineRunHistoryEntry['status'] {
+  if (state.phase === 'cancelled') return 'cancelled';
+  if (state.phase === 'error') return 'failed';
+  if (steps.some(step => step.status === 'warning')) return 'warning';
+  return 'success';
+}
+
 type PipelineHistoryProjectConfig = Pick<
   FolderSonarConfig,
   'projectKey' | 'projectName' | 'branch'
@@ -45,13 +55,7 @@ export class PipelineHistoryStore {
       completedAt: step.completedAt,
       durationMs: step.durationMs
     }));
-    const status = state.phase === 'cancelled'
-      ? 'cancelled'
-      : state.phase === 'error'
-        ? 'failed'
-        : steps.some(step => step.status === 'warning')
-          ? 'warning'
-          : 'success';
+    const status = historyStatus(state, steps);
     const entry: PipelineRunHistoryEntry = {
       id: `${Date.now().toString(36)}-${createHash('sha1')
         .update(`${request.rootPath}\0${startedAt}`)

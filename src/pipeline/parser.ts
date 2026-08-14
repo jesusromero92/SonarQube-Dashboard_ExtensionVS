@@ -26,7 +26,7 @@ export function parseAnalysisPipeline(
 
   return commands.map((line, index) => {
     const parts = line.split('::').map(part => part.trim());
-    const trailingPolicy = parts[parts.length - 1];
+    const trailingPolicy = parts.at(-1);
     const failurePolicy: AnalysisFailurePolicy = trailingPolicy === 'continue'
       ? 'continue'
       : 'stop';
@@ -68,18 +68,22 @@ export function expandAnalysisPipelineCommand(
   variables: AnalysisPipelineVariables
 ): string {
   return command
-    .replace(/\$\{workspaceFolder\}/g, variables.workspaceFolder)
-    .replace(/\$\{projectKey\}/g, variables.projectKey)
-    .replace(/\$\{projectName\}/g, variables.projectName)
-    .replace(/\$\{serverUrl\}/g, variables.serverUrl)
-    .replace(/\$\{branch\}/g, variables.branch);
+    .replaceAll('${workspaceFolder}', variables.workspaceFolder)
+    .replaceAll('${projectKey}', variables.projectKey)
+    .replaceAll('${projectName}', variables.projectName)
+    .replaceAll('${serverUrl}', variables.serverUrl)
+    .replaceAll('${branch}', variables.branch);
 }
 
 function slug(value: string): string {
-  return value
+  const normalized = value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'step';
+    .replace(/[^a-z0-9]+/g, '-');
+  let start = 0;
+  let end = normalized.length;
+  while (start < end && normalized[start] === '-') start += 1;
+  while (end > start && normalized[end - 1] === '-') end -= 1;
+  return normalized.slice(start, end) || 'step';
 }

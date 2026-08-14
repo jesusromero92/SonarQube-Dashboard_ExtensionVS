@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
+import * as path from 'node:path';
 import { ProcessResult, ProcessSpec } from './types';
 
 export class ProcessRunner {
@@ -111,7 +112,8 @@ export class ProcessRunner {
       return;
     }
     if (process.platform === 'win32') {
-      const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      const taskkill = path.join(process.env.SystemRoot ?? String.raw`C:\Windows`, 'System32', 'taskkill.exe');
+      const killer = spawn(taskkill, ['/pid', String(child.pid), '/t', '/f'], {
         windowsHide: true,
         stdio: 'ignore'
       });

@@ -495,7 +495,6 @@ export interface SonarAnalysisBaselineData {
   qualityGate: QualityGateStatus;
 }
 
-export type DashboardSeverity = string;
 export type QualityGateStatus = 'OK' | 'WARN' | 'ERROR' | 'NONE';
 export type RatingGrade = 'A' | 'B' | 'C' | 'D' | 'E' | 'NONE';
 
@@ -565,7 +564,7 @@ export interface DashboardIssue {
   component: string;
   folderUri: string;
   impacts: SonarImpact[];
-  severity: DashboardSeverity;
+  severity: string;
   severityRank: number;
   type: string;
   message: string;
@@ -694,7 +693,7 @@ export interface DashboardHotspotDetail {
 }
 
 export interface SeverityCount {
-  name: DashboardSeverity;
+  name: string;
   count: number;
   rank: number;
 }

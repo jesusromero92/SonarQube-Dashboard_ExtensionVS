@@ -8,7 +8,6 @@ import {
   DashboardIssue,
   DashboardIssueFlow,
   DashboardIssueLocation,
-  DashboardSeverity,
   LoadedIssues,
   PublishResult,
   RemoteCoverageData,
@@ -62,7 +61,7 @@ function highestImpact(impacts: SonarImpact[] | undefined): string | undefined {
 export function issueSeverityLabel(
   issue: SonarIssue,
   instanceMode: SonarInstanceMode
-): DashboardSeverity {
+): string {
   const standardSeverity = normalizedUpperCase(issue.severity);
   const impactSeverity = highestImpact(issue.impacts);
 
@@ -75,7 +74,7 @@ export function issueSeverityLabel(
   return impactSeverity ?? standardSeverity ?? 'UNKNOWN';
 }
 
-export function issueSeverityRank(severity: DashboardSeverity): number {
+export function issueSeverityRank(severity: string): number {
   return SEVERITY_RANKS[severity.toUpperCase()] ?? 10;
 }
 
@@ -115,7 +114,7 @@ function issueRange(issue: SonarIssue): vscode.Range {
 }
 
 export function normalizeRelativePath(candidate: string): string | undefined {
-  const unixPath = candidate.replace(/\\/g, '/').replace(/^\/+/, '');
+  const unixPath = candidate.replaceAll('\\', '/').replace(/^\/+/, '');
   const normalized = path.posix.normalize(unixPath);
   if (
     normalized === '.' ||

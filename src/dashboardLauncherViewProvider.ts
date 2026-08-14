@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
-import { DASHBOARD_LAUNCHER_VIEW_ID } from './constants';
+export { DASHBOARD_LAUNCHER_VIEW_ID as DASHBOARD_VIEW_ID } from './constants';
 import { getDashboardLauncherHtml } from './dashboard/launcherWebview';
 import { DashboardPanel } from './dashboardPanel';
 import { localizeRuntimeText } from './i18n';
 import { getWebviewLocalizationBundle } from './i18n/runtimeWebview';
 
-export const DASHBOARD_VIEW_ID = DASHBOARD_LAUNCHER_VIEW_ID;
 
 export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;

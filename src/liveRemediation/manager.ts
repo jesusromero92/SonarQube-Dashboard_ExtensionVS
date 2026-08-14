@@ -33,6 +33,12 @@ import {
   SonarIdeDiagnosticsObserver
 } from './sonarIde';
 
+interface RestoredPendingState {
+  state: Exclude<IssueLocalRemediationState, 'server'>;
+  range: vscode.Range;
+  observedBySonarIde: boolean;
+}
+
 /**
  * Tracks the local remediation state of server-side issues without pretending that
  * a local edit has already been accepted by SonarQube Server.
@@ -63,9 +69,21 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.statusBar.name = 'SonarQube live remediation';
     this.statusBar.command = DASHBOARD_COMMANDS.refresh;
 
+    const trackedFilesWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+
     this.disposables.push(
       this.statusBar,
       this.changedEmitter,
+      trackedFilesWatcher,
+      trackedFilesWatcher.onDidChange(uri => {
+        void this.onTrackedFileSystemChanged(uri);
+      }),
+      trackedFilesWatcher.onDidCreate(uri => {
+        void this.onTrackedFileSystemChanged(uri);
+      }),
+      trackedFilesWatcher.onDidDelete(uri => {
+        void this.onTrackedFileSystemChanged(uri, true);
+      }),
       vscode.workspace.onDidChangeTextDocument(event => this.onDocumentChanged(event)),
       vscode.languages.onDidChangeDiagnostics(event => {
         for (const uri of event.uris) {
@@ -105,81 +123,98 @@ export class LiveRemediationManager implements vscode.Disposable {
     const diagnosticByKey = collectDiagnosticsByIssueKey(serverDiagnostics);
     const previousTracked = new Map(this.trackedByKey);
     const serverIssueKeys = new Set(issues.map(issue => issue.key));
-    const pendingLocallyModifiedKeys = new Set<string>();
-
-    for (const [key, tracked] of previousTracked) {
-      if (tracked.state !== 'server') pendingLocallyModifiedKeys.add(key);
-    }
-    for (const key of this.stateStore.pendingByKey.keys()) {
-      pendingLocallyModifiedKeys.add(key);
-    }
-
+    const pendingLocallyModifiedKeys = this.collectPendingLocallyModifiedKeys(previousTracked);
     const confirmedLocallyModifiedCount = confirmLocalRemediation
       ? [...pendingLocallyModifiedKeys].filter(key => !serverIssueKeys.has(key)).length
       : 0;
 
+    this.resetTrackedSnapshot();
+
+    for (const issue of issues) {
+      const sourceDiagnostic = diagnosticByKey.get(issue.key);
+      if (!sourceDiagnostic) continue;
+      this.trackServerIssue(
+        issue,
+        sourceDiagnostic,
+        previousTracked,
+        confirmLocalRemediation
+      );
+    }
+
+    this.syncPersistedStateFromTracked();
+    if (this.enabled) this.observeExternalDiagnosticsForAllFiles();
+    this.publishAll();
+    this.fireChanged();
+    return confirmedLocallyModifiedCount;
+  }
+
+  private collectPendingLocallyModifiedKeys(
+    previousTracked: ReadonlyMap<string, TrackedIssue>
+  ): Set<string> {
+    const keys = new Set<string>();
+    for (const [key, tracked] of previousTracked) {
+      if (tracked.state !== 'server') keys.add(key);
+    }
+    for (const key of this.stateStore.pendingByKey.keys()) keys.add(key);
+    return keys;
+  }
+
+  private resetTrackedSnapshot(): void {
     this.cancelEvaluationTimers();
     this.cancelActiveProblemsReveal();
     this.trackedByKey.clear();
     this.keysByUri.clear();
     this.diagnostics.restoreServerSnapshot();
     this.sonarIde.forget();
+  }
 
-    for (const issue of issues) {
-      const sourceDiagnostic = diagnosticByKey.get(issue.key);
-      if (!sourceDiagnostic) continue;
+  private restoredPendingState(
+    issue: DashboardIssue,
+    previousTracked: ReadonlyMap<string, TrackedIssue>
+  ): RestoredPendingState | undefined {
+    if (!this.enabled) return undefined;
 
-      const previous = this.enabled ? previousTracked.get(issue.key) : undefined;
-      const persisted = this.enabled ? this.stateStore.pendingByKey.get(issue.key) : undefined;
-      let restoredPending: {
-        state: Exclude<IssueLocalRemediationState, 'server'>;
-        range: vscode.Range;
-        observedBySonarIde: boolean;
-      } | undefined;
-
-      if (previous && previous.state !== 'server') {
-        restoredPending = {
-          state: previous.state,
-          range: previous.range,
-          observedBySonarIde: previous.observedBySonarIde
-        };
-      } else if (persisted?.fileUri === issue.fileUri) {
-        restoredPending = {
-          state: persisted.state,
-          range: persistedRange(persisted),
-          // For a persisted issue still pending validation, external evidence from a
-          // previous VS Code session is stale. Require SonarQube for IDE to report it
-          // again before local analyzer disappearance can move it to awaiting confirmation.
-          observedBySonarIde: persisted.state === 'awaitingConfirmation'
-            ? persisted.observedBySonarIde
-            : false
-        };
-      }
-
-      const preservePendingState = !confirmLocalRemediation && restoredPending !== undefined;
-      const pendingState = preservePendingState ? restoredPending : undefined;
-      const tracked: TrackedIssue = {
-        issue,
-        range: pendingState ? pendingState.range : sourceDiagnostic.range,
-        serverSeverity: sourceDiagnostic.severity,
-        serverMessage: sourceDiagnostic.message,
-        state: pendingState ? pendingState.state : 'server',
-        observedBySonarIde: pendingState ? pendingState.observedBySonarIde : false
+    const previous = previousTracked.get(issue.key);
+    if (previous?.state !== undefined && previous.state !== 'server') {
+      return {
+        state: previous.state,
+        range: previous.range,
+        observedBySonarIde: previous.observedBySonarIde
       };
-
-      this.trackedByKey.set(issue.key, tracked);
-      const keys = this.keysByUri.get(issue.fileUri) ?? new Set<string>();
-      keys.add(issue.key);
-      this.keysByUri.set(issue.fileUri, keys);
     }
 
-    this.syncPersistedStateFromTracked();
-    if (this.enabled) {
-      this.observeExternalDiagnosticsForAllFiles();
-    }
-    this.publishAll();
-    this.fireChanged();
-    return confirmedLocallyModifiedCount;
+    const persisted = this.stateStore.pendingByKey.get(issue.key);
+    if (persisted?.fileUri !== issue.fileUri) return undefined;
+    return {
+      state: persisted.state,
+      range: persistedRange(persisted),
+      observedBySonarIde: persisted.state === 'awaitingConfirmation'
+        ? persisted.observedBySonarIde
+        : false
+    };
+  }
+
+  private trackServerIssue(
+    issue: DashboardIssue,
+    sourceDiagnostic: vscode.Diagnostic,
+    previousTracked: ReadonlyMap<string, TrackedIssue>,
+    confirmLocalRemediation: boolean
+  ): void {
+    const restoredPending = this.restoredPendingState(issue, previousTracked);
+    const pendingState = !confirmLocalRemediation ? restoredPending : undefined;
+    const tracked: TrackedIssue = {
+      issue,
+      range: pendingState?.range ?? sourceDiagnostic.range,
+      serverSeverity: sourceDiagnostic.severity,
+      serverMessage: sourceDiagnostic.message,
+      state: pendingState?.state ?? 'server',
+      observedBySonarIde: pendingState?.observedBySonarIde ?? false
+    };
+
+    this.trackedByKey.set(issue.key, tracked);
+    const keys = this.keysByUri.get(issue.fileUri) ?? new Set<string>();
+    keys.add(issue.key);
+    this.keysByUri.set(issue.fileUri, keys);
   }
 
   clear(): void {
@@ -310,6 +345,55 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.syncPersistedStateFromTracked();
     this.publishUri(event.document.uri);
     if (stateChanged) this.fireChanged();
+  }
+
+  private async onTrackedFileSystemChanged(
+    uri: vscode.Uri,
+    deleted = false
+  ): Promise<void> {
+    if (!this.enabled || uri.scheme !== 'file') return;
+
+    const uriString = uri.toString();
+    const keys = this.keysByUri.get(uriString);
+    if (!keys?.size) return;
+
+    // Editor changes already provide precise ranges through onDidChangeTextDocument.
+    // If the open document and the file on disk are identical, this watcher event
+    // is the corresponding save/reload and must not broaden the affected issues.
+    // A closed-file replacement has no text diff, so every tracked issue in that
+    // file is conservatively considered modified locally.
+    if (!deleted && await this.openDocumentMatchesDisk(uri, uriString)) return;
+
+    let stateChanged = false;
+    for (const key of keys) {
+      const tracked = this.trackedByKey.get(key);
+      if (!tracked || tracked.state === 'modified') continue;
+      tracked.state = 'modified';
+      stateChanged = true;
+    }
+
+    if (!stateChanged) return;
+    this.syncPersistedStateFromTracked();
+    this.publishUri(uri);
+    this.fireChanged();
+  }
+
+  private async openDocumentMatchesDisk(
+    uri: vscode.Uri,
+    uriString: string
+  ): Promise<boolean> {
+    const document = vscode.workspace.textDocuments.find(
+      candidate => candidate.uri.toString() === uriString
+    );
+    if (!document) return false;
+
+    try {
+      let diskText = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+      if (diskText.startsWith('\uFEFF')) diskText = diskText.slice(1);
+      return diskText === document.getText();
+    } catch {
+      return false;
+    }
   }
 
   private scheduleExternalEvaluation(uri: vscode.Uri): void {

@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import {
-  PIPELINE_COMMANDS,
-  PIPELINE_EXECUTION_TREE_VIEW_ID
-} from './constants';
+import { PIPELINE_COMMANDS } from './constants';
+export { PIPELINE_EXECUTION_TREE_VIEW_ID } from './constants';
 import { DashboardLanguage, getDashboardLanguage } from '../i18n';
 import {
   AnalysisState,
@@ -309,8 +307,10 @@ function executionTooltip(
   if (entry.branch) {
     lines.push(`${branchTitle}: ${entry.branch}`);
   }
-  lines.push(`${startedTitle}: ${formatDate(entry.startedAt)}`);
-  lines.push(`${durationTitle}: ${formatDuration(entry.durationMs)}`);
+  lines.push(
+    `${startedTitle}: ${formatDate(entry.startedAt)}`,
+    `${durationTitle}: ${formatDuration(entry.durationMs)}`
+  );
   if (entry.message) {
     lines.push(`${messageTitle}: ${entry.message}`);
   }
@@ -337,6 +337,12 @@ function baselineDescription(
   return `Issues ${delta > 0 ? '+' : ''}${delta}`;
 }
 
+function baselineDeltaSign(delta: number): string {
+  if (delta > 0) return '+';
+  if (delta < 0) return '-';
+  return '';
+}
+
 function baselineTooltipLines(
   entry: PipelineRunHistoryEntry,
   spanish: boolean
@@ -359,7 +365,8 @@ function baselineTooltipLines(
     if (before === null || after === null) return '—';
     const delta = after - before;
     const decimals = Number.isInteger(delta) ? 0 : 1;
-    const signed = `${delta > 0 ? '+' : delta < 0 ? '-' : ''}${formatBaselineNumber(
+    const sign = baselineDeltaSign(delta);
+    const signed = `${sign}${formatBaselineNumber(
       Math.abs(delta),
       locale,
       decimals
@@ -430,4 +437,3 @@ function executionProjectTitle(
   return spanish ? 'Ejecución del pipeline' : 'Pipeline execution';
 }
 
-export { PIPELINE_EXECUTION_TREE_VIEW_ID };

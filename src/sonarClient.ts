@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { trimTrailingSlashes } from './textUtils';
 import {
   SONAR_COVERAGE_METRICS,
   SONAR_EVOLUTION_METRICS,
@@ -108,7 +109,7 @@ function rememberSonarRequestFailure(
 }
 
 function normalizeServerUrl(serverUrl: string): string {
-  return serverUrl.trim().replace(/\/+$/, '');
+  return trimTrailingSlashes(serverUrl.trim());
 }
 
 function getTotal(response: SonarIssuesResponse): number {

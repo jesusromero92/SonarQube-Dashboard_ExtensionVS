@@ -117,7 +117,7 @@ function addNestedMessageTranslations(
 export function getRuntimeLocalizationScript(
   initialBundle: WebviewLocalizationBundle
 ): string {
-  return `
+  return String.raw`
     let dashboardLanguage = ${JSON.stringify(initialBundle.language)};
     let dashboardLocale = ${JSON.stringify(initialBundle.locale)};
     let dashboardMessages = ${JSON.stringify(initialBundle.messages)};
@@ -158,7 +158,7 @@ export function getRuntimeLocalizationScript(
     function isLocalizationFragment(value) {
       return (
         value.length > 1 &&
-        (/^\\s|\\s$/.test(value) || /[:：]\\s*$/.test(value) || value.includes('…'))
+        (/^\s|\s$/.test(value) || /[:：]\s*$/.test(value) || value.includes('…'))
       );
     }
 
@@ -174,16 +174,22 @@ export function getRuntimeLocalizationScript(
     }
 
     function escapeLocalizationRegExp(value) {
-      return value.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&');
+      const specialCharacters = '.*+?^$()|[]{}';
+      const backslash = String.fromCharCode(92);
+      return Array.from(value, character =>
+        specialCharacters.includes(character) || character === backslash
+          ? backslash + character
+          : character
+      ).join('');
     }
 
     function translateSelectFragments(value) {
       let translated = value;
       for (const [source, target] of localizationSelectTranslations) {
         const pattern = new RegExp(
-          '(?<![\\p{L}\\p{N}_])' +
+          '(?<![\p{L}\p{N}_])' +
             escapeLocalizationRegExp(source) +
-            '(?![\\p{L}\\p{N}_])',
+            '(?![\p{L}\p{N}_])',
           'gu'
         );
         translated = translated.replace(pattern, target);
@@ -201,8 +207,8 @@ export function getRuntimeLocalizationScript(
         return direct;
       }
 
-      const leading = value.match(/^\\s*/)?.[0] || '';
-      const trailing = value.match(/\\s*$/)?.[0] || '';
+      const leading = value.match(/^\s*/)?.[0] || '';
+      const trailing = value.match(/\s*$/)?.[0] || '';
       const coreEnd = value.length - trailing.length;
       const core = value.slice(leading.length, coreEnd);
       const translatedCore = localizationExactTranslations.get(core);

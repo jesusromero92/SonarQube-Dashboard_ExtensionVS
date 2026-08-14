@@ -60,208 +60,254 @@ export async function detectPredefinedIntegrations(
 ): Promise<DetectedProjectIntegration[]> {
   const packageJsonPath = path.join(rootPath, 'package.json');
   const nodeContext = providedNodeContext ?? await readNodeProject(rootPath, packageJsonPath);
-  const integrations: DetectedProjectIntegration[] = [];
+  const candidates = [
+    await detectDependencyAuditIntegration(rootPath, nodeContext),
+    await detectEslintIntegration(rootPath, nodeContext),
+    await detectSemgrepIntegration(rootPath, nodeContext),
+    await detectSnykIntegration(rootPath, nodeContext),
+    await detectTrivyIntegration(rootPath, nodeContext),
+    await detectMavenOwaspIntegration(rootPath),
+    await detectGradleOwaspIntegration(rootPath)
+  ];
 
-  if (nodeContext) {
-    const { packageJson, packageManager } = nodeContext;
-    const scripts = packageJson.scripts ?? {};
-    const dependencies = {
-      ...(packageJson.dependencies ?? {}),
-      ...(packageJson.devDependencies ?? {})
-    };
-    const lockFile = await firstExisting(rootPath, [
-      'package-lock.json',
-      'npm-shrinkwrap.json',
-      'pnpm-lock.yaml',
-      'yarn.lock'
-    ]);
+  return uniqueIntegrations(
+    candidates.filter((item): item is DetectedProjectIntegration => item !== undefined)
+  );
+}
 
-    if (lockFile) {
-      integrations.push({
-        id: 'dependency-audit',
-        name: packageManager === 'npm' ? 'npm audit' : `${packageManager} audit`,
-        description: 'Audita las dependencias conocidas del proyecto.',
-        command: packageManager === 'npm'
-          ? 'npm audit --audit-level=high'
-          : packageManager === 'pnpm'
-            ? 'pnpm audit --audit-level=high'
-            : 'yarn audit --level high',
-        evidence: lockFile,
-        category: 'security',
-        failurePolicy: 'continue'
-      });
-    }
+async function detectDependencyAuditIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const lockFile = await firstExisting(rootPath, [
+    'package-lock.json',
+    'npm-shrinkwrap.json',
+    'pnpm-lock.yaml',
+    'yarn.lock'
+  ]);
+  if (!lockFile) return undefined;
 
-    const lintScript = firstScript(scripts, ['lint', 'lint:ci', 'eslint']);
-    const eslintConfig = await firstExisting(rootPath, [
-      'eslint.config.js',
-      'eslint.config.mjs',
-      'eslint.config.cjs',
-      '.eslintrc',
-      '.eslintrc.js',
-      '.eslintrc.cjs',
-      '.eslintrc.json',
-      '.eslintrc.yml',
-      '.eslintrc.yaml'
-    ]);
-    if (lintScript || dependencies.eslint || eslintConfig) {
-      integrations.push({
-        id: 'eslint',
-        name: 'ESLint',
-        description: 'Ejecuta el análisis estático de JavaScript y TypeScript.',
-        command: lintScript
-          ? packageScriptCommand(packageManager, lintScript)
-          : packageExecutableCommand(packageManager, 'eslint .'),
-        evidence: lintScript ? `package.json#${lintScript}` : eslintConfig ?? 'package.json#eslint',
-        category: 'quality',
-        failurePolicy: 'stop'
-      });
-    }
+  return {
+    id: 'dependency-audit',
+    name: nodeContext.packageManager === 'npm'
+      ? 'npm audit'
+      : `${nodeContext.packageManager} audit`,
+    description: 'Audita las dependencias conocidas del proyecto.',
+    command: dependencyAuditCommand(nodeContext.packageManager),
+    evidence: lockFile,
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
 
-    const semgrepScript = firstScript(scripts, ['semgrep', 'security:semgrep', 'scan:semgrep']);
-    const semgrepConfig = await firstExisting(rootPath, [
-      '.semgrep.yml',
-      '.semgrep.yaml',
-      'semgrep.yml',
-      'semgrep.yaml'
-    ]);
-    if (semgrepScript || dependencies.semgrep || semgrepConfig) {
-      integrations.push({
-        id: 'semgrep',
-        name: 'Semgrep',
-        description: 'Busca patrones de seguridad y calidad mediante reglas Semgrep.',
-        command: semgrepScript
-          ? packageScriptCommand(packageManager, semgrepScript)
-          : 'semgrep scan --config auto .',
-        evidence: semgrepScript ? `package.json#${semgrepScript}` : semgrepConfig ?? 'package.json#semgrep',
-        category: 'security',
-        failurePolicy: 'continue'
-      });
-    }
+function nodeDependencies(nodeContext: NodeProjectContext): Record<string, string> {
+  return {
+    ...nodeContext.packageJson.dependencies,
+    ...nodeContext.packageJson.devDependencies
+  };
+}
 
-    const snykScript = firstScript(scripts, ['snyk', 'security:snyk', 'scan:snyk']);
-    const snykConfig = await firstExisting(rootPath, ['.snyk']);
-    if (snykScript || dependencies.snyk || snykConfig) {
-      integrations.push({
-        id: 'snyk',
-        name: 'Snyk',
-        description: 'Comprueba vulnerabilidades de dependencias con Snyk.',
-        command: snykScript
-          ? packageScriptCommand(packageManager, snykScript)
-          : packageExecutableCommand(packageManager, 'snyk test'),
-        evidence: snykScript ? `package.json#${snykScript}` : snykConfig ?? 'package.json#snyk',
-        category: 'security',
-        failurePolicy: 'continue'
-      });
-    }
+async function detectEslintIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const lintScript = firstScript(scripts, ['lint', 'lint:ci', 'eslint']);
+  const eslintConfig = await firstExisting(rootPath, [
+    'eslint.config.js',
+    'eslint.config.mjs',
+    'eslint.config.cjs',
+    '.eslintrc',
+    '.eslintrc.js',
+    '.eslintrc.cjs',
+    '.eslintrc.json',
+    '.eslintrc.yml',
+    '.eslintrc.yaml'
+  ]);
+  if (!lintScript && !dependencies.eslint && !eslintConfig) return undefined;
 
-    const trivyScript = firstScript(scripts, ['trivy', 'security:trivy', 'scan:trivy']);
-    const trivyEvidence = await firstExisting(rootPath, [
-      'trivy.yaml',
-      'trivy.yml',
-      '.trivyignore',
-      'Dockerfile',
-      'docker-compose.yml',
-      'docker-compose.yaml'
-    ]);
-    if (trivyScript || trivyEvidence) {
-      integrations.push({
-        id: 'trivy',
-        name: 'Trivy',
-        description: 'Escanea vulnerabilidades, secretos y configuraciones inseguras.',
-        command: trivyScript
-          ? packageScriptCommand(packageManager, trivyScript)
-          : 'trivy fs --scanners vuln,secret,misconfig .',
-        evidence: trivyScript ? `package.json#${trivyScript}` : trivyEvidence!,
-        category: 'security',
-        failurePolicy: 'continue'
-      });
-    }
-  } else {
-    const trivyEvidence = await firstExisting(rootPath, [
-      'trivy.yaml',
-      'trivy.yml',
-      '.trivyignore',
-      'Dockerfile',
-      'docker-compose.yml',
-      'docker-compose.yaml'
-    ]);
-    if (trivyEvidence) {
-      integrations.push({
-        id: 'trivy',
-        name: 'Trivy',
-        description: 'Escanea vulnerabilidades, secretos y configuraciones inseguras.',
-        command: 'trivy fs --scanners vuln,secret,misconfig .',
-        evidence: trivyEvidence,
-        category: 'security',
-        failurePolicy: 'continue'
-      });
-    }
-  }
+  return {
+    id: 'eslint',
+    name: 'ESLint',
+    description: 'Ejecuta el análisis estático de JavaScript y TypeScript.',
+    command: lintScript
+      ? packageScriptCommand(nodeContext.packageManager, lintScript)
+      : packageExecutableCommand(nodeContext.packageManager, 'eslint .'),
+    evidence: lintScript ? `package.json#${lintScript}` : eslintConfig ?? 'package.json#eslint',
+    category: 'quality',
+    failurePolicy: 'stop'
+  };
+}
 
+async function detectSemgrepIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
   const semgrepConfig = await firstExisting(rootPath, [
     '.semgrep.yml',
     '.semgrep.yaml',
     'semgrep.yml',
     'semgrep.yaml'
   ]);
-  if (semgrepConfig && !integrations.some(item => item.id === 'semgrep')) {
-    integrations.push({
-      id: 'semgrep',
-      name: 'Semgrep',
-      description: 'Busca patrones de seguridad y calidad mediante reglas Semgrep.',
-      command: 'semgrep scan --config auto .',
-      evidence: semgrepConfig,
-      category: 'security',
-      failurePolicy: 'continue'
-    });
+  if (!nodeContext) {
+    return semgrepConfig ? semgrepConfigIntegration(semgrepConfig) : undefined;
   }
 
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const semgrepScript = firstScript(scripts, ['semgrep', 'security:semgrep', 'scan:semgrep']);
+  if (!semgrepScript && !dependencies.semgrep && !semgrepConfig) return undefined;
+
+  return {
+    id: 'semgrep',
+    name: 'Semgrep',
+    description: 'Busca patrones de seguridad y calidad mediante reglas Semgrep.',
+    command: semgrepScript
+      ? packageScriptCommand(nodeContext.packageManager, semgrepScript)
+      : 'semgrep scan --config auto .',
+    evidence: semgrepScript ? `package.json#${semgrepScript}` : semgrepConfig ?? 'package.json#semgrep',
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
+
+function semgrepConfigIntegration(config: string): DetectedProjectIntegration {
+  return {
+    id: 'semgrep',
+    name: 'Semgrep',
+    description: 'Busca patrones de seguridad y calidad mediante reglas Semgrep.',
+    command: 'semgrep scan --config auto .',
+    evidence: config,
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
+
+async function detectSnykIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const snykScript = firstScript(scripts, ['snyk', 'security:snyk', 'scan:snyk']);
+  const snykConfig = await firstExisting(rootPath, ['.snyk']);
+  if (!snykScript && !dependencies.snyk && !snykConfig) return undefined;
+
+  return {
+    id: 'snyk',
+    name: 'Snyk',
+    description: 'Comprueba vulnerabilidades de dependencias con Snyk.',
+    command: snykScript
+      ? packageScriptCommand(nodeContext.packageManager, snykScript)
+      : packageExecutableCommand(nodeContext.packageManager, 'snyk test'),
+    evidence: snykScript ? `package.json#${snykScript}` : snykConfig ?? 'package.json#snyk',
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
+
+async function detectTrivyIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  const trivyEvidence = await firstExisting(rootPath, [
+    'trivy.yaml',
+    'trivy.yml',
+    '.trivyignore',
+    'Dockerfile',
+    'docker-compose.yml',
+    'docker-compose.yaml'
+  ]);
+  const scripts = nodeContext?.packageJson.scripts ?? {};
+  const trivyScript = firstScript(scripts, ['trivy', 'security:trivy', 'scan:trivy']);
+  if (!trivyScript && !trivyEvidence) return undefined;
+
+  return {
+    id: 'trivy',
+    name: 'Trivy',
+    description: 'Escanea vulnerabilidades, secretos y configuraciones inseguras.',
+    command: trivyScript && nodeContext
+      ? packageScriptCommand(nodeContext.packageManager, trivyScript)
+      : 'trivy fs --scanners vuln,secret,misconfig .',
+    evidence: trivyScript ? `package.json#${trivyScript}` : trivyEvidence!,
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
+
+async function detectMavenOwaspIntegration(
+  rootPath: string
+): Promise<DetectedProjectIntegration | undefined> {
   const pomPath = path.join(rootPath, 'pom.xml');
-  if (await fileContains(pomPath, /dependency-check-maven|org\.owasp/i)) {
-    const executable = await executableForWrapper(
-      rootPath,
-      process.platform === 'win32' ? 'mvnw.cmd' : 'mvnw',
-      process.platform === 'win32' ? 'mvn.cmd' : 'mvn'
-    );
-    integrations.push({
-      id: 'owasp-dependency-check',
-      name: 'OWASP Dependency-Check',
-      description: 'Analiza dependencias conocidas mediante OWASP Dependency-Check.',
-      command: `${executable} org.owasp:dependency-check-maven:check`,
-      evidence: 'pom.xml',
-      category: 'security',
-      failurePolicy: 'continue'
-    });
-  }
+  if (!await fileContains(pomPath, /dependency-check-maven|org\.owasp/i)) return undefined;
+  const executable = await executableForWrapper(
+    rootPath,
+    process.platform === 'win32' ? 'mvnw.cmd' : 'mvnw',
+    process.platform === 'win32' ? 'mvn.cmd' : 'mvn'
+  );
+  return {
+    id: 'owasp-dependency-check',
+    name: 'OWASP Dependency-Check',
+    description: 'Analiza dependencias conocidas mediante OWASP Dependency-Check.',
+    command: `${executable} org.owasp:dependency-check-maven:check`,
+    evidence: 'pom.xml',
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
 
+async function detectGradleOwaspIntegration(
+  rootPath: string
+): Promise<DetectedProjectIntegration | undefined> {
   const gradleFile = await firstExisting(rootPath, ['build.gradle', 'build.gradle.kts']);
-  if (
-    gradleFile &&
-    await fileContains(path.join(rootPath, gradleFile), /org\.owasp\.dependencycheck|dependencyCheck/i)
-  ) {
-    const executable = await executableForWrapper(
-      rootPath,
-      process.platform === 'win32' ? 'gradlew.bat' : 'gradlew',
-      process.platform === 'win32' ? 'gradle.bat' : 'gradle'
-    );
-    integrations.push({
-      id: 'owasp-dependency-check',
-      name: 'OWASP Dependency-Check',
-      description: 'Analiza dependencias conocidas mediante OWASP Dependency-Check.',
-      command: `${executable} dependencyCheckAnalyze`,
-      evidence: gradleFile,
-      category: 'security',
-      failurePolicy: 'continue'
-    });
-  }
+  if (!gradleFile) return undefined;
+  const hasPlugin = await fileContains(
+    path.join(rootPath, gradleFile),
+    /org\.owasp\.dependencycheck|dependencyCheck/i
+  );
+  if (!hasPlugin) return undefined;
 
-  return uniqueIntegrations(integrations);
+  const executable = await executableForWrapper(
+    rootPath,
+    process.platform === 'win32' ? 'gradlew.bat' : 'gradlew',
+    process.platform === 'win32' ? 'gradle.bat' : 'gradle'
+  );
+  return {
+    id: 'owasp-dependency-check',
+    name: 'OWASP Dependency-Check',
+    description: 'Analiza dependencias conocidas mediante OWASP Dependency-Check.',
+    command: `${executable} dependencyCheckAnalyze`,
+    evidence: gradleFile,
+    category: 'security',
+    failurePolicy: 'continue'
+  };
 }
 
 async function detectNonNodeActions(
   rootPath: string
 ): Promise<Omit<DetectedProjectActions, 'integrations'>> {
+  const detectors = [
+    detectDotnetActions,
+    detectMavenActions,
+    detectGradleActions,
+    detectCargoActions,
+    detectGoActions,
+    detectPythonActions
+  ];
+  for (const detector of detectors) {
+    const detected = await detector(rootPath);
+    if (detected) return detected;
+  }
+  return {};
+}
+
+async function detectDotnetActions(
+  rootPath: string
+): Promise<Omit<DetectedProjectActions, 'integrations'> | undefined> {
   const dotnetTarget = await firstMatchingFile(rootPath, [
     '.sln',
     '.slnx',
@@ -269,79 +315,89 @@ async function detectNonNodeActions(
     '.vbproj',
     '.fsproj'
   ]);
-  if (dotnetTarget) {
-    const target = quoteShellArgument(path.relative(rootPath, dotnetTarget));
-    return {
-      buildCommand: `dotnet build ${target} --no-incremental`,
-      testCommand: `dotnet test ${target} --no-build`,
-      evidence: path.basename(dotnetTarget)
-    };
-  }
+  if (!dotnetTarget) return undefined;
+  const target = quoteShellArgument(path.relative(rootPath, dotnetTarget));
+  return {
+    buildCommand: `dotnet build ${target} --no-incremental`,
+    testCommand: `dotnet test ${target} --no-build`,
+    evidence: path.basename(dotnetTarget)
+  };
+}
 
-  if (await exists(path.join(rootPath, 'pom.xml'))) {
-    const executable = await executableForWrapper(
-      rootPath,
-      process.platform === 'win32' ? 'mvnw.cmd' : 'mvnw',
-      process.platform === 'win32' ? 'mvn.cmd' : 'mvn'
-    );
-    return {
-      buildCommand: `${executable} clean package -DskipTests`,
-      testCommand: `${executable} test`,
-      evidence: 'pom.xml'
-    };
-  }
+async function detectMavenActions(
+  rootPath: string
+): Promise<Omit<DetectedProjectActions, 'integrations'> | undefined> {
+  if (!await exists(path.join(rootPath, 'pom.xml'))) return undefined;
+  const executable = await executableForWrapper(
+    rootPath,
+    process.platform === 'win32' ? 'mvnw.cmd' : 'mvnw',
+    process.platform === 'win32' ? 'mvn.cmd' : 'mvn'
+  );
+  return {
+    buildCommand: `${executable} clean package -DskipTests`,
+    testCommand: `${executable} test`,
+    evidence: 'pom.xml'
+  };
+}
 
+async function detectGradleActions(
+  rootPath: string
+): Promise<Omit<DetectedProjectActions, 'integrations'> | undefined> {
   const gradleFile = await firstExisting(rootPath, [
     'build.gradle',
     'build.gradle.kts',
     'settings.gradle',
     'settings.gradle.kts'
   ]);
-  if (gradleFile) {
-    const executable = await executableForWrapper(
-      rootPath,
-      process.platform === 'win32' ? 'gradlew.bat' : 'gradlew',
-      process.platform === 'win32' ? 'gradle.bat' : 'gradle'
-    );
-    return {
-      buildCommand: `${executable} clean build -x test`,
-      testCommand: `${executable} test`,
-      evidence: gradleFile
-    };
-  }
+  if (!gradleFile) return undefined;
+  const executable = await executableForWrapper(
+    rootPath,
+    process.platform === 'win32' ? 'gradlew.bat' : 'gradlew',
+    process.platform === 'win32' ? 'gradle.bat' : 'gradle'
+  );
+  return {
+    buildCommand: `${executable} clean build -x test`,
+    testCommand: `${executable} test`,
+    evidence: gradleFile
+  };
+}
 
-  if (await exists(path.join(rootPath, 'Cargo.toml'))) {
-    return {
-      buildCommand: 'cargo build',
-      testCommand: 'cargo test',
-      evidence: 'Cargo.toml'
-    };
-  }
+async function detectCargoActions(
+  rootPath: string
+): Promise<Omit<DetectedProjectActions, 'integrations'> | undefined> {
+  if (!await exists(path.join(rootPath, 'Cargo.toml'))) return undefined;
+  return {
+    buildCommand: 'cargo build',
+    testCommand: 'cargo test',
+    evidence: 'Cargo.toml'
+  };
+}
 
-  if (await exists(path.join(rootPath, 'go.mod'))) {
-    return {
-      buildCommand: 'go build ./...',
-      testCommand: 'go test ./...',
-      evidence: 'go.mod'
-    };
-  }
+async function detectGoActions(
+  rootPath: string
+): Promise<Omit<DetectedProjectActions, 'integrations'> | undefined> {
+  if (!await exists(path.join(rootPath, 'go.mod'))) return undefined;
+  return {
+    buildCommand: 'go build ./...',
+    testCommand: 'go test ./...',
+    evidence: 'go.mod'
+  };
+}
 
-  const pythonEvidence = await firstExisting(rootPath, [
+async function detectPythonActions(
+  rootPath: string
+): Promise<Omit<DetectedProjectActions, 'integrations'> | undefined> {
+  const evidence = await firstExisting(rootPath, [
     'pyproject.toml',
     'pytest.ini',
     'setup.cfg',
     'requirements.txt'
   ]);
-  if (pythonEvidence) {
-    return {
-      testCommand: process.platform === 'win32'
-        ? 'py -m pytest'
-        : 'python3 -m pytest',
-      evidence: pythonEvidence
-    };
-  }
-
-  return {};
+  if (!evidence) return undefined;
+  return {
+    testCommand: process.platform === 'win32' ? 'py -m pytest' : 'python3 -m pytest',
+    evidence
+  };
 }
 
 async function readNodeProject(
@@ -390,6 +446,12 @@ async function detectPackageManager(rootPath: string): Promise<PackageManager> {
     return 'yarn';
   }
   return 'npm';
+}
+
+function dependencyAuditCommand(packageManager: PackageManager): string {
+  if (packageManager === 'npm') return 'npm audit --audit-level=high';
+  if (packageManager === 'pnpm') return 'pnpm audit --audit-level=high';
+  return 'yarn audit --level high';
 }
 
 function packageScriptCommand(
@@ -510,7 +572,7 @@ function quoteShellArgument(value: string): string {
   if (!/\s/.test(value)) {
     return value;
   }
-  return `"${value.replaceAll('"', '\\"')}"`;
+  return '"' + value.replaceAll('"', String.raw`\"`) + '"';
 }
 
 async function exists(file: string): Promise<boolean> {

@@ -1,4 +1,5 @@
 import type { SonarAnalysisBaselineData } from '../types';
+import { trimTrailingSlashes } from '../textUtils';
 import type {
   AnalysisBaselineComparison,
   AnalysisBaselineSnapshot
@@ -22,7 +23,7 @@ export function compareAnalysisBaselines(
   return {
     projectKey: context.projectKey,
     branch: context.branch?.trim() ?? '',
-    serverUrl: context.serverUrl.trim().replace(/\/+$/, ''),
+    serverUrl: trimTrailingSlashes(context.serverUrl.trim()),
     before,
     after,
     capturedAt: after.capturedAt

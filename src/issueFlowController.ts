@@ -107,9 +107,10 @@ export class IssueFlowController implements vscode.CodeLensProvider, vscode.Disp
       .map(({ location, index }) => {
         const line = Math.min(Math.max(0, location.line - 1), Math.max(0, document.lineCount - 1));
         const total = locations.length;
+        const messageSuffix = location.message ? ` · ${location.message}` : '';
         return new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
           command: DASHBOARD_COMMANDS.openFlowLocation,
-          title: `$(debug-step-over) ${roleLabel(location.role)} ${index + 1}/${total}${location.message ? ` · ${location.message}` : ''}`,
+          title: `$(debug-step-over) ${roleLabel(location.role)} ${index + 1}/${total}${messageSuffix}`,
           arguments: [this.flowIndex, index]
         });
       });

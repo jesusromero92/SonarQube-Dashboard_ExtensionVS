@@ -1,3 +1,4 @@
+import { stringifyUnknown } from './textUtils';
 import type {
   CanonicalParameters,
   LogicalParameter
@@ -257,10 +258,11 @@ interface CachedCompatibility {
 
 const compatibilityCache = new Map<string, CachedCompatibility>();
 
+
 function isConnectionFailure(error: unknown): boolean {
   const message = error instanceof Error
-    ? `${error.message} ${String(error.cause ?? '')}`
-    : String(error);
+    ? `${error.message} ${stringifyUnknown(error.cause ?? '')}`
+    : stringifyUnknown(error);
 
   return error instanceof TypeError ||
     /fetch failed|network|enotfound|econnrefused|econnreset|etimedout|certificate|ssl|tls/i.test(
@@ -270,7 +272,7 @@ function isConnectionFailure(error: unknown): boolean {
 
 function firstConnectionFailure(
   results: readonly PromiseSettledResult<unknown>[]
-): unknown | undefined {
+): unknown {
   return results
     .filter(
       (result): result is PromiseRejectedResult =>

@@ -59,6 +59,68 @@ function appendHoverField(
   hover.appendMarkdown('  \n');
 }
 
+function appendIssueLocalState(
+  hover: vscode.MarkdownString,
+  localState: IssueLocalRemediationState,
+  spanish: boolean
+): void {
+  if (localState === 'server') return;
+  appendHoverField(
+    hover,
+    spanish ? 'Estado local' : 'Local state',
+    localIssueStateLabel(localState, spanish)
+  );
+}
+
+function appendIssueImpacts(
+  hover: vscode.MarkdownString,
+  issue: DashboardIssue,
+  spanish: boolean
+): void {
+  if (issue.impacts.length === 0) return;
+  appendHoverField(
+    hover,
+    spanish ? 'Impactos' : 'Impacts',
+    issue.impacts
+      .map(impact => `${impact.softwareQuality}: ${impact.severity}`)
+      .join(', ')
+  );
+}
+
+function appendIssueMetadata(
+  hover: vscode.MarkdownString,
+  issue: DashboardIssue,
+  type: DecoratedIssueType,
+  localState: IssueLocalRemediationState,
+  spanish: boolean
+): void {
+  appendHoverField(hover, spanish ? 'Tipo' : 'Type', typeLabel(type, spanish));
+  appendHoverField(hover, spanish ? 'Severidad' : 'Severity', issue.severity);
+  appendHoverField(hover, spanish ? 'Estado' : 'Status', issue.status);
+  appendIssueLocalState(hover, localState, spanish);
+  appendHoverField(hover, spanish ? 'Archivo' : 'File', issue.relativePath);
+  appendHoverField(hover, spanish ? 'Línea' : 'Line', issue.line);
+  appendHoverField(hover, spanish ? 'Regla' : 'Rule', issue.rule);
+  appendHoverField(hover, spanish ? 'Proyecto' : 'Project', issue.project);
+  appendHoverField(hover, spanish ? 'Componente' : 'Component', issue.component);
+  appendHoverField(hover, 'Issue key', issue.key);
+  appendIssueImpacts(hover, issue, spanish);
+}
+
+function appendIssueAction(
+  hover: vscode.MarkdownString,
+  issueKey: string,
+  spanish: boolean
+): void {
+  const commandArguments = encodeURIComponent(JSON.stringify([issueKey]));
+  const label = spanish
+    ? 'Gestionar defecto en SonarQube Dashboard'
+    : 'Manage issue in SonarQube Dashboard';
+  hover.appendMarkdown(
+    `\n\n[${label}](command:${DASHBOARD_COMMANDS.showIssueDetail}?${commandArguments})`
+  );
+}
+
 function issueHover(
   issue: DashboardIssue,
   type: DecoratedIssueType,
@@ -73,37 +135,8 @@ function issueHover(
   hover.appendMarkdown(`**${spanish ? 'Descripción' : 'Description'}**\n\n`);
   hover.appendText(issue.message || (spanish ? 'Sin descripción.' : 'No description.'));
   hover.appendMarkdown('\n\n---\n\n');
-  appendHoverField(hover, spanish ? 'Tipo' : 'Type', typeLabel(type, spanish));
-  appendHoverField(hover, spanish ? 'Severidad' : 'Severity', issue.severity);
-  appendHoverField(hover, spanish ? 'Estado' : 'Status', issue.status);
-  if (localState !== 'server') {
-    appendHoverField(
-      hover,
-      spanish ? 'Estado local' : 'Local state',
-      localIssueStateLabel(localState, spanish)
-    );
-  }
-  appendHoverField(hover, spanish ? 'Archivo' : 'File', issue.relativePath);
-  appendHoverField(hover, spanish ? 'Línea' : 'Line', issue.line);
-  appendHoverField(hover, spanish ? 'Regla' : 'Rule', issue.rule);
-  appendHoverField(hover, spanish ? 'Proyecto' : 'Project', issue.project);
-  appendHoverField(hover, spanish ? 'Componente' : 'Component', issue.component);
-  appendHoverField(hover, 'Issue key', issue.key);
-  if (issue.impacts.length > 0) {
-    appendHoverField(
-      hover,
-      spanish ? 'Impactos' : 'Impacts',
-      issue.impacts
-        .map(impact => `${impact.softwareQuality}: ${impact.severity}`)
-        .join(', ')
-    );
-  }
-  const commandArguments = encodeURIComponent(JSON.stringify([issue.key]));
-  hover.appendMarkdown(
-    `\n\n[${
-      spanish ? 'Gestionar defecto en SonarQube Dashboard' : 'Manage issue in SonarQube Dashboard'
-    }](command:${DASHBOARD_COMMANDS.showIssueDetail}?${commandArguments})`
-  );
+  appendIssueMetadata(hover, issue, type, localState, spanish);
+  appendIssueAction(hover, issue.key, spanish);
   return hover;
 }
 

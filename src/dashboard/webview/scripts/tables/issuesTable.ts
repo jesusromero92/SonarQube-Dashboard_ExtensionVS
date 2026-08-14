@@ -1,4 +1,4 @@
-export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
+export const ISSUES_TABLE_SCRIPT = String.raw`    function severityClass(severity) {
       return String(severity || 'UNKNOWN').toLowerCase();
     }
 
@@ -146,7 +146,7 @@ export const ISSUES_TABLE_SCRIPT = `    function severityClass(severity) {
 
     const fileCellUtils = {
       fileName(relativePath) {
-        const normalizedPath = String(relativePath || '').replace(/\\\\/g, '/');
+        const normalizedPath = String(relativePath || '').replace(/\\/g, '/');
         const pathParts = normalizedPath.split('/');
         return pathParts[pathParts.length - 1] || normalizedPath;
       },

@@ -74,6 +74,6 @@ export function externalDiagnosticsSignature(diagnostics: readonly vscode.Diagno
       const range = diagnostic.range;
       return `${diagnostic.source ?? ''}|${code}|${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
     })
-    .sort()
+    .sort((left, right) => left.localeCompare(right))
     .join('\n');
 }

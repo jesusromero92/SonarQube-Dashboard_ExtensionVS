@@ -1,4 +1,4 @@
-export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
+export const PIPELINE_EDITOR_SCRIPT = String.raw`    let pipelineStepCounter = 0;
     let analysisStepTemplates = new Map();
 
     function nextPipelineStepId(prefix = 'step') {
@@ -8,7 +8,7 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
 
     function parsePipelineField(value, idPrefix = 'custom') {
       return String(value || '')
-        .split(/\\r?\\n/)
+        .split(/\r?\n/)
         .map(line => line.trim())
         .filter(line => line && !line.startsWith('#'))
         .map((line, index) => {
@@ -42,7 +42,7 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
           step.command.trim(),
           step.failurePolicy === 'continue' ? 'continue' : 'stop'
         ].join(' :: '))
-        .join('\\n');
+        .join('\n');
     }
 
     function configuredPipelineSteps() {
@@ -55,7 +55,7 @@ export const PIPELINE_EDITOR_SCRIPT = `    let pipelineStepCounter = 0;
     function normalizedPipelineCommand(command) {
       return String(command || '')
         .trim()
-        .replace(/\\s+/g, ' ')
+        .replace(/\s+/g, ' ')
         .toLocaleLowerCase();
     }
 

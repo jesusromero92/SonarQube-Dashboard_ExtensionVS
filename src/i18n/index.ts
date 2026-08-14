@@ -81,7 +81,7 @@ export function localizeWebviewSource(
 
     if (/^[\p{L}\p{N}]+$/u.test(sourceText)) {
       const pattern = new RegExp(
-        `(?<![\\p{L}\\p{N}_])${escapeRegExp(sourceText)}(?![\\p{L}\\p{N}_])`,
+        String.raw`(?<![\p{L}\p{N}_])${escapeRegExp(sourceText)}(?![\p{L}\p{N}_])`,
         'gu'
       );
       localized = localized.replace(pattern, targetText);
@@ -105,7 +105,7 @@ export function localizeRuntimeText(
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 export function localizeAnalysisState<T extends LocalizedAnalysisState>(

@@ -57,7 +57,8 @@ export class RemediationStateStore implements vscode.Disposable {
     const snapshot = this.context.workspaceState.get<PersistedRemediationSnapshot>(
       LIVE_REMEDIATION_STORAGE_KEY
     );
-    if (!snapshot || snapshot.version !== 2 || !snapshot.issues) return;
+    if (!snapshot) return;
+    if (snapshot.version !== 2 || !snapshot.issues) return;
 
     for (const [key, issue] of Object.entries(snapshot.issues)) {
       if (isPersistedRemediationIssue(issue)) {
