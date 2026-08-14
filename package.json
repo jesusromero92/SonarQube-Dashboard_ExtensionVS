@@ -111,12 +111,14 @@
       {
         "command": "sonarQubeDashboard.analyze",
         "title": "%command.analyze%",
-        "icon": "$(play)"
+        "icon": "$(play)",
+        "enablement": "sonarQubeDashboard.module.pipeline.enabled"
       },
       {
         "command": "sonarQubeDashboard.cancelAnalysis",
         "title": "%command.cancelAnalysis%",
-        "icon": "$(debug-stop)"
+        "icon": "$(debug-stop)",
+        "enablement": "sonarQubeDashboard.module.pipeline.enabled"
       },
       {
         "command": "sonarQubeDashboard.nextIssue",

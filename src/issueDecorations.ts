@@ -6,7 +6,10 @@ import {
 } from './constants';
 import { getDashboardLanguage } from './i18n';
 import { DashboardHotspot, DashboardIssue } from './types';
-import { localStateLabel, type IssueLocalRemediationState } from './liveRemediation';
+import {
+  localIssueStateLabel,
+  type IssueLocalRemediationState
+} from './issueLocalState';
 
 type DecoratedIssueType =
   | 'BUG'
@@ -77,7 +80,7 @@ function issueHover(
     appendHoverField(
       hover,
       spanish ? 'Estado local' : 'Local state',
-      localStateLabel(localState, spanish)
+      localIssueStateLabel(localState, spanish)
     );
   }
   appendHoverField(hover, spanish ? 'Archivo' : 'File', issue.relativePath);
@@ -329,7 +332,7 @@ export class IssueDecorationManager implements vscode.Disposable {
         renderOptions: localState !== 'server'
           ? {
               after: {
-                contentText: `  ${localStateLabel(
+                contentText: `  ${localIssueStateLabel(
                   localState,
                   getDashboardLanguage() === 'es'
                 )}`,
@@ -390,7 +393,7 @@ implements vscode.CodeLensProvider, vscode.Disposable {
       const line = trackedRange?.start.line ?? clampLine(document, issue.line);
       const spanish = getDashboardLanguage() === 'es';
       const title = localState !== 'server'
-        ? `$(edit) ${localStateLabel(localState, spanish)}`
+        ? `$(edit) ${localIssueStateLabel(localState, spanish)}`
         : `${severityCodicon(issue.severity)} ${issue.severity} · ${issue.ruleName || issue.rule}`;
       const lens = new vscode.CodeLens(
         new vscode.Range(line, 0, line, 0),

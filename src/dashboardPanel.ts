@@ -21,7 +21,8 @@ import { getWebviewLocalizationBundle } from './i18n/runtimeWebview';
 import {
   getDashboardModuleState,
   isDashboardModuleEnabled,
-  setDashboardModuleEnabled
+  setDashboardModuleEnabled,
+  type DashboardModuleId
 } from './modules';
 import {
   getFolderConfig,
@@ -50,6 +51,7 @@ import {
 } from './dashboard/diagnostics';
 import {
   AnalysisService,
+  emptyAnalysisState,
   compareAnalysisBaselines,
   createAnalysisBaselineSnapshot,
   createBuiltinPipelineTemplates,
@@ -137,9 +139,11 @@ export class DashboardPanel {
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
   private readonly languageEmitter = new vscode.EventEmitter<DashboardLanguage>();
   private readonly analysisEmitter = new vscode.EventEmitter<AnalysisState>();
-  private readonly analysisService: AnalysisService;
+  private pipelineRuntime: {
+    analysisService: AnalysisService;
+    templateStore: PipelineTemplateStore;
+  } | undefined;
   private pendingHistoryEntryId = '';
-  private readonly pipelineTemplateStore: PipelineTemplateStore;
   private readonly latestDiagnostics = new Map<string, ExtensionDiagnosticsSnapshot>();
   private readonly duplicationComparison: DuplicationComparisonPanel;
 
@@ -158,15 +162,7 @@ export class DashboardPanel {
     private readonly scopeCallback: (scope: 'overall' | 'newCode') => void
   ) {
     this.duplicationComparison = new DuplicationComparisonPanel(coverageDecorations);
-    this.pipelineTemplateStore = new PipelineTemplateStore(context);
-    this.analysisService = new AnalysisService(context, state => {
-      const localizedState = localizeAnalysisState(state, this.language);
-      this.postMessage({
-        type: 'analysisState',
-        state: localizedState
-      });
-      this.analysisEmitter.fire(localizedState);
-    });
+    this.syncPipelineRuntime();
   }
 
   async show(page: DashboardPage = this.currentPage): Promise<void> {
@@ -244,7 +240,12 @@ export class DashboardPanel {
   }
 
   getAnalysisState(): AnalysisState {
-    return localizeAnalysisState(this.analysisService.getState(), this.language);
+    return localizeAnalysisState(this.pipelineAnalysisState(), this.language);
+  }
+
+  async refreshModuleState(): Promise<void> {
+    this.syncPipelineRuntime();
+    await this.sendState();
   }
 
   async getPipelineExecutions(): Promise<PipelineRunHistoryEntry[]> {
@@ -298,7 +299,7 @@ export class DashboardPanel {
   }
 
   cancelAnalysis(): void {
-    this.analysisService.cancel();
+    this.pipelineRuntime?.analysisService.cancel();
   }
 
   async showQualityGate(): Promise<void> {
@@ -347,7 +348,7 @@ export class DashboardPanel {
 
   dispose(): void {
     this.projectLoadController?.abort();
-    this.analysisService.dispose();
+    this.deactivatePipelineRuntime();
     this.duplicationComparison.dispose();
     this.disposePanelListeners();
     this.panel?.dispose();
@@ -403,7 +404,7 @@ export class DashboardPanel {
           this.setRefreshSummary(this.lastSummary);
           this.postMessage({
             type: 'analysisState',
-            state: localizeAnalysisState(this.analysisService.getState(), this.language)
+            state: localizeAnalysisState(this.pipelineAnalysisState(), this.language)
           });
         }
       })
@@ -417,6 +418,14 @@ export class DashboardPanel {
   }
 
   private async handleMessage(message: DashboardWebviewMessage): Promise<void> {
+    if (this.isPipelineMessage(message.type) && !isDashboardModuleEnabled('pipeline')) {
+      this.postStatus(
+        'error',
+        'El módulo Pipeline está desactivado. Actívalo en Configuración > Módulos para usar esta función.'
+      );
+      return;
+    }
+
     switch (message.type) {
       case 'ready':
         this.validatedConnections.clear();
@@ -426,7 +435,7 @@ export class DashboardPanel {
         this.postMessage({ type: 'loading', loading: this.loading });
         this.postMessage({
             type: 'analysisState',
-            state: localizeAnalysisState(this.analysisService.getState(), this.language)
+            state: localizeAnalysisState(this.pipelineAnalysisState(), this.language)
           });
         this.navigate(this.currentPage);
         this.postPendingIssueDetail();
@@ -446,12 +455,23 @@ export class DashboardPanel {
         break;
       case 'setModule':
         if (message.moduleId) {
+          const requestedEnabled = message.moduleEnabled !== false;
+          const currentlyEnabled = isDashboardModuleEnabled(message.moduleId);
+          if (
+            currentlyEnabled &&
+            !requestedEnabled &&
+            !(await this.confirmModuleDisable(message.moduleId))
+          ) {
+            await this.sendState();
+            break;
+          }
+
           const moduleState = await setDashboardModuleEnabled(
             message.moduleId,
-            message.moduleEnabled !== false
+            requestedEnabled
           );
           if (message.moduleId === 'pipeline' && !moduleState.pipeline) {
-            this.analysisService.cancel();
+            this.deactivatePipelineRuntime();
           }
           await this.sendState();
         }
@@ -547,7 +567,7 @@ export class DashboardPanel {
         });
         break;
       case 'cancelAnalysis':
-        this.analysisService.cancel();
+        this.pipelineRuntime?.analysisService.cancel();
         break;
       case 'clear':
         this.clearCallback();
@@ -562,6 +582,97 @@ export class DashboardPanel {
         await vscode.commands.executeCommand('workbench.actions.view.problems');
         break;
     }
+  }
+
+  private async confirmModuleDisable(
+    moduleId: DashboardModuleId
+  ): Promise<boolean> {
+    const confirmLabel = localizeRuntimeText('Desactivar', this.language);
+    let confirmationText: string;
+
+    if (moduleId === 'pipeline') {
+      confirmationText = this.pipelineRuntime?.analysisService.isRunning()
+        ? 'Hay un análisis de Pipeline en ejecución. Si desactivas el módulo Pipeline, el análisis se cancelará y sus vistas y funciones dejarán de estar disponibles. ¿Quieres continuar?'
+        : '¿Seguro que quieres desactivar el módulo Pipeline? Sus vistas y funciones dejarán de estar disponibles hasta que vuelvas a activarlo.';
+    } else {
+      confirmationText =
+        '¿Seguro que quieres desactivar el módulo Live Remediation? Se detendrá el seguimiento local y se ocultará su vista. Los diagnósticos normales de SonarQube seguirán funcionando.';
+    }
+
+    const selected = await vscode.window.showWarningMessage(
+      localizeRuntimeText(confirmationText, this.language),
+      { modal: true },
+      confirmLabel
+    );
+    return selected === confirmLabel;
+  }
+
+  private syncPipelineRuntime(
+    enabled = isDashboardModuleEnabled('pipeline')
+  ): void {
+    if (!enabled) {
+      this.deactivatePipelineRuntime();
+      return;
+    }
+    if (this.pipelineRuntime) return;
+
+    const analysisService = new AnalysisService(this.context, state => {
+      const localizedState = localizeAnalysisState(state, this.language);
+      this.postMessage({
+        type: 'analysisState',
+        state: localizedState
+      });
+      this.analysisEmitter.fire(localizedState);
+    });
+    this.pipelineRuntime = {
+      analysisService,
+      templateStore: new PipelineTemplateStore(this.context)
+    };
+  }
+
+  private deactivatePipelineRuntime(): void {
+    if (!this.pipelineRuntime) return;
+    this.pipelineRuntime.analysisService.cancel();
+    this.pipelineRuntime.analysisService.dispose();
+    this.pipelineRuntime = undefined;
+
+    const state = localizeAnalysisState(emptyAnalysisState(), this.language);
+    this.postMessage({ type: 'analysisState', state });
+    this.analysisEmitter.fire(state);
+  }
+
+  private pipelineAnalysisState(): AnalysisState {
+    return this.pipelineRuntime?.analysisService.getState() ?? emptyAnalysisState();
+  }
+
+  private get analysisService(): AnalysisService {
+    this.syncPipelineRuntime();
+    if (!this.pipelineRuntime) {
+      throw new Error('El módulo Pipeline está desactivado.');
+    }
+    return this.pipelineRuntime.analysisService;
+  }
+
+  private get pipelineTemplateStore(): PipelineTemplateStore {
+    this.syncPipelineRuntime();
+    if (!this.pipelineRuntime) {
+      throw new Error('El módulo Pipeline está desactivado.');
+    }
+    return this.pipelineRuntime.templateStore;
+  }
+
+  private isPipelineMessage(type: string | undefined): boolean {
+    return type !== undefined && [
+      'savePipeline',
+      'savePipelineTemplate',
+      'deletePipelineTemplate',
+      'exportPipelineTemplate',
+      'importPipelineTemplate',
+      'loadPipelineHistory',
+      'clearPipelineHistory',
+      'analyze',
+      'cancelAnalysis'
+    ].includes(type);
   }
 
   private getWorkspaceFolder(folderUri?: string): vscode.WorkspaceFolder | undefined {
@@ -588,6 +699,7 @@ export class DashboardPanel {
 
     const folders = vscode.workspace.workspaceFolders ?? [];
     const moduleState = getDashboardModuleState();
+    this.syncPipelineRuntime(moduleState.pipeline);
     await this.refreshConfiguredFolderCount(folders);
     if (folders.length === 0) {
       this.postMessage({
@@ -1510,7 +1622,11 @@ ${selected.name}`,
     }
 
     const analysisContext = await this.prepareAnalysis(folder, requestedActions);
-    if (!analysisContext) {
+    if (!analysisContext || !isDashboardModuleEnabled('pipeline')) {
+      return;
+    }
+    const analysisService = this.pipelineRuntime?.analysisService;
+    if (!analysisService) {
       return;
     }
 
@@ -1518,11 +1634,13 @@ ${selected.name}`,
     this.postMessage({ type: 'showAnalysisDialog' });
 
     try {
-      await this.runAnalysis(analysisContext);
+      await this.runAnalysis(analysisContext, analysisService);
     } catch (error) {
-      this.handleAnalysisFailure(error);
+      this.handleAnalysisFailure(error, analysisService);
     } finally {
-      await this.sendPipelineHistory(folder.uri.toString());
+      if (this.isActivePipelineService(analysisService)) {
+        await this.sendPipelineHistory(folder.uri.toString());
+      }
     }
   }
 
@@ -1619,22 +1737,26 @@ ${selected.name}`,
   }
 
   private async runAnalysis(
-    analysisContext: AnalysisRequest
+    analysisContext: AnalysisRequest,
+    analysisService: AnalysisService
   ): Promise<void> {
-    await this.analysisService.analyze(analysisContext);
-    this.analysisService.setRefreshing();
+    await analysisService.analyze(analysisContext);
+    if (!this.isActivePipelineService(analysisService)) return;
+    analysisService.setRefreshing();
 
     const summary = await this.refreshCallback('analysis');
+    if (!this.isActivePipelineService(analysisService)) return;
     this.setRefreshSummary(summary, true);
     if (summary.errors.length === 0) {
-      await this.updateAnalysisBaselineComparison(analysisContext);
+      await this.updateAnalysisBaselineComparison(analysisContext, analysisService);
     }
-    this.reportAnalysisRefreshResult(summary);
+    this.reportAnalysisRefreshResult(summary, analysisService);
     this.navigate('data');
   }
 
   private async updateAnalysisBaselineComparison(
-    analysisContext: AnalysisRequest
+    analysisContext: AnalysisRequest,
+    analysisService: AnalysisService
   ): Promise<void> {
     if (!analysisContext.baseline) {
       return;
@@ -1642,7 +1764,7 @@ ${selected.name}`,
     try {
       const data = await fetchAnalysisBaselineData(analysisContext.config);
       const after = createAnalysisBaselineSnapshot(data);
-      await this.analysisService.setBaselineComparison(
+      await analysisService.setBaselineComparison(
         analysisContext,
         compareAnalysisBaselines(analysisContext.baseline, after, {
           projectKey: analysisContext.config.projectKey,
@@ -1658,27 +1780,38 @@ ${selected.name}`,
     }
   }
 
-  private reportAnalysisRefreshResult(summary: RefreshSummary): void {
+  private reportAnalysisRefreshResult(
+    summary: RefreshSummary,
+    analysisService: AnalysisService
+  ): void {
     if (summary.errors.length > 0) {
       const message = summary.errors.join(' | ');
-      this.analysisService.setRefreshError(message);
+      analysisService.setRefreshError(message);
       return;
     }
 
     const message = `Análisis finalizado. ${summary.published} issues encontrados.`;
-    this.analysisService.setRefreshCompleted(message);
+    analysisService.setRefreshCompleted(message);
   }
 
-  private handleAnalysisFailure(error: unknown): void {
-    const analysisState = this.analysisService.getState();
+  private handleAnalysisFailure(
+    error: unknown,
+    analysisService: AnalysisService
+  ): void {
+    const analysisState = analysisService.getState();
     if (analysisState.phase === 'cancelled') {
       return;
     }
 
     const message = this.errorMessage(error);
     if (analysisState.phase === 'refreshing') {
-      this.analysisService.setRefreshError(message);
+      analysisService.setRefreshError(message);
     }
+  }
+
+  private isActivePipelineService(service: AnalysisService): boolean {
+    return isDashboardModuleEnabled('pipeline')
+      && this.pipelineRuntime?.analysisService === service;
   }
 
   private analysisRoot(folder: vscode.WorkspaceFolder, baseDir?: string): string | undefined {

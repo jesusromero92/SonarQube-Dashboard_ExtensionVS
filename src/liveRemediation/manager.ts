@@ -4,8 +4,11 @@ import {
   DASHBOARD_CONFIGURATION_SECTION
 } from '../constants';
 import { getDashboardLanguage } from '../i18n';
-import { MODULE_CONFIGURATION_KEYS } from '../modules';
 import { DashboardIssue } from '../types';
+import type {
+  IssueDiagnosticPresentation,
+  IssueDiagnosticSnapshot
+} from '../issueDiagnostics';
 import {
   ACTIVE_PROBLEMS_REVEAL_DELAY_MS,
   DASHBOARD_DIAGNOSTIC_SOURCE,
@@ -53,12 +56,12 @@ export class LiveRemediationManager implements vscode.Disposable {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly diagnostics: vscode.DiagnosticCollection
+    private readonly diagnostics: IssueDiagnosticPresentation
   ) {
     this.enabled = this.readEnabled();
     this.stateStore = new RemediationStateStore(context);
     this.statusBar.name = 'SonarQube live remediation';
-    this.statusBar.command = DASHBOARD_COMMANDS.analyze;
+    this.statusBar.command = DASHBOARD_COMMANDS.refresh;
 
     this.disposables.push(
       this.statusBar,
@@ -73,14 +76,14 @@ export class LiveRemediationManager implements vscode.Disposable {
         if (
           event.affectsConfiguration(
             `${DASHBOARD_CONFIGURATION_SECTION}.${LIVE_REMEDIATION_CONFIGURATION_KEY}`
-          ) ||
-          event.affectsConfiguration(
-            `${DASHBOARD_CONFIGURATION_SECTION}.${MODULE_CONFIGURATION_KEYS.liveRemediation}`
           )
         ) {
           const wasEnabled = this.enabled;
           this.enabled = this.readEnabled();
           if (!this.enabled) {
+            this.cancelEvaluationTimers();
+            this.cancelActiveProblemsReveal();
+            this.sonarIde.forget();
             this.resetLocalStates();
           } else if (!wasEnabled) {
             this.observeExternalDiagnosticsForAllFiles();
@@ -96,10 +99,10 @@ export class LiveRemediationManager implements vscode.Disposable {
 
   applyServerSnapshot(
     issues: readonly DashboardIssue[],
-    pendingDiagnostics: vscode.DiagnosticCollection,
+    serverDiagnostics: IssueDiagnosticSnapshot,
     confirmLocalRemediation = false
   ): number {
-    const diagnosticByKey = collectDiagnosticsByIssueKey(pendingDiagnostics);
+    const diagnosticByKey = collectDiagnosticsByIssueKey(serverDiagnostics);
     const previousTracked = new Map(this.trackedByKey);
     const serverIssueKeys = new Set(issues.map(issue => issue.key));
     const pendingLocallyModifiedKeys = new Set<string>();
@@ -119,15 +122,15 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.cancelActiveProblemsReveal();
     this.trackedByKey.clear();
     this.keysByUri.clear();
-    this.diagnostics.clear();
+    this.diagnostics.restoreServerSnapshot();
     this.sonarIde.forget();
 
     for (const issue of issues) {
       const sourceDiagnostic = diagnosticByKey.get(issue.key);
       if (!sourceDiagnostic) continue;
 
-      const previous = previousTracked.get(issue.key);
-      const persisted = this.stateStore.pendingByKey.get(issue.key);
+      const previous = this.enabled ? previousTracked.get(issue.key) : undefined;
+      const persisted = this.enabled ? this.stateStore.pendingByKey.get(issue.key) : undefined;
       let restoredPending: {
         state: Exclude<IssueLocalRemediationState, 'server'>;
         range: vscode.Range;
@@ -170,9 +173,10 @@ export class LiveRemediationManager implements vscode.Disposable {
       this.keysByUri.set(issue.fileUri, keys);
     }
 
-    pendingDiagnostics.dispose();
     this.syncPersistedStateFromTracked();
-    this.observeExternalDiagnosticsForAllFiles();
+    if (this.enabled) {
+      this.observeExternalDiagnosticsForAllFiles();
+    }
     this.publishAll();
     this.fireChanged();
     return confirmedLocallyModifiedCount;
@@ -183,7 +187,7 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.cancelActiveProblemsReveal();
     this.trackedByKey.clear();
     this.keysByUri.clear();
-    this.diagnostics.clear();
+    this.diagnostics.restoreServerSnapshot();
     this.sonarIde.forget();
     this.stateStore.clear();
     this.fireChanged();
@@ -195,18 +199,21 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   getStates(): ReadonlyMap<string, IssueLocalRemediationState> {
+    if (!this.enabled) return new Map();
     const result = new Map<string, IssueLocalRemediationState>();
     for (const [key, tracked] of this.trackedByKey) result.set(key, tracked.state);
     return result;
   }
 
   getRanges(): ReadonlyMap<string, vscode.Range> {
+    if (!this.enabled) return new Map();
     const result = new Map<string, vscode.Range>();
     for (const [key, tracked] of this.trackedByKey) result.set(key, tracked.range);
     return result;
   }
 
   getLocallyModifiedIssues(): LocallyModifiedIssueSummary[] {
+    if (!this.enabled) return [];
     return [...this.trackedByKey.values()]
       .filter(tracked => tracked.state !== 'server')
       .map(tracked => ({
@@ -242,6 +249,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.diagnostics.restoreServerSnapshot();
     this.cancelEvaluationTimers();
     this.cancelActiveProblemsReveal();
     this.syncPersistedStateFromTracked();
@@ -254,9 +262,6 @@ export class LiveRemediationManager implements vscode.Disposable {
       DASHBOARD_CONFIGURATION_SECTION
     );
     return configuration.get<boolean>(
-      MODULE_CONFIGURATION_KEYS.liveRemediation,
-      true
-    ) && configuration.get<boolean>(
       LIVE_REMEDIATION_CONFIGURATION_KEY,
       true
     );
@@ -329,7 +334,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   private observeExternalPresence(uri: vscode.Uri): void {
-    if (!this.sonarIde.isActive()) return;
+    if (!this.enabled || !this.sonarIde.isActive()) return;
     const external = this.sonarIde.rememberCurrentSnapshot(uri);
     if (external.length === 0) return;
 
@@ -354,7 +359,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   private evaluateExternalDiagnostics(uri: vscode.Uri): void {
-    if (!this.sonarIde.isActive()) return;
+    if (!this.enabled || !this.sonarIde.isActive()) return;
     const tracked = this.trackedIssuesForUri(uri);
     if (tracked.length === 0) return;
 
@@ -401,7 +406,8 @@ export class LiveRemediationManager implements vscode.Disposable {
 
   private publishAll(): void {
     this.cancelActiveProblemsReveal();
-    this.diagnostics.clear();
+    this.diagnostics.restoreServerSnapshot();
+    if (!this.enabled) return;
     const activeUri = vscode.window.activeTextEditor?.document.uri.toString();
 
     for (const uriString of this.keysByUri.keys()) {
@@ -442,8 +448,8 @@ export class LiveRemediationManager implements vscode.Disposable {
     }
 
     diagnostics.sort(compareDiagnosticPosition);
-    if (diagnostics.length > 0) this.diagnostics.set(uri, diagnostics);
-    else this.diagnostics.delete(uri);
+    if (diagnostics.length > 0) this.diagnostics.setPresentation(uri, diagnostics);
+    else this.diagnostics.deletePresentation(uri);
   }
 
   private fireChanged(): void {
@@ -479,8 +485,8 @@ export class LiveRemediationManager implements vscode.Disposable {
     }
     this.statusBar.text = `$(pulse) SonarQube: ${fragments.join(' · ')}`;
     this.statusBar.tooltip = spanish
-      ? 'Estado local pendiente de confirmación de SonarQube. Haz clic para analizar el repositorio.'
-      : 'Local state pending SonarQube confirmation. Click to analyze the repository.';
+      ? 'Estado local pendiente de confirmación de SonarQube. Haz clic para sincronizar con el servidor.'
+      : 'Local state pending SonarQube confirmation. Click to refresh from the server.';
     this.statusBar.show();
   }
 

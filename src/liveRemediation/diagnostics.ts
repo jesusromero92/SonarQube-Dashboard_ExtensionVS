@@ -1,18 +1,20 @@
 import * as vscode from 'vscode';
 import { getDashboardLanguage } from '../i18n';
+import { localIssueStateLabel } from '../issueLocalState';
+import type { IssueDiagnosticSnapshot } from '../issueDiagnostics';
 import { DASHBOARD_DIAGNOSTIC_SOURCE } from './constants';
 import { TrackedIssue } from './models';
 
 export function collectDiagnosticsByIssueKey(
-  collection: vscode.DiagnosticCollection
+  snapshot: IssueDiagnosticSnapshot
 ): Map<string, vscode.Diagnostic> {
   const result = new Map<string, vscode.Diagnostic>();
-  collection.forEach((_uri, diagnostics) => {
+  for (const diagnostics of snapshot.values()) {
     for (const diagnostic of diagnostics) {
       const key = diagnosticCode(diagnostic);
       if (key) result.set(key, diagnostic);
     }
-  });
+  }
   return result;
 }
 
@@ -20,14 +22,7 @@ export function localStateLabel(
   state: Exclude<TrackedIssue['state'], 'server'>,
   spanish = getDashboardLanguage() === 'es'
 ): string {
-  if (state === 'awaitingConfirmation') {
-    return spanish
-      ? 'Modificado localmente · pendiente de confirmación de SonarQube'
-      : 'Modified locally · awaiting SonarQube confirmation';
-  }
-  return spanish
-    ? 'Modificado localmente · pendiente de validación'
-    : 'Modified locally · pending validation';
+  return localIssueStateLabel(state, spanish);
 }
 
 export function diagnosticMessage(tracked: TrackedIssue): string {

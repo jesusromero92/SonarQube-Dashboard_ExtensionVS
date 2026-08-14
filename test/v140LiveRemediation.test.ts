@@ -36,7 +36,8 @@ test('v2.0.0 mantiene seguimiento conservador de remediación local', () => {
 });
 
 test('Live Remediation nunca presenta un issue como fixed antes del análisis de servidor', () => {
-  const diagnostics = read('src/liveRemediation/diagnostics.ts');
+  const diagnostics = read('src/liveRemediation/diagnostics.ts')
+    + read('src/issueLocalState.ts');
   const decorations = read('src/issueDecorations.ts');
   const navigation = read('src/issueNavigation.ts');
 

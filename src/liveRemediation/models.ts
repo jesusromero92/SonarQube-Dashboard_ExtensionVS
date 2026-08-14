@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { DashboardIssue } from '../types';
+import type { IssueLocalRemediationState } from '../issueLocalState';
 
-export type IssueLocalRemediationState = 'server' | 'modified' | 'awaitingConfirmation';
+export type { IssueLocalRemediationState } from '../issueLocalState';
 
 export interface LocallyModifiedIssueSummary {
   key: string;

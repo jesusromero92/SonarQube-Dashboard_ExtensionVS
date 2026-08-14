@@ -41,6 +41,7 @@ import {
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { IssueNavigationManager } from './issueNavigation';
+import { IssueDiagnosticManager } from './issueDiagnostics';
 import {
   LiveRemediationManager,
   LocallyModifiedIssuesTreeProvider,
@@ -49,6 +50,7 @@ import {
 } from './liveRemediation';
 import { IssueTreeProvider } from './issueTreeView';
 import {
+  getDashboardModuleState,
   MODULE_CONFIGURATION_KEYS,
   updateDashboardModuleContexts
 } from './modules';
@@ -80,7 +82,7 @@ import {
   SeverityCount
 } from './types';
 
-let diagnostics: vscode.DiagnosticCollection;
+let issueDiagnostics: IssueDiagnosticManager;
 let refreshTimer: NodeJS.Timeout | undefined;
 let configurationRefreshTimer: NodeJS.Timeout | undefined;
 let activeRefresh: AbortController | undefined;
@@ -89,11 +91,13 @@ let issueDecorations: IssueDecorationManager;
 let coverageDecorations: CoverageDecorationManager;
 let flowController: IssueFlowController;
 let issueNavigation: IssueNavigationManager;
-let liveRemediation: LiveRemediationManager;
+let liveRemediation: LiveRemediationManager | undefined;
 let issueTree: IssueTreeProvider;
-let locallyModifiedIssuesTree: LocallyModifiedIssuesTreeProvider;
-let pipelineExecutionTree: PipelineExecutionTreeProvider;
+let locallyModifiedIssuesTree: LocallyModifiedIssuesTreeProvider | undefined;
+let pipelineExecutionTree: PipelineExecutionTreeProvider | undefined;
 let notifications: NotificationManager;
+let liveRemediationModuleDisposables: vscode.Disposable[] = [];
+let pipelineModuleDisposables: vscode.Disposable[] = [];
 
 const CHANGELOG_VERSION_STATE_KEY = 'sonarqubeDashboard.lastShownChangelogVersion';
 
@@ -340,7 +344,8 @@ function runAsync(task: Promise<unknown> | undefined, operation: string): void {
 }
 
 function clearWorkspaceData(summary: RefreshSummary): RefreshSummary {
-  liveRemediation.clear();
+  liveRemediation?.clear();
+  issueDiagnostics.clear();
   issueDecorations.clear();
   coverageDecorations.clear();
   issueNavigation.clear();
@@ -600,8 +605,8 @@ function prepareRefreshSummary(summary: RefreshSummary): void {
 
 function applyLiveRemediationState(): void {
   issueDecorations.setLocalRemediation(
-    liveRemediation.getStates(),
-    liveRemediation.getRanges()
+    liveRemediation?.getStates() ?? new Map(),
+    liveRemediation?.getRanges() ?? new Map()
   );
   issueTree.refresh();
 }
@@ -612,11 +617,13 @@ function applyRefreshSummary(
   source: 'sync' | 'analysis'
 ): number {
   issueDecorations.setIssues(summary.issues, summary.hotspots);
-  const confirmedLocallyModifiedCount = liveRemediation.applyServerSnapshot(
+  issueDiagnostics.replaceServerSnapshot(operation.pendingDiagnostics);
+  operation.pendingDiagnostics.dispose();
+  const confirmedLocallyModifiedCount = liveRemediation?.applyServerSnapshot(
     summary.issues,
-    operation.pendingDiagnostics,
-    source === 'analysis'
-  );
+    issueDiagnostics.getServerSnapshot(),
+    true
+  ) ?? 0;
   coverageDecorations.setCoverage(summary.coverage);
   issueNavigation.setIssues(summary.issues, summary.newIssues);
   applyLiveRemediationState();
@@ -837,36 +844,125 @@ function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode
   return vscode.Uri.parse(url.toString());
 }
 
+function disposeModuleDisposables(disposables: vscode.Disposable[]): void {
+  while (disposables.length > 0) {
+    disposables.pop()?.dispose();
+  }
+}
+
+function activateLiveRemediationModule(context: vscode.ExtensionContext): void {
+  if (liveRemediation) return;
+
+  const manager = new LiveRemediationManager(context, issueDiagnostics);
+  const tree = new LocallyModifiedIssuesTreeProvider(manager);
+  liveRemediation = manager;
+  locallyModifiedIssuesTree = tree;
+  liveRemediationModuleDisposables = [
+    manager,
+    tree,
+    manager.onDidChange(() => applyLiveRemediationState()),
+    vscode.window.registerTreeDataProvider(
+      LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
+      tree
+    )
+  ];
+
+  const summary = dashboardPanel?.getRefreshSummary();
+  if (summary) {
+    manager.applyServerSnapshot(
+      summary.issues,
+      issueDiagnostics.getServerSnapshot(),
+      false
+    );
+  }
+  applyLiveRemediationState();
+}
+
+function deactivateLiveRemediationModule(clearState: boolean): void {
+  if (!liveRemediation) {
+    issueDiagnostics.restoreServerSnapshot();
+    applyLiveRemediationState();
+    return;
+  }
+
+  if (clearState) {
+    liveRemediation.clear();
+  }
+  disposeModuleDisposables(liveRemediationModuleDisposables);
+  liveRemediationModuleDisposables = [];
+  liveRemediation = undefined;
+  locallyModifiedIssuesTree = undefined;
+  issueDiagnostics.restoreServerSnapshot();
+  applyLiveRemediationState();
+}
+
+function activatePipelineModule(): void {
+  if (pipelineExecutionTree || !dashboardPanel) return;
+
+  const tree = new PipelineExecutionTreeProvider(dashboardPanel);
+  pipelineExecutionTree = tree;
+  pipelineModuleDisposables = [
+    vscode.window.registerTreeDataProvider(
+      PIPELINE_EXECUTION_TREE_VIEW_ID,
+      tree
+    ),
+    tree
+  ];
+}
+
+function deactivatePipelineModule(): void {
+  disposeModuleDisposables(pipelineModuleDisposables);
+  pipelineModuleDisposables = [];
+  pipelineExecutionTree = undefined;
+}
+
+async function syncOptionalModules(
+  context: vscode.ExtensionContext,
+  clearDisabledState = true
+): Promise<void> {
+  const state = getDashboardModuleState();
+
+  if (state.liveRemediation) {
+    activateLiveRemediationModule(context);
+  } else {
+    deactivateLiveRemediationModule(clearDisabledState);
+  }
+
+  await dashboardPanel?.refreshModuleState();
+  if (state.pipeline) {
+    activatePipelineModule();
+    pipelineExecutionTree?.refresh();
+  } else {
+    deactivatePipelineModule();
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await updateDashboardModuleContexts();
-  diagnostics = vscode.languages.createDiagnosticCollection('sonarqube-dashboard');
-  liveRemediation = new LiveRemediationManager(context, diagnostics);
+  issueDiagnostics = new IssueDiagnosticManager();
   issueDecorations = new IssueDecorationManager(context.extensionUri);
   coverageDecorations = new CoverageDecorationManager(context, context.extensionUri);
   flowController = new IssueFlowController();
   issueNavigation = new IssueNavigationManager();
   issueTree = new IssueTreeProvider(issueNavigation);
-  locallyModifiedIssuesTree = new LocallyModifiedIssuesTreeProvider(liveRemediation);
   notifications = new NotificationManager(context);
   const issueCodeLensProvider = new SonarIssueCodeLensProvider(issueDecorations);
   context.subscriptions.push(
-    diagnostics,
-    liveRemediation,
+    issueDiagnostics,
     issueDecorations,
     coverageDecorations,
     flowController,
     issueNavigation,
     issueTree,
-    locallyModifiedIssuesTree,
-    issueCodeLensProvider,
-    liveRemediation.onDidChange(() => applyLiveRemediationState())
+    issueCodeLensProvider
   );
 
   dashboardPanel = new DashboardPanel(
     context,
     source => refreshAll(context, source),
     () => {
-      liveRemediation.clear();
+      liveRemediation?.clear();
+      issueDiagnostics.clear();
       issueDecorations.clear();
       coverageDecorations.clear();
       issueNavigation.clear();
@@ -885,19 +981,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dashboardPanel
   );
 
-  pipelineExecutionTree = new PipelineExecutionTreeProvider(dashboardPanel);
-  context.subscriptions.push(pipelineExecutionTree);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(ISSUE_TREE_VIEW_ID, issueTree),
-    vscode.window.registerTreeDataProvider(
-      LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
-      locallyModifiedIssuesTree
-    ),
-    vscode.window.registerTreeDataProvider(
-      PIPELINE_EXECUTION_TREE_VIEW_ID,
-      pipelineExecutionTree
-    ),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, flowController),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, issueCodeLensProvider),
     vscode.window.registerWebviewViewProvider(
@@ -917,7 +1003,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,
-      (issueKey: string) => liveRemediation.revealLocallyModifiedIssue(issueKey)
+      (issueKey: string) => liveRemediation?.revealLocallyModifiedIssue(issueKey)
     ),
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.getStarted,
@@ -945,7 +1031,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.clear,
       () => {
-        liveRemediation.clear();
+        liveRemediation?.clear();
+        issueDiagnostics.clear();
         issueDecorations.clear();
         coverageDecorations.clear();
         issueNavigation.clear();
@@ -1224,8 +1311,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               updateDashboardModuleContexts(),
               'module context refresh'
             );
-            pipelineExecutionTree.refresh();
-            locallyModifiedIssuesTree.refresh();
+            runAsync(
+              syncOptionalModules(context),
+              'optional module lifecycle refresh'
+            );
           }
           if (event.affectsConfiguration(`${DASHBOARD_CONFIGURATION_SECTION}.${DASHBOARD_CONFIGURATION_KEYS.language}`)) {
             runAsync(
@@ -1233,7 +1322,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               'language refresh'
             );
             issueDecorations.refreshLanguage();
-            liveRemediation.refreshLanguage();
+            liveRemediation?.refreshLanguage();
             coverageDecorations.refreshLanguage();
             flowController.refreshLanguage();
             issueNavigation.refreshLanguage();
@@ -1246,6 +1335,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     {
       dispose: () => {
         activeRefresh?.abort();
+        deactivateLiveRemediationModule(false);
+        deactivatePipelineModule();
         dashboardPanel?.dispose();
         if (refreshTimer) {
           clearInterval(refreshTimer);
@@ -1256,6 +1347,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
   );
+
+  await syncOptionalModules(context, false);
 
   configureRefreshTimer(context);
   runAsync(showChangelogIfNeeded(context), 'changelog display');
