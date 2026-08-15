@@ -25,7 +25,7 @@ Para realizar una primera configuración guiada, abre la paleta de comandos y ej
 | Análisis del repositorio | Detecta Maven, Gradle, .NET, NPM, Docker o un comando de scanner personalizado y lo ejecuta en el workspace. |
 | Pipeline de calidad | Ejecuta compilación, tests, auditorías, herramientas de seguridad, SonarQube y comandos personalizados en el orden seleccionado y con políticas de fallo por paso. |
 | Integración con el editor | Publica entradas en Problems, decoraciones, hovers, CodeLens, flujos de issues, cobertura e indicadores de duplicación. |
-| Remediación en vivo | Sigue cambios de issues sincronizados tanto dentro del editor como en archivos copiados/reemplazados externamente, mantiene alineados sus rangos cuando existe un diff preciso y puede usar diagnósticos independientes de SonarQube for IDE para distinguir pendiente de validación de pendiente de confirmación. |
+| Remediación en vivo | Sigue cambios netos de issues sincronizados dentro del editor y en operaciones externas/múltiples archivos, ofrece diff Servidor ↔ Local y revert seguro, mantiene una sesión persistente con cambios pendientes y separa los resultados del último análisis real entre Solucionados y Siguen detectándose. |
 | Historial de ejecuciones | Conserva las últimas 30 ejecuciones por carpeta de análisis, incluyendo estado, duración, pasos, log limitado y la línea base exacta antes/después de cada ejecución finalizada. |
 | Diagnóstico | Informa del entorno, compatibilidad, scanner, comandos detectados, herramientas, latencia del servidor y última petición fallida, ocultando secretos. |
 
@@ -96,7 +96,7 @@ Si el código analizado se encuentra dentro de una subcarpeta del workspace, deb
 - Tabla de defectos con filtro, ordenación por cabeceras y navegación al código.
 - Gestión del ciclo de vida del defecto sin salir de VS Code: aceptar, falso positivo, reapertura, asignación, comentarios, historial y responsable actual.
 - Información dentro del editor mediante decoraciones, hovers, acciones rápidas y CodeLens para defectos y Security Hotspots.
-- **Estado de remediación en vivo** que marca los defectos tocados o cuyos archivos han sido reemplazados externamente como modificados localmente. SonarQube for IDE puede mover el estado de pendiente de validación a pendiente de confirmación, y la siguiente sincronización correcta con SonarQube restaura el estado autoritativo del servidor.
+- **Live Remediation 2.0** con seguimiento neto dentro/fuera del editor, operaciones de múltiples archivos, diff Servidor ↔ Local, revert seguro por issue, sesión persistente, cambios pendientes restaurables tras reiniciar, acordeón **Tras último análisis** con **Solucionados** / **Siguen detectándose**, navegación a la ubicación nueva del servidor, historial de solucionados y acciones de limpieza independientes. Solo un análisis real del repositorio puede confirmar una remediación.
 - Navegación de flujos de seguridad con source, pasos intermedios, sink, ubicaciones secundarias y CodeLens.
 - Vista de cobertura y duplicación con métricas actuales de Overall/New Code, decoraciones en el gutter, bloques duplicados, archivos con menor cobertura e histórico de Overall agrupable por día, semana o mes.
 - Navegación mediante atajos, contador en la barra de estado y explorador agrupado por archivo, regla o severidad.
@@ -203,35 +203,71 @@ Las acciones Quick Fix que modifican SonarQube respetan los permisos del token c
 
 ### Estado de remediación en vivo
 
-Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveRemediation.enabled` y su interruptor interno `sonarQubeDashboard.liveRemediation.enabled` están activos. Los issues sincronizados reaccionan a cambios locales sin presentar esos cambios como resultados ya confirmados por SonarQube Server:
+Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveRemediation.enabled` y su interruptor interno `sonarQubeDashboard.liveRemediation.enabled` están activos. Su principio es deliberadamente conservador: **modificar código no significa solucionar un issue**. SonarQube Server sigue siendo la única fuente de verdad y una remediación solo se confirma a partir del snapshot producido por un análisis real del repositorio.
 
-- al editar dentro de VS Code el rango seguido de un issue, el CodeLens/hover pasa a **Modificado localmente · pendiente de validación** y la entrada de Problems se vuelve informativa mientras el rango exacto se ajusta a inserciones, eliminaciones y reemplazos;
-- el módulo incorpora un `FileSystemWatcher` propio para detectar archivos seguidos que cambian, se crean, se eliminan, se copian o se sustituyen desde Explorer, terminal u otras herramientas externas. Cuando VS Code no proporciona un diff de texto exacto, todos los issues seguidos de ese archivo se marcan de forma conservadora como **Modificado localmente · pendiente de validación**;
-- si la extensión oficial **SonarQube for IDE** había informado previamente de la misma regla en la misma ubicación, SonarQube Dashboard observa sus diagnósticos independientes en tiempo real;
-- cuando ese diagnóstico externo desaparece después de una modificación, el issue permanece como **Modificado localmente · pendiente de confirmación de SonarQube**; sigue visible en **Problems**, en la navegación normal y en **Issues modificados localmente**;
-- si SonarQube for IDE vuelve a informar del hallazgo, el estado regresa a **Modificado localmente · pendiente de validación**;
-- si SonarQube for IDE no está instalado, no está activo, no soporta el archivo o nunca informó de ese hallazgo exacto, la extensión mantiene deliberadamente **Modificado localmente · pendiente de validación** y no asume que está corregido;
-- una sincronización correcta posterior con SonarQube es autoritativa para el estado local pendiente: si el servidor sigue devolviendo el issue, se restaura su estado normal de servidor; si ya no lo devuelve, desaparece normalmente;
-- los estados pendientes, sus rangos/baselines y la **sesión completa de remediación** se guardan por workspace. Al recargar o reiniciar VS Code se restauran la hora de inicio, los issues modificados, el último bloque **Tras último análisis**, los solucionados, los que siguen detectándose y el historial de solucionados;
-- al desactivar el módulo se eliminan su watcher, listeners, timers, barra de estado y vista nativa, y **Problems** vuelve inmediatamente a los diagnósticos normales del servidor mantenidos por el core.
+#### Seguimiento de cambios locales
 
-El indicador de la barra de estado aparece únicamente mientras exista estado local pendiente. Al seleccionarlo se solicita una actualización con SonarQube para contrastar el estado local con el servidor.
+- Al editar dentro de VS Code el rango seguido de un issue, el CodeLens/hover pasa a **Modificado localmente · pendiente de validación** y la entrada de Problems se vuelve informativa. El rango seguido se transforma con inserciones, eliminaciones, reemplazos, undo y redo.
+- Live Remediation compara el **cambio neto** con la baseline capturada desde el servidor. Si el código vuelve exactamente al contenido original —también mediante `Ctrl+Z`— el issue deja de estar pendiente inmediatamente, sin exigir una edición adicional.
+- El módulo observa también operaciones de archivos fuera del editor: cambios, guardados, creación, eliminación, rename, copia y sustitución desde Explorer, terminal u otras herramientas. Los eventos rápidos de múltiples archivos se agrupan y se realiza una reconciliación adicional del conjunto de archivos seguidos para no perder cambios por ordenación/coalescencia de eventos del sistema.
+- Cuando un reemplazo externo desplaza líneas pero el bloque original del issue sigue intacto, la baseline se relocaliza en lugar de marcar un falso cambio. Cuando no existe información suficiente para demostrar equivalencia, el comportamiento es conservador y el issue afectado se mantiene como modificado.
+- Si la extensión oficial **SonarQube for IDE** había informado previamente del mismo hallazgo, sus diagnósticos pueden utilizarse únicamente como señal adicional para pasar de **pendiente de validación** a **pendiente de confirmación de SonarQube**. Esa señal local nunca confirma una solución.
 
-La vista **Issues modificados localmente** incorpora además un flujo de remediación determinista:
+#### Diff y revert seguro
 
-- al seleccionar un issue se abre un **diff Servidor ↔ Local** construido con la baseline capturada desde el último snapshot de SonarQube y el bloque local actual;
-- el menú contextual ofrece **Ver cambio**, **Ir al código** y **Revertir este cambio**. El revert solo se ejecuta si el bloque original puede localizarse con seguridad mediante su rango y anclas de contexto; si no puede garantizarse, la extensión rechaza el revert automático y obliga a revisarlo manualmente en el diff;
-- se crea una **Remediation Session** con hora de inicio, estado pendiente actual y una acción **Analizar repositorio** para solicitar un nuevo snapshot real;
-- después de una sincronización autoritativa, el acordeón **Tras último análisis** conserva la hora de validación, los **Solucionados** y los issues que **Siguen detectándose**;
-- la vista conserva además un **Historial de solucionados** de hasta 20 confirmaciones. Todo este estado de sesión se restaura tras reiniciar VS Code dentro del mismo workspace y solo SonarQube Server puede añadir una confirmación.
+Cada entrada de **Cambios pendientes** utiliza la baseline del último snapshot de SonarQube:
 
-Las baselines necesarias para mantener el diff y el revert seguro, junto con el estado de la sesión y sus resultados de validación, se guardan localmente en el estado del workspace. No se utilizan para inferir que un issue está resuelto: SonarQube Server sigue siendo la única fuente de verdad.
+- seleccionar el issue abre un **diff Servidor ↔ Local** con el bloque original y el bloque local actual;
+- las acciones inline/contextuales permiten **Ver cambio**, **Ir al código** y **Revertir este cambio**;
+- el revert restaura únicamente el bloque asociado al issue y pide confirmación mediante un modal nativo de VS Code;
+- antes de aplicar el revert se comprueban el rango seguido, el rango original y las anclas de contexto. Si no puede demostrarse que el bloque es el correcto, el revert automático se rechaza sin modificar el archivo;
+- revertir un issue no guarda automáticamente el archivo, por lo que sigue siendo una edición normal de VS Code y puede deshacerse con Undo.
 
-El contenedor de la barra de actividad incorpora la vista nativa independiente **Issues modificados localmente**, al mismo nivel que **Ejecuciones del pipeline** y **Explorador de issues**. La raíz de la vista muestra la sesión, los cambios pendientes y el historial; seleccionar un issue abre su diff y sus acciones inline permiten ver el cambio, ir al código o intentar un revert seguro.
+#### Sesión de remediación
 
-Dentro de la pestaña **Live Remediation**, el acordeón **Integración con el editor** indica automáticamente si la extensión oficial **SonarQube for IDE** (`SonarSource.sonarlint-vscode`) está detectada y activa. Es opcional y se utiliza únicamente como una señal adicional para distinguir **pendiente de validación** de **pendiente de confirmación de SonarQube**.
+La vista nativa **Issues modificados localmente** contiene una **Sesión de remediación** con:
 
-Los indicadores solo se crean para hallazgos cuya ruta de SonarQube coincide con un archivo real de la carpeta vinculada. Se actualizan al sincronizar el dashboard y se eliminan al limpiar sus datos.
+- **Iniciada**, con la hora de inicio de la sesión;
+- **Analizar repositorio**, que ejecuta el Pipeline para obtener un nuevo snapshot real de SonarQube;
+- **Modificados ahora**, **Pendientes de validación** y **Pendientes de servidor**, que representan el estado pendiente actual;
+- **Cambios pendientes (N)**, con los issues que todavía tienen estado local diferente del snapshot del servidor.
+
+Una sincronización normal, el auto-refresh o el refresh de arranque **no consumen ni validan Cambios pendientes**. Solo un refresh cuyo origen sea un análisis real del repositorio puede producir resultados de validación.
+
+#### Tras último análisis
+
+Después de un análisis real aparece el acordeón **Tras último análisis**, que agrupa exclusivamente los resultados de esa última validación:
+
+- **Validado** muestra la hora del snapshot que produjo el resultado;
+- **Solucionados (N)** contiene los issues modificados que SonarQube dejó de devolver;
+- **Siguen detectándose (N)** contiene los issues modificados que SonarQube volvió a devolver. Cada entrada conserva los datos y la **ubicación nueva del último análisis**, por lo que al seleccionarla se abre el archivo en la línea actual devuelta por el servidor;
+- **Historial de solucionados** conserva hasta 20 confirmaciones anteriores. El historial solo contiene remediaciones realmente confirmadas por SonarQube Server.
+
+Los resultados del último análisis son independientes del historial acumulado: un análisis posterior sustituye las listas **Solucionados** y **Siguen detectándose**, mientras el historial de solucionados continúa conservando las confirmaciones anteriores.
+
+#### Persistencia y limpieza
+
+La sesión completa se guarda por workspace mediante `ExtensionContext.workspaceState` (esquema v4, con migración automática del estado pendiente v3). Al recargar la ventana o reiniciar VS Code se restauran:
+
+- los **Cambios pendientes**, estados `modified` / `awaitingConfirmation`, rangos y baselines;
+- la hora de inicio de la sesión;
+- el bloque **Tras último análisis**, incluidos Solucionados y Siguen detectándose;
+- el Historial de solucionados.
+
+Los pendientes persistidos se muestran incluso mientras todavía se está ejecutando el primer refresh del servidor, evitando que la vista parezca vacía durante el arranque.
+
+La vista incorpora acciones de papelera independientes, todas con confirmación nativa:
+
+- la papelera de **Sesión de remediación** borra pendientes, resultados del último análisis, historial y persistencia local de la sesión y crea una sesión nueva limpia; **no revierte ni modifica archivos locales y no modifica SonarQube Server**;
+- la papelera de **Solucionados** elimina únicamente esa lista del último análisis y mantiene el Historial de solucionados;
+- la papelera de **Siguen detectándose** elimina únicamente esa lista del último análisis y no toca Cambios pendientes ni los archivos.
+
+El indicador de la barra de estado aparece únicamente mientras exista estado local pendiente. Seleccionarlo solicita un refresh del Dashboard, pero la confirmación definitiva de remediaciones continúa reservada al resultado de un análisis real del repositorio.
+
+Al desactivar el módulo se liberan watcher, listeners, timers, barra de estado y vista nativa. Los diagnósticos normales de **Problems** continúan perteneciendo al core y se restauran inmediatamente al desmontar Live Remediation.
+
+![Estado de remediación en vivo](docs/images/liveremedation.png)
+
 
 ## Top Archivos y Top Reglas
 
@@ -584,7 +620,7 @@ El análisis solo puede ejecutarse en un workspace de confianza. Los lenguajes d
 
 ![Issues de SonarQube publicados en Problems](docs/images/problems-integration.png)
 
-Los issues Overall se publican como diagnósticos nativos de VS Code mediante un gestor perteneciente al core. Esta publicación no depende de Pipeline ni de Live Remediation. Con Live Remediation activado, el módulo puede superponer temporalmente el estado local conservador: los hallazgos tocados pasan a entradas informativas **Modificado localmente**. SonarQube for IDE puede moverlos de pendiente de validación a pendiente de confirmación, y una sincronización correcta posterior con SonarQube restaura el estado autoritativo del servidor.
+Los issues Overall se publican como diagnósticos nativos de VS Code mediante un gestor perteneciente al core. Esta publicación no depende de Pipeline ni de Live Remediation. Con Live Remediation activado, el módulo puede superponer temporalmente el estado local conservador: los hallazgos tocados pasan a entradas informativas **Modificado localmente**. SonarQube for IDE puede moverlos de pendiente de validación a pendiente de confirmación, pero las sincronizaciones normales y los refresh de arranque conservan ese estado pendiente. Solo el snapshot del servidor producido por un análisis real del repositorio puede clasificar una remediación pendiente como **Solucionada** o **Sigue detectándose**.
 
 - se agrupan por archivo;
 - muestran regla y descripción;

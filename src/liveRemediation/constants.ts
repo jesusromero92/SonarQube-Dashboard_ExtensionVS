@@ -13,3 +13,6 @@ export const ACTIVE_PROBLEMS_REVEAL_DELAY_MS = 120;
 export const LIVE_REMEDIATION_STORAGE_KEY = 'sonarQubeDashboard.liveRemediation.state.v4';
 export const LEGACY_LIVE_REMEDIATION_STORAGE_KEY = 'sonarQubeDashboard.liveRemediation.pending.v3';
 export const PERSISTENCE_DEBOUNCE_MS = 150;
+
+export const TRACKED_FILE_RECONCILIATION_DELAY_MS = 120;
+export const TRACKED_BATCH_RECONCILIATION_DELAY_MS = 500;

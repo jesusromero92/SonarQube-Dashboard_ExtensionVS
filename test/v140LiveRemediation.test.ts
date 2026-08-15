@@ -93,7 +93,8 @@ test('los archivos reemplazados fuera del editor también aparecen como modifica
   assert.match(source, /trackedFilesWatcher\.onDidChange/);
   assert.match(source, /trackedFilesWatcher\.onDidCreate/);
   assert.match(source, /trackedFilesWatcher\.onDidDelete/);
-  assert.match(source, /onTrackedFileSystemChanged/);
+  assert.match(source, /queueTrackedFileSystemChange/);
+  assert.match(source, /reconcileTrackedFileState/);
   assert.match(source, /workspace\.fs\.readFile/);
   assert.match(source, /document\.getText/);
   assert.match(source, /reconcileTrackedIssueAfterFileChange/);
@@ -320,4 +321,64 @@ test('Solucionados y Siguen detectándose pueden limpiarse de forma independient
   assert.match(extension, /CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND/);
   assert.match(packageJson, /clearLastSolvedRemediationResults/);
   assert.match(packageJson, /clearLastStillDetectedRemediationResults/);
+});
+
+test('Live Remediation reconcilia pegados/reemplazos de varios archivos como un lote', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+  const constants = read('src/liveRemediation/constants.ts');
+
+  assert.match(manager, /queueTrackedFileSystemChange/);
+  assert.match(manager, /trackedFileReconciliationTimers/);
+  assert.match(manager, /scheduleTrackedBatchReconciliation/);
+  assert.match(manager, /reconcileAllTrackedFiles/);
+  assert.match(manager, /for \(const uriString of this\.keysByUri\.keys\(\)\)/);
+  assert.match(constants, /TRACKED_FILE_RECONCILIATION_DELAY_MS/);
+  assert.match(constants, /TRACKED_BATCH_RECONCILIATION_DELAY_MS/);
+});
+
+test('los cambios externos en archivos abiertos se comparan contra baseline y no se descartan por coincidir con disco', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+
+  assert.doesNotMatch(manager, /openDocumentMatchesDisk/);
+  assert.match(manager, /openDocument\?\.isDirty/);
+  assert.match(manager, /readCurrentTrackedFileText/);
+  assert.match(manager, /reconcileTrackedFileState/);
+});
+
+test('un bloque desplazado sin cambios se relocaliza y no genera un Modified locally falso', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+  const baseline = read('src/liveRemediation/baseline.ts');
+
+  assert.match(baseline, /matchingBaselineRangeInText/);
+  assert.match(baseline, /matchingBlockStarts/);
+  assert.match(baseline, /baselineAnchorScore/);
+  assert.match(manager, /matchingBaselineRangeInText\(currentText, tracked\)/);
+  assert.match(manager, /restoreTrackedServerState\(tracked, matchingRange\)/);
+});
+
+test('las operaciones de archivos de VS Code y los saves refuerzan el watcher para lotes', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+
+  assert.match(manager, /onDidCreateFiles/);
+  assert.match(manager, /onDidDeleteFiles/);
+  assert.match(manager, /onDidRenameFiles/);
+  assert.match(manager, /onDidSaveTextDocument/);
+});
+
+test('una baseline no se acepta si el archivo cambia mientras se está capturando', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+
+  assert.match(manager, /fileChangeVersions/);
+  assert.match(manager, /const fileChangeVersionsAtSnapshot = new Map\(this\.fileChangeVersions\)/);
+  assert.match(manager, /const captureVersion = versionsAtSnapshot\?\.get\(uriString\)/);
+  assert.match(manager, /this\.fileChangeVersions\.get\(uriString\)[\s\S]*!== captureVersion/);
+  assert.match(manager, /this\.markTrackedModified\(tracked\.issue\.key, tracked\)/);
+});
+
+test('los documentos ya abiertos se reconcilian después de capturar baselines', () => {
+  const manager = read('src/liveRemediation/manager.ts');
+
+  assert.match(manager, /reconcileOpenTrackedDocuments/);
+  assert.match(manager, /for \(const document of vscode\.workspace\.textDocuments\)/);
+  assert.match(manager, /reconcileTrackedFileState\(document\.uri\)/);
 });

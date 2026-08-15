@@ -84,6 +84,91 @@ export function textMatchesBaseline(text: string, tracked: TrackedIssue): boolea
     || textBlockMatches(lines, tracked.baselineRange, baseline);
 }
 
+
+export function matchingBaselineRangeInText(
+  text: string,
+  tracked: TrackedIssue
+): vscode.Range | undefined {
+  const baseline = tracked.baseline;
+  if (!baseline || baseline.blockLines.length === 0) return undefined;
+
+  const lines = splitLines(text);
+  if (textBlockMatches(lines, tracked.range, baseline)) return tracked.range;
+  if (textBlockMatches(lines, tracked.baselineRange, baseline)) return tracked.baselineRange;
+
+  const candidates = matchingBlockStarts(lines, baseline);
+  if (candidates.length === 0) return undefined;
+
+  const preferredStart = tracked.range.start.line;
+  const ranked = candidates
+    .map(start => ({
+      start,
+      anchorScore: baselineAnchorScore(lines, start, baseline),
+      distance: Math.abs(start - preferredStart)
+    }))
+    .sort((left, right) =>
+      right.anchorScore - left.anchorScore
+      || left.distance - right.distance
+      || Math.abs(left.start - baseline.blockStartLine) - Math.abs(right.start - baseline.blockStartLine)
+    );
+
+  const best = ranked[0];
+  const second = ranked[1];
+  if (
+    second?.anchorScore === best.anchorScore
+    && second?.distance === best.distance
+  ) {
+    return undefined;
+  }
+
+  const sourceRange = deserializeRange(baseline.range);
+  const lineDelta = best.start - baseline.blockStartLine;
+  return new vscode.Range(
+    Math.max(0, sourceRange.start.line + lineDelta),
+    sourceRange.start.character,
+    Math.max(0, sourceRange.end.line + lineDelta),
+    sourceRange.end.character
+  );
+}
+
+function matchingBlockStarts(
+  lines: readonly string[],
+  baseline: IssueBaseline
+): number[] {
+  const result: number[] = [];
+  const blockLength = baseline.blockLines.length;
+  for (let start = 0; start + blockLength <= lines.length; start += 1) {
+    if (arraysEqual(lines.slice(start, start + blockLength), baseline.blockLines)) {
+      result.push(start);
+    }
+  }
+  return result;
+}
+
+function baselineAnchorScore(
+  lines: readonly string[],
+  start: number,
+  baseline: IssueBaseline
+): number {
+  let score = 0;
+  const end = start + baseline.blockLines.length - 1;
+  if (
+    baseline.beforeAnchor !== undefined
+    && start > 0
+    && lines[start - 1] === baseline.beforeAnchor
+  ) {
+    score += 1;
+  }
+  if (
+    baseline.afterAnchor !== undefined
+    && end + 1 < lines.length
+    && lines[end + 1] === baseline.afterAnchor
+  ) {
+    score += 1;
+  }
+  return score;
+}
+
 export function currentIssueSnippet(
   document: vscode.TextDocument,
   tracked: TrackedIssue

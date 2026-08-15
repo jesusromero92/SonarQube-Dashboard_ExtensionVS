@@ -4,67 +4,45 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
-## [2.0.0]
-
-- Live Remediation: la sesión completa (estado pendiente, último análisis, solucionados, issues que siguen detectándose e historial) se persiste por workspace y se restaura tras recargar o reiniciar VS Code. Incluye migración automática del estado pendiente v3 al nuevo esquema v4. - 2026-08-14
+## [2.0.0] - 2026-08-15
 
 ### Added
 
-- Live Remediation now provides a deterministic **Server ↔ Local diff** for every pending issue whose server baseline is available, plus inline actions to view the diff, jump to code, and attempt a guarded per-issue revert. Automatic revert is refused when the original block can no longer be located safely.
+- Added the **modular 2.0 architecture** with a dedicated **Configuration → Modules** area. **Pipeline** and **Live Remediation** can be enabled or disabled independently at runtime, their native views/configuration tabs follow module state immediately, and disabling a module requires confirmation through a native VS Code modal. If Pipeline is running, the modal explicitly warns that the analysis will be cancelled.
 
-  *Live Remediation incorpora ahora un **diff Servidor ↔ Local** determinista para cada issue pendiente cuya baseline de servidor esté disponible, además de acciones inline para ver el diff, ir al código e intentar un revert protegido por issue. El revert automático se rechaza cuando el bloque original ya no puede localizarse con seguridad.*
+  *Se ha añadido la **arquitectura modular de la 2.0** con una sección dedicada **Configuración → Módulos**. **Pipeline** y **Live Remediation** pueden activarse o desactivarse de forma independiente en runtime, sus vistas nativas/pestañas de configuración reaccionan inmediatamente al estado del módulo y la desactivación requiere confirmación mediante un modal nativo de VS Code. Si Pipeline está ejecutándose, el modal avisa expresamente de que el análisis será cancelado.*
 
-- Added **Remediation Session** tracking to the native locally-modified view. The session reports its start time, issues at start, modified/pending counts, exposes **Analyze repository**, and records the latest authoritative validation result.
+- Added isolated module lifecycles. Pipeline services are created only while Pipeline is enabled, and the core owns the normal SonarQube diagnostic snapshot used by **Problems**, so Live Remediation can be mounted or removed without disabling server diagnostics or the rest of the Dashboard.
 
-  *Se ha añadido el seguimiento de **Remediation Session** a la vista nativa de issues modificados localmente. La sesión muestra hora de inicio, issues al comenzar, contadores modificados/pendientes, expone **Analizar repositorio** y registra el último resultado de validación autoritativa.*
+  *Se han añadido ciclos de vida aislados por módulo. Los servicios de Pipeline solo se crean mientras Pipeline está activo y el core mantiene el snapshot normal de diagnósticos de SonarQube utilizado por **Problems**, por lo que Live Remediation puede montarse o desmontarse sin desactivar los diagnósticos del servidor ni el resto del Dashboard.*
 
-- Added an in-session **Remediation history** capped at 20 validation results. Entries are created only from real SonarQube server snapshots and distinguish **Confirmed by SonarQube** from **Still detected by SonarQube**.
+- Added the native **Issues modified locally** workflow. Live Remediation tracks net changes to synchronized issues inside the editor and in files changed, copied, replaced, created, deleted, renamed, or saved externally. Multi-file operations are reconciled in batches, tracked ranges follow precise edits, and an issue returns to the server state automatically when its code is restored exactly to the captured baseline.
 
-  *Se ha añadido un **Historial de remediación** de sesión limitado a 20 resultados de validación. Las entradas solo se crean a partir de snapshots reales de SonarQube Server y distinguen **Confirmado por SonarQube** de **Sigue detectándose en SonarQube**.*
+  *Se ha añadido el flujo nativo **Issues modificados localmente**. Live Remediation sigue los cambios netos de issues sincronizados dentro del editor y en archivos modificados, copiados, sustituidos, creados, eliminados, renombrados o guardados externamente. Las operaciones de múltiples archivos se reconcilian por lotes, los rangos seguidos acompañan las ediciones precisas y un issue vuelve automáticamente al estado del servidor cuando su código se restaura exactamente a la baseline capturada.*
 
-- Added a new **Configuration → Modules** area that independently enables or disables the **Pipeline** and **Live Remediation** modules. Module-specific configuration tabs are only shown while their module is active.
+- Added deterministic **Server ↔ Local diff** support for pending issues and guarded per-issue actions to **View change**, **Go to code**, and **Revert this change**. Automatic revert restores only the associated baseline block and is refused when the original location/context cannot be proven safe.
 
-  *Se ha añadido una nueva sección **Configuración → Módulos** que permite activar o desactivar de forma independiente los módulos **Pipeline** y **Live Remediation**. Las pestañas de configuración específicas de cada módulo solo se muestran mientras el módulo está activo.*
+  *Se ha añadido soporte de **diff Servidor ↔ Local** determinista para los issues pendientes y acciones protegidas por issue para **Ver cambio**, **Ir al código** y **Revertir este cambio**. El revert automático restaura únicamente el bloque asociado de la baseline y se rechaza cuando no puede demostrarse con seguridad la ubicación/contexto original.*
 
-- Added centralized module state management under `src/modules/`, including VS Code context keys so native sidebar views react immediately when a module is toggled.
+- Added a persistent **Remediation Session** to the native view, with start time, current modified/pending counters, and an **Analyze repository** action. Ordinary synchronization/startup refreshes preserve pending remediation state; only the real SonarQube snapshot produced by a repository analysis can validate pending modifications.
 
-  *Se ha añadido la gestión centralizada del estado de módulos bajo `src/modules/`, incluyendo context keys de VS Code para que las vistas nativas de la barra lateral reaccionen inmediatamente al activar o desactivar un módulo.*
+  *Se ha añadido una **Sesión de remediación** persistente a la vista nativa, con hora de inicio, contadores actuales de modificados/pendientes y la acción **Analizar repositorio**. Las sincronizaciones normales y los refresh de arranque conservan el estado de remediación pendiente; solo el snapshot real de SonarQube producido por un análisis del repositorio puede validar las modificaciones pendientes.*
 
-### Changed
+- Added the **After latest analysis / Tras último análisis** accordion. It records the validation time and separates **Solved** issues from issues **Still detected** by the latest real server analysis. Still-detected entries use the new location returned by SonarQube and navigate directly to that current file/line.
 
-- **Pipeline** is now an optional module. Disabling it hides its configuration tab and native execution view, removes repository-analysis actions from the dashboard, blocks pipeline commands, cancels an active pipeline, and skips project-action/template discovery while the module is off.
+  *Se ha añadido el acordeón **Tras último análisis / After latest analysis**. Registra la hora de validación y separa los issues **Solucionados** de los que **Siguen detectándose** en el último análisis real del servidor. Las entradas que siguen detectándose utilizan la ubicación nueva devuelta por SonarQube y navegan directamente a ese archivo/línea actual.*
 
-  ***Pipeline** pasa a ser un módulo opcional. Al desactivarlo se ocultan su pestaña de configuración y la vista nativa de ejecuciones, desaparecen las acciones de análisis del repositorio, se bloquean los comandos de pipeline, se cancela una ejecución activa y se evita detectar acciones/plantillas mientras el módulo está apagado.*
+- Added a **Solved history** capped at 20 confirmed remediations. Only a real SonarQube server analysis can add a confirmation; local edits or SonarQube for IDE diagnostics never mark an issue as solved on their own.
 
-- **Live Remediation** is now an optional module independent from its own tracking switch. Disabling the module hides its configuration tab and native locally-modified view and disables local remediation tracking while normal SonarQube diagnostics remain available.
+  *Se ha añadido un **Historial de solucionados** limitado a 20 remediaciones confirmadas. Solo un análisis real de SonarQube Server puede añadir una confirmación; las ediciones locales o los diagnósticos de SonarQube for IDE nunca marcan por sí solos un issue como solucionado.*
 
-  ***Live Remediation** pasa a ser un módulo opcional independiente de su interruptor interno de seguimiento. Al desactivar el módulo se ocultan su pestaña de configuración y la vista nativa de issues modificados localmente y se desactiva el seguimiento de remediación, manteniendo disponibles los diagnósticos normales de SonarQube.*
+- Added full **per-workspace remediation-session persistence** using VS Code `workspaceState` (schema v4 with automatic migration from v3). Pending changes, baselines/ranges, session start, latest-analysis results, still-detected results, and solved history survive window reloads and VS Code restarts and are surfaced immediately while the first server refresh is still loading.
 
-- The extension version is now **2.0.0**, reflecting the new modular architecture. Pipeline remains centralized in `src/pipeline/` and Live Remediation in `src/liveRemediation/`, with shared module lifecycle/configuration logic isolated in `src/modules/`.
+  *Se ha añadido persistencia completa de la **sesión de remediación por workspace** mediante `workspaceState` de VS Code (esquema v4 con migración automática desde v3). Los cambios pendientes, baselines/rangos, inicio de sesión, resultados del último análisis, issues que siguen detectándose e historial de solucionados sobreviven a recargas y reinicios de VS Code y se muestran inmediatamente mientras todavía se carga el primer refresh del servidor.*
 
-  *La versión de la extensión pasa a ser **2.0.0**, reflejando la nueva arquitectura modular. Pipeline continúa centralizado en `src/pipeline/` y Live Remediation en `src/liveRemediation/`, mientras la lógica compartida de ciclo de vida/configuración de módulos queda aislada en `src/modules/`.*
+- Added independent cleanup actions with native confirmation modals: a trash action on **Remediation Session** resets all session-local pending/results/history without modifying source files or SonarQube Server; separate trash actions clear only **Solved** or only **Still detected** results from the latest analysis. Clearing the latest solved results does not erase the accumulated solved history.
 
-- Live Remediation no longer labels a local analyzer disappearance as **Fixed locally**. Every edited server issue remains **Modified locally**: first **pending validation**, then optionally **awaiting SonarQube confirmation** when SonarQube for IDE stops reporting the previously matched finding. A successful SonarQube synchronization is authoritative for the pending state: issues still returned by the server return to their normal server state, while issues no longer returned are removed normally. The native view is renamed to **Issues modified locally**, uses a modified/edit indicator instead of a green pass icon, and pending findings remain available in normal issue navigation.
-
-  *Live Remediation deja de etiquetar como **Corregido localmente** la desaparición de un diagnóstico del analizador local. Todo issue editado permanece **Modificado localmente**: primero **pendiente de validación** y, opcionalmente, **pendiente de confirmación de SonarQube** cuando SonarQube for IDE deja de informar del hallazgo previamente correlacionado. Una sincronización correcta con SonarQube es autoritativa para el estado pendiente: los issues que el servidor sigue devolviendo recuperan su estado normal de servidor y los que ya no devuelve desaparecen normalmente. La vista nativa pasa a llamarse **Issues modificados localmente**, utiliza un indicador de edición/modificación en lugar del check verde y los hallazgos pendientes siguen disponibles en la navegación normal de issues.*
-
-### Fixed
-
-- Optional-module lifecycle is now isolated from the core runtime. Pipeline services are created only while Pipeline is enabled, and Live Remediation no longer owns the server diagnostic snapshot used by **Problems**. Disabling either module tears down its runtime resources without disabling the rest of the extension.
-
-  *El ciclo de vida de los módulos opcionales queda aislado del runtime principal. Los servicios de Pipeline solo se crean mientras Pipeline está activo y Live Remediation deja de ser propietario del snapshot de diagnósticos de servidor utilizado por **Problems**. Desactivar cualquiera de los módulos libera sus recursos de runtime sin desactivar el resto de la extensión.*
-
-- Disabling an optional module now requires confirmation through a native VS Code modal. If Pipeline has an analysis in progress, the confirmation explicitly warns that the running analysis will be cancelled; cancelling or closing the modal leaves the module and analysis unchanged.
-
-  *La desactivación de un módulo opcional requiere ahora confirmación mediante un modal nativo de VS Code. Si Pipeline tiene un análisis en ejecución, la confirmación avisa expresamente de que se cancelará; cancelar o cerrar el modal mantiene el módulo y el análisis sin cambios.*
-
-- Live Remediation now detects tracked files changed, created, deleted, copied, or replaced outside the editor through a module-owned file-system watcher. When no exact text diff is available, tracked issues in that file are conservatively marked **Modified locally · pending validation** instead of being silently ignored.
-
-  *Live Remediation detecta ahora archivos seguidos que se modifican, crean, eliminan, copian o sustituyen fuera del editor mediante un watcher de sistema de archivos propiedad del módulo. Cuando no existe un diff de texto exacto, los issues seguidos de ese archivo se marcan de forma conservadora como **Modificado localmente · pendiente de validación** en lugar de ignorar el cambio.*
-
-- All issues reported by SonarQube against the 2.0.0 codebase have been corrected without intentional functional changes.
-
-  *Se han corregido todos los issues informados por SonarQube sobre el código de la versión 2.0.0 sin introducir cambios funcionales intencionados.*
+  *Se han añadido acciones de limpieza independientes con modales nativos de confirmación: una papelera en **Sesión de remediación** reinicia todos los pendientes/resultados/historial locales de la sesión sin modificar archivos fuente ni SonarQube Server; papeleras separadas eliminan únicamente **Solucionados** o únicamente **Siguen detectándose** del último análisis. Limpiar los solucionados del último análisis no borra el historial acumulado de solucionados.*
 
 ## [1.4.0] - 2026-08-13
 

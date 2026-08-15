@@ -14,15 +14,17 @@ import {
   captureIssueBaseline,
   currentIssueSnippet,
   issueMatchesBaseline,
+  matchingBaselineRangeInText,
   safeRevertRange,
-  serverIssueSnippet,
-  textMatchesBaseline
+  serverIssueSnippet
 } from './baseline';
 import {
   ACTIVE_PROBLEMS_REVEAL_DELAY_MS,
   DASHBOARD_DIAGNOSTIC_SOURCE,
   EXTERNAL_EVALUATION_DELAY_MS,
-  LIVE_REMEDIATION_CONFIGURATION_KEY
+  LIVE_REMEDIATION_CONFIGURATION_KEY,
+  TRACKED_BATCH_RECONCILIATION_DELAY_MS,
+  TRACKED_FILE_RECONCILIATION_DELAY_MS
 } from './constants';
 import {
   collectDiagnosticsByIssueKey,
@@ -92,7 +94,11 @@ const MAX_REMEDIATION_HISTORY = 20;
 export class LiveRemediationManager implements vscode.Disposable {
   private readonly trackedByKey = new Map<string, TrackedIssue>();
   private readonly keysByUri = new Map<string, Set<string>>();
+  private readonly trackedFileUris = new Set<string>();
   private readonly evaluationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly trackedFileReconciliationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private trackedBatchReconciliationTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly fileChangeVersions = new Map<string, number>();
   private activeProblemsRevealTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly changedEmitter = new vscode.EventEmitter<void>();
   private readonly disposables: vscode.Disposable[] = [];
@@ -133,14 +139,23 @@ export class LiveRemediationManager implements vscode.Disposable {
         this.diffProvider
       ),
       trackedFilesWatcher,
-      trackedFilesWatcher.onDidChange(uri => {
-        void this.onTrackedFileSystemChanged(uri);
+      trackedFilesWatcher.onDidChange(uri => this.queueTrackedFileSystemChange(uri)),
+      trackedFilesWatcher.onDidCreate(uri => this.queueTrackedFileSystemChange(uri)),
+      trackedFilesWatcher.onDidDelete(uri => this.queueTrackedFileSystemChange(uri)),
+      vscode.workspace.onDidCreateFiles(event => {
+        for (const uri of event.files) this.queueTrackedFileSystemChange(uri);
       }),
-      trackedFilesWatcher.onDidCreate(uri => {
-        void this.onTrackedFileSystemChanged(uri);
+      vscode.workspace.onDidDeleteFiles(event => {
+        for (const uri of event.files) this.queueTrackedFileSystemChange(uri);
       }),
-      trackedFilesWatcher.onDidDelete(uri => {
-        void this.onTrackedFileSystemChanged(uri, true);
+      vscode.workspace.onDidRenameFiles(event => {
+        for (const file of event.files) {
+          this.queueTrackedFileSystemChange(file.oldUri);
+          this.queueTrackedFileSystemChange(file.newUri);
+        }
+      }),
+      vscode.workspace.onDidSaveTextDocument(document => {
+        this.queueTrackedFileSystemChange(document.uri);
       }),
       vscode.workspace.onDidChangeTextDocument(event => this.onDocumentChanged(event)),
       vscode.languages.onDidChangeDiagnostics(event => {
@@ -158,6 +173,7 @@ export class LiveRemediationManager implements vscode.Disposable {
           this.enabled = this.readEnabled();
           if (!this.enabled) {
             this.cancelEvaluationTimers();
+            this.cancelTrackedFileReconciliation();
             this.cancelActiveProblemsReveal();
             this.sonarIde.forget();
             this.resetLocalStates();
@@ -181,6 +197,7 @@ export class LiveRemediationManager implements vscode.Disposable {
     confirmLocalRemediation = false
   ): number {
     this.ensureSession(issues.length);
+    const fileChangeVersionsAtSnapshot = new Map(this.fileChangeVersions);
     const diagnosticByKey = collectDiagnosticsByIssueKey(serverDiagnostics);
     const previousTracked = new Map(this.trackedByKey);
     const serverIssuesByKey = new Map(issues.map(issue => [issue.key, issue] as const));
@@ -202,8 +219,9 @@ export class LiveRemediationManager implements vscode.Disposable {
       );
     }
 
+    this.syncTrackedFileUris();
     this.syncPersistedStateFromTracked(!confirmLocalRemediation);
-    void this.captureMissingBaselines();
+    void this.captureMissingBaselines(fileChangeVersionsAtSnapshot);
     if (this.enabled) this.observeExternalDiagnosticsForAllFiles();
     this.publishAll();
     this.fireChanged();
@@ -324,6 +342,7 @@ export class LiveRemediationManager implements vscode.Disposable {
 
   private resetTrackedSnapshot(): void {
     this.cancelEvaluationTimers();
+    this.cancelTrackedFileReconciliation();
     this.cancelActiveProblemsReveal();
     this.trackedByKey.clear();
     this.keysByUri.clear();
@@ -385,13 +404,17 @@ export class LiveRemediationManager implements vscode.Disposable {
     const keys = this.keysByUri.get(issue.fileUri) ?? new Set<string>();
     keys.add(issue.key);
     this.keysByUri.set(issue.fileUri, keys);
+    this.trackedFileUris.add(issue.fileUri);
   }
 
   clear(): void {
     this.cancelEvaluationTimers();
+    this.cancelTrackedFileReconciliation();
     this.cancelActiveProblemsReveal();
     this.trackedByKey.clear();
     this.keysByUri.clear();
+    this.trackedFileUris.clear();
+    this.fileChangeVersions.clear();
     this.diagnostics.restoreServerSnapshot();
     this.sonarIde.forget();
     this.stateStore.clear();
@@ -414,6 +437,7 @@ export class LiveRemediationManager implements vscode.Disposable {
     if (choice !== confirmLabel) return;
 
     this.cancelEvaluationTimers();
+    this.cancelTrackedFileReconciliation();
     this.cancelActiveProblemsReveal();
     this.sonarIde.forget();
     for (const tracked of this.trackedByKey.values()) {
@@ -699,6 +723,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   dispose(): void {
     this.diagnostics.restoreServerSnapshot();
     this.cancelEvaluationTimers();
+    this.cancelTrackedFileReconciliation();
     this.cancelActiveProblemsReveal();
     this.syncPersistedStateFromTracked();
     this.persistSessionState();
@@ -836,11 +861,14 @@ export class LiveRemediationManager implements vscode.Disposable {
     const transformed = this.transformTrackedRange(tracked.range, changes);
     tracked.range = clampRangeToDocument(document, transformed.range);
 
-    if (tracked.baseline && issueMatchesBaseline(document, tracked)) {
-      return this.restoreTrackedServerState(
-        tracked,
-        clampRangeToDocument(document, tracked.baselineRange)
-      );
+    if (tracked.baseline) {
+      const matchingRange = matchingBaselineRangeInText(document.getText(), tracked);
+      if (matchingRange) {
+        return this.restoreTrackedServerState(
+          tracked,
+          clampRangeToDocument(document, matchingRange)
+        );
+      }
     }
 
     return transformed.touched && this.markTrackedModified(key, tracked);
@@ -859,71 +887,112 @@ export class LiveRemediationManager implements vscode.Disposable {
     return { range, touched };
   }
 
-  private async onTrackedFileSystemChanged(
-    uri: vscode.Uri,
-    deleted = false
-  ): Promise<void> {
+  private queueTrackedFileSystemChange(uri: vscode.Uri): void {
     if (!this.enabled || uri.scheme !== 'file') return;
 
     const uriString = uri.toString();
-    const keys = this.keysByUri.get(uriString);
-    if (!keys?.size) return;
-    if (!deleted && await this.openDocumentMatchesDisk(uri, uriString)) return;
+    if (!this.keysByUri.has(uriString) && !this.trackedFileUris.has(uriString)) return;
+    this.fileChangeVersions.set(uriString, (this.fileChangeVersions.get(uriString) ?? 0) + 1);
+    if (!this.keysByUri.has(uriString)) return;
 
-    const diskText = await this.readTrackedFileText(uri, deleted);
-    let stateChanged = false;
-    for (const key of keys) {
-      stateChanged = this.reconcileTrackedIssueAfterFileChange(key, diskText) || stateChanged;
+    const existing = this.trackedFileReconciliationTimers.get(uriString);
+    if (existing) clearTimeout(existing);
+    this.trackedFileReconciliationTimers.set(uriString, setTimeout(() => {
+      this.trackedFileReconciliationTimers.delete(uriString);
+      void this.reconcileTrackedFileUri(uri);
+    }, TRACKED_FILE_RECONCILIATION_DELAY_MS));
+
+    this.scheduleTrackedBatchReconciliation();
+  }
+
+  private scheduleTrackedBatchReconciliation(): void {
+    if (this.trackedBatchReconciliationTimer) {
+      clearTimeout(this.trackedBatchReconciliationTimer);
     }
+    this.trackedBatchReconciliationTimer = setTimeout(() => {
+      this.trackedBatchReconciliationTimer = undefined;
+      void this.reconcileAllTrackedFiles();
+    }, TRACKED_BATCH_RECONCILIATION_DELAY_MS);
+  }
 
-    if (!stateChanged) return;
+  private async reconcileTrackedFileUri(uri: vscode.Uri): Promise<void> {
+    const changed = await this.reconcileTrackedFileState(uri, true);
+    if (!changed) return;
     this.syncPersistedStateFromTracked();
     this.publishUri(uri);
     this.fireChanged();
   }
 
-  private async readTrackedFileText(
+  private async reconcileAllTrackedFiles(): Promise<void> {
+    if (!this.enabled) return;
+    const changedUris: vscode.Uri[] = [];
+    for (const uriString of this.keysByUri.keys()) {
+      const uri = vscode.Uri.parse(uriString);
+      if (await this.reconcileTrackedFileState(uri, false)) changedUris.push(uri);
+    }
+    if (changedUris.length === 0) return;
+
+    this.syncPersistedStateFromTracked();
+    for (const uri of changedUris) this.publishUri(uri);
+    this.fireChanged();
+  }
+
+  private async reconcileTrackedFileState(
     uri: vscode.Uri,
-    deleted: boolean
-  ): Promise<string | undefined> {
-    if (deleted) return undefined;
+    missingMeansModified = false
+  ): Promise<boolean> {
+    if (!this.enabled || uri.scheme !== 'file') return false;
+    const keys = this.keysByUri.get(uri.toString());
+    if (!keys?.size) return false;
+
+    const currentText = await this.readCurrentTrackedFileText(uri);
+    if (currentText === undefined && !missingMeansModified) return false;
+    let stateChanged = false;
+    for (const key of keys) {
+      stateChanged = this.reconcileTrackedIssueAfterFileChange(key, currentText) || stateChanged;
+    }
+    return stateChanged;
+  }
+
+  private async readCurrentTrackedFileText(uri: vscode.Uri): Promise<string | undefined> {
+    const uriString = uri.toString();
+    const openDocument = vscode.workspace.textDocuments.find(
+      candidate => candidate.uri.toString() === uriString
+    );
+    if (openDocument?.isDirty) return openDocument.getText();
+
     try {
       let text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
       if (text.startsWith('\uFEFF')) text = text.slice(1);
       return text;
     } catch {
-      return undefined;
+      return openDocument?.getText();
     }
   }
 
   private reconcileTrackedIssueAfterFileChange(
     key: string,
-    diskText: string | undefined
+    currentText: string | undefined
   ): boolean {
     const tracked = this.trackedByKey.get(key);
     if (!tracked) return false;
 
-    if (this.diskTextMatchesBaseline(diskText, tracked)) {
-      return this.restoreTrackedServerState(tracked, tracked.baselineRange);
+    if (currentText !== undefined && tracked.baseline) {
+      const matchingRange = matchingBaselineRangeInText(currentText, tracked);
+      if (matchingRange) return this.restoreTrackedServerState(tracked, matchingRange);
     }
     return this.markTrackedModified(key, tracked);
   }
 
-  private diskTextMatchesBaseline(
-    diskText: string | undefined,
-    tracked: TrackedIssue
-  ): boolean {
-    return diskText !== undefined
-      && tracked.baseline !== undefined
-      && textMatchesBaseline(diskText, tracked);
-  }
-
   private restoreTrackedServerState(tracked: TrackedIssue, range: vscode.Range): boolean {
-    if (tracked.state === 'server') return false;
-    tracked.state = 'server';
-    tracked.observedBySonarIde = false;
+    const rangeChanged = !tracked.range.isEqual(range);
+    const stateChanged = tracked.state !== 'server' || tracked.observedBySonarIde;
     tracked.range = range;
-    return true;
+    if (stateChanged) {
+      tracked.state = 'server';
+      tracked.observedBySonarIde = false;
+    }
+    return rangeChanged || stateChanged;
   }
 
   private markTrackedModified(key: string, tracked: TrackedIssue): boolean {
@@ -931,24 +1000,6 @@ export class LiveRemediationManager implements vscode.Disposable {
     tracked.state = 'modified';
     this.markSessionModified(key);
     return true;
-  }
-
-  private async openDocumentMatchesDisk(
-    uri: vscode.Uri,
-    uriString: string
-  ): Promise<boolean> {
-    const document = vscode.workspace.textDocuments.find(
-      candidate => candidate.uri.toString() === uriString
-    );
-    if (!document) return false;
-
-    try {
-      let diskText = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-      if (diskText.startsWith('\uFEFF')) diskText = diskText.slice(1);
-      return diskText === document.getText();
-    } catch {
-      return false;
-    }
   }
 
   private scheduleExternalEvaluation(uri: vscode.Uri): void {
@@ -1042,25 +1093,51 @@ export class LiveRemediationManager implements vscode.Disposable {
     return result;
   }
 
-  private async captureMissingBaselines(): Promise<void> {
+  private async captureMissingBaselines(
+    versionsAtSnapshot?: ReadonlyMap<string, number>
+  ): Promise<void> {
     const pending = [...this.trackedByKey.values()].filter(
       tracked => tracked.state === 'server' && !tracked.baseline
     );
     if (pending.length === 0) return;
-    let changed = false;
+
+    let baselineChanged = false;
+    let stateChanged = false;
     await Promise.all(pending.map(async tracked => {
+      const uriString = tracked.issue.fileUri;
+      const captureVersion = versionsAtSnapshot?.get(uriString)
+        ?? this.fileChangeVersions.get(uriString)
+        ?? 0;
       const baseline = await captureIssueBaseline(tracked);
       if (
         !baseline
         || this.trackedByKey.get(tracked.issue.key) !== tracked
         || tracked.state !== 'server'
       ) return;
+
+      if ((this.fileChangeVersions.get(uriString) ?? 0) !== captureVersion) {
+        stateChanged = this.markTrackedModified(tracked.issue.key, tracked) || stateChanged;
+        return;
+      }
+
       tracked.baseline = baseline;
-      changed = true;
+      baselineChanged = true;
     }));
-    if (!changed) return;
+
+    const openDocumentsChanged = await this.reconcileOpenTrackedDocuments();
+    if (!baselineChanged && !stateChanged && !openDocumentsChanged) return;
     this.syncPersistedStateFromTracked();
+    this.publishAll();
     this.fireChanged();
+  }
+
+  private async reconcileOpenTrackedDocuments(): Promise<boolean> {
+    let changed = false;
+    for (const document of vscode.workspace.textDocuments) {
+      if (document.uri.scheme !== 'file' || !this.keysByUri.has(document.uri.toString())) continue;
+      changed = await this.reconcileTrackedFileState(document.uri) || changed;
+    }
+    return changed;
   }
 
   private async ensureBaseline(tracked: TrackedIssue): Promise<IssueBaseline | undefined> {
@@ -1169,6 +1246,14 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.statusBar.show();
   }
 
+  private syncTrackedFileUris(): void {
+    this.trackedFileUris.clear();
+    for (const uriString of this.keysByUri.keys()) this.trackedFileUris.add(uriString);
+    for (const uriString of this.fileChangeVersions.keys()) {
+      if (!this.trackedFileUris.has(uriString)) this.fileChangeVersions.delete(uriString);
+    }
+  }
+
   private syncPersistedStateFromTracked(preserveMissing = false): void {
     this.stateStore.syncFromTracked(this.trackedByKey, preserveMissing);
   }
@@ -1176,6 +1261,15 @@ export class LiveRemediationManager implements vscode.Disposable {
   private cancelEvaluationTimers(): void {
     for (const timer of this.evaluationTimers.values()) clearTimeout(timer);
     this.evaluationTimers.clear();
+  }
+
+  private cancelTrackedFileReconciliation(): void {
+    for (const timer of this.trackedFileReconciliationTimers.values()) clearTimeout(timer);
+    this.trackedFileReconciliationTimers.clear();
+    if (this.trackedBatchReconciliationTimer) {
+      clearTimeout(this.trackedBatchReconciliationTimer);
+      this.trackedBatchReconciliationTimer = undefined;
+    }
   }
 
   private cancelActiveProblemsReveal(): void {
