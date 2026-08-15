@@ -7,7 +7,7 @@ import type { DashboardIssue, FolderSonarFormConfig, RefreshSummary } from '../t
 import type { DashboardModuleState } from './manager';
 import type { LocalizationBundle } from '../i18n/types';
 
-export type DashboardModuleId = string;
+export type DashboardModuleId = string & { readonly __dashboardModuleId?: never };
 
 export interface ModuleWebviewContribution {
   configurationTab?: string;
@@ -70,7 +70,7 @@ export interface ModuleActivationContext {
 }
 
 /** Open capability token: modules can add providers without extending a core union. */
-export type DashboardModuleCapability = string;
+export type DashboardModuleCapability = string & { readonly __dashboardModuleCapability?: never };
 
 export interface DashboardModule extends vscode.Disposable {
   readonly id: DashboardModuleId;

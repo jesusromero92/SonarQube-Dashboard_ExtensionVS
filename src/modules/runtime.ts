@@ -129,49 +129,70 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   async setEnabled(moduleId: string, enabled: boolean): Promise<boolean> {
     const definition = this.definitions.find(item => item.id === moduleId);
     if (!definition) return false;
+
     const currentlyEnabled = isDashboardModuleEnabled(moduleId);
     if (currentlyEnabled !== enabled && !(await this.confirmModuleChange(definition, enabled))) {
       return false;
     }
 
-    const applied = await this.enqueueLifecycle(async () => {
-      const latestEnabled = isDashboardModuleEnabled(moduleId);
-      if (latestEnabled === enabled) {
-        const repaired = await this.performModuleSync();
-        if (repaired) this.bridge?.rebuildWebview();
-        return isDashboardModuleEnabled(moduleId) === enabled;
-      }
+    return this.enqueueLifecycle(() => this.applyModuleEnabledState(definition, enabled));
+  }
 
-      if (enabled) {
-        let loadedForTransition = false;
-        try {
-          loadedForTransition = await this.loadAndActivate(definition);
-          await setDashboardModuleEnabled(moduleId, true);
-        } catch (error) {
-          if (loadedForTransition) {
-            try {
-              this.unloadModule(moduleId);
-            } catch {
-              // Keep reporting the original activation/configuration failure.
-            }
-          }
-          this.reportModuleError(definition, error);
-          return false;
-        }
-      } else {
-        try {
-          await setDashboardModuleEnabled(moduleId, false);
-        } catch (error) {
-          this.reportModuleError(definition, error);
-          return false;
-        }
-      }
+  private async applyModuleEnabledState(
+    definition: DashboardModuleDefinition,
+    enabled: boolean
+  ): Promise<boolean> {
+    const latestEnabled = isDashboardModuleEnabled(definition.id);
+    if (latestEnabled === enabled) {
+      return this.repairModuleRuntimeState(definition.id, enabled);
+    }
 
-      await this.performModuleSync();
-      this.bridge?.rebuildWebview();
+    const transitionApplied = enabled
+      ? await this.enableModule(definition)
+      : await this.disableModule(definition);
+    if (!transitionApplied) return false;
+
+    await this.performModuleSync();
+    this.bridge?.rebuildWebview();
+    return true;
+  }
+
+  private async repairModuleRuntimeState(moduleId: string, enabled: boolean): Promise<boolean> {
+    const repaired = await this.performModuleSync();
+    if (repaired) this.bridge?.rebuildWebview();
+    return isDashboardModuleEnabled(moduleId) === enabled;
+  }
+
+  private async enableModule(definition: DashboardModuleDefinition): Promise<boolean> {
+    const moduleId = definition.id;
+    let loadedForTransition = false;
+    try {
+      loadedForTransition = await this.loadAndActivate(definition);
+      await setDashboardModuleEnabled(moduleId, true);
       return true;
-    });
-    return applied;
+    } catch (error) {
+      if (loadedForTransition) this.tryUnloadAfterFailedEnable(moduleId);
+      this.reportModuleError(definition, error);
+      return false;
+    }
+  }
+
+  private tryUnloadAfterFailedEnable(moduleId: string): void {
+    try {
+      this.unloadModule(moduleId);
+    } catch {
+      // Keep reporting the original activation/configuration failure.
+    }
+  }
+
+  private async disableModule(definition: DashboardModuleDefinition): Promise<boolean> {
+    try {
+      await setDashboardModuleEnabled(definition.id, false);
+      return true;
+    } catch (error) {
+      this.reportModuleError(definition, error);
+      return false;
+    }
   }
 
   private getStateSignature(state: DashboardModuleState): string {
@@ -220,19 +241,38 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
     const module = this.loadedModules.get(definition.id);
     if (!enabled && module) return module.confirmDisable();
 
-    const spanish = this.bridge?.getLanguage() === 'es';
-    const action = enabled
-      ? (spanish ? 'Activar' : 'Enable')
-      : (spanish ? 'Desactivar' : 'Disable');
-    const message = enabled
-      ? (spanish
-          ? `¿Quieres activar el módulo ${definition.displayName}? Sus vistas y funciones se cargarán al confirmar.`
-          : `Do you want to enable the ${definition.displayName} module? Its views and features will be loaded after confirmation.`)
-      : (spanish
-          ? `¿Quieres desactivar el módulo ${definition.displayName}? Sus vistas y funciones dejarán de estar disponibles.`
-          : `Do you want to disable the ${definition.displayName} module? Its views and features will no longer be available.`);
+    const { action, message } = this.getModuleChangeConfirmation(definition, enabled);
     const selected = await vscode.window.showWarningMessage(message, { modal: true }, action);
     return selected === action;
+  }
+
+  private getModuleChangeConfirmation(
+    definition: DashboardModuleDefinition,
+    enabled: boolean
+  ): { action: string; message: string } {
+    const spanish = this.bridge?.getLanguage() === 'es';
+    if (enabled && spanish) {
+      return {
+        action: 'Activar',
+        message: `¿Quieres activar el módulo ${definition.displayName}? Sus vistas y funciones se cargarán al confirmar.`
+      };
+    }
+    if (enabled) {
+      return {
+        action: 'Enable',
+        message: `Do you want to enable the ${definition.displayName} module? Its views and features will be loaded after confirmation.`
+      };
+    }
+    if (spanish) {
+      return {
+        action: 'Desactivar',
+        message: `¿Quieres desactivar el módulo ${definition.displayName}? Sus vistas y funciones dejarán de estar disponibles.`
+      };
+    }
+    return {
+      action: 'Disable',
+      message: `Do you want to disable the ${definition.displayName} module? Its views and features will no longer be available.`
+    };
   }
 
   private reportModuleError(definition: DashboardModuleDefinition, error: unknown): void {
