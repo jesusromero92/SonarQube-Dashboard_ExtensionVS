@@ -9,10 +9,16 @@ import {
 } from '../src/modules/pipeline/scanner/analysisScope';
 import { PIPELINE_CONFIGURATION_PANEL_MARKUP } from '../src/modules/pipeline/webview/configuration';
 import { PIPELINE_INTEGRATION_SCRIPT } from '../src/modules/pipeline/webview/integration';
+import { PIPELINE_LOCALIZATION } from '../src/modules/pipeline/i18n';
+
 import { DISCLOSURE_STYLES } from '../src/dashboard/webview/design/components/disclosure';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
 import { EN_MESSAGES } from '../src/i18n/en';
 import { ES_MESSAGES } from '../src/i18n/es';
+
+const ALL_SOURCE_MESSAGES: Record<string, string> = { ...SOURCE_MESSAGES, ...PIPELINE_LOCALIZATION.source };
+const ALL_EN_MESSAGES: Record<string, string> = { ...EN_MESSAGES, ...PIPELINE_LOCALIZATION.en };
+const ALL_ES_MESSAGES: Record<string, string> = { ...ES_MESSAGES, ...PIPELINE_LOCALIZATION.es };
 
 test('las inclusiones y exclusiones pertenecen a la configuración del módulo Pipeline', () => {
   assert.match(PIPELINE_CONFIGURATION_PANEL_MARKUP, /Inclusiones y exclusiones/);
@@ -104,9 +110,9 @@ test('manifest 1.3.0, traducciones y documentación mantienen la configuración 
     'analysisExclusionsHint',
     'analysisScopeDefaultsHint'
   ] as const) {
-    assert.ok(SOURCE_MESSAGES[key]);
-    assert.ok(EN_MESSAGES[key]);
-    assert.ok(ES_MESSAGES[key]);
+    assert.ok(ALL_SOURCE_MESSAGES[key]);
+    assert.ok(ALL_EN_MESSAGES[key]);
+    assert.ok(ALL_ES_MESSAGES[key]);
   }
 
   const readme = readFileSync(path.resolve(process.cwd(), 'README.md'), 'utf8');

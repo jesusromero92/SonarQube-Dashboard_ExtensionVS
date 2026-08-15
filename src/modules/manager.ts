@@ -1,66 +1,67 @@
 import * as vscode from 'vscode';
 import { DASHBOARD_CONFIGURATION_SECTION } from '../constants';
-import {
-  DashboardModuleId,
-  MODULE_CONFIGURATION_KEYS,
-  MODULE_CONTEXT_KEYS
-} from './constants';
+import type { DashboardModuleDefinition, DashboardModuleId } from './contracts';
 
-export interface DashboardModuleState {
-  pipeline: boolean;
-  liveRemediation: boolean;
+export type DashboardModuleState = Record<DashboardModuleId, boolean>;
+
+let registeredDefinitions: readonly DashboardModuleDefinition[] = [];
+
+export function registerDashboardModuleDefinitions(
+  definitions: readonly DashboardModuleDefinition[]
+): void {
+  registeredDefinitions = [...definitions];
+}
+
+export function getDashboardModuleDefinitions(): readonly DashboardModuleDefinition[] {
+  return registeredDefinitions;
 }
 
 export function getDashboardModuleState(): DashboardModuleState {
   const configuration = vscode.workspace.getConfiguration(
     DASHBOARD_CONFIGURATION_SECTION
   );
-  return {
-    pipeline: configuration.get<boolean>(
-      MODULE_CONFIGURATION_KEYS.pipeline,
-      true
-    ),
-    liveRemediation: configuration.get<boolean>(
-      MODULE_CONFIGURATION_KEYS.liveRemediation,
-      true
-    )
-  };
+  return Object.fromEntries(registeredDefinitions.map(definition => [
+    definition.id,
+    configuration.get<boolean>(definition.configurationKey, definition.defaultEnabled)
+  ]));
+}
+
+function getRegisteredDefinition(
+  moduleId: DashboardModuleId
+): DashboardModuleDefinition | undefined {
+  for (const definition of registeredDefinitions) {
+    if (definition.id === moduleId) return definition;
+  }
+  return undefined;
 }
 
 export function isDashboardModuleEnabled(moduleId: DashboardModuleId): boolean {
-  return getDashboardModuleState()[moduleId];
+  const definition = getRegisteredDefinition(moduleId);
+  return definition ? getDashboardModuleState()[moduleId] : false;
 }
 
 export async function setDashboardModuleEnabled(
   moduleId: DashboardModuleId,
   enabled: boolean
 ): Promise<DashboardModuleState> {
+  const definition = getRegisteredDefinition(moduleId);
+  if (!definition) return getDashboardModuleState();
+
   await vscode.workspace
     .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
-    .update(
-      MODULE_CONFIGURATION_KEYS[moduleId],
-      enabled,
-      vscode.ConfigurationTarget.Global
-    );
+    .update(definition.configurationKey, enabled, vscode.ConfigurationTarget.Global);
 
-  const state = getDashboardModuleState();
-  await updateDashboardModuleContexts(state);
-  return state;
+  return getDashboardModuleState();
 }
 
 export async function updateDashboardModuleContexts(
   state = getDashboardModuleState()
 ): Promise<void> {
-  await Promise.all([
+  await Promise.all(registeredDefinitions.map(definition =>
     vscode.commands.executeCommand(
       'setContext',
-      MODULE_CONTEXT_KEYS.pipeline,
-      state.pipeline
-    ),
-    vscode.commands.executeCommand(
-      'setContext',
-      MODULE_CONTEXT_KEYS.liveRemediation,
-      state.liveRemediation
+      definition.contextKey,
+      state[definition.id] ?? definition.defaultEnabled
     )
-  ]);
+  ));
 }

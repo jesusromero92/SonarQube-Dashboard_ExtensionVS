@@ -1,5 +1,6 @@
 import { DashboardLanguage } from '../../../i18n';
-import { MODULE_SCRIPTS } from '../../../modules/webview';
+import type { ModuleWebviewContribution } from '../../../modules';
+import type { DashboardPage } from '../../contracts';
 import { getBootstrapScript } from './bootstrap';
 import { CHARTS_SCRIPT } from './charts';
 import { EVENTS_SCRIPT } from './events/index';
@@ -17,9 +18,13 @@ import { CREATE_COMPONENT_DIALOG_SCRIPT } from './modals/createComponentDialog';
 import { DIAGNOSTICS_SCRIPT } from './diagnostics';
 import { TERMINAL_SCRIPT } from './terminal';
 
-export function getDashboardScript(language: DashboardLanguage): string {
+export function getDashboardScript(
+  language: DashboardLanguage,
+  modules: ModuleWebviewContribution = {},
+  initialPage: DashboardPage = 'data'
+): string {
   return [
-    getBootstrapScript(language),
+    getBootstrapScript(language, initialPage),
     SELECT_DROPDOWN_SCRIPT,
     CREATE_COMPONENT_DIALOG_SCRIPT,
     ISSUES_TABLE_SCRIPT,
@@ -33,7 +38,7 @@ export function getDashboardScript(language: DashboardLanguage): string {
     COVERAGE_SCRIPT,
     TERMINAL_SCRIPT,
     DIAGNOSTICS_SCRIPT,
-    MODULE_SCRIPTS,
+    modules.scripts ?? '',
     RENDER_SCRIPT,
     EVENTS_SCRIPT
   ].join('');

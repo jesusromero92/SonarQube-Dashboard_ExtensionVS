@@ -353,7 +353,9 @@ export class LiveRemediationManager implements vscode.Disposable {
     }
 
     const persisted = this.stateStore.pendingByKey.get(issue.key);
-    if (persisted?.fileUri !== issue.fileUri) return undefined;
+    if (!persisted || this.uriKey(persisted.fileUri) !== this.uriKey(issue.fileUri)) {
+      return undefined;
+    }
     return {
       state: persisted.state,
       range: persistedRange(persisted),
@@ -386,10 +388,11 @@ export class LiveRemediationManager implements vscode.Disposable {
 
     this.trackedByKey.set(issue.key, tracked);
     if (tracked.state !== 'server') this.markSessionModified(issue.key);
-    const keys = this.keysByUri.get(issue.fileUri) ?? new Set<string>();
+    const uriKey = this.uriKey(issue.fileUri);
+    const keys = this.keysByUri.get(uriKey) ?? new Set<string>();
     keys.add(issue.key);
-    this.keysByUri.set(issue.fileUri, keys);
-    this.trackedFileUris.add(issue.fileUri);
+    this.keysByUri.set(uriKey, keys);
+    this.trackedFileUris.add(uriKey);
   }
 
   clear(): void {
@@ -794,7 +797,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   private onDocumentChanged(event: vscode.TextDocumentChangeEvent): void {
     if (!this.shouldProcessDocumentChange(event)) return;
 
-    const keys = this.keysByUri.get(event.document.uri.toString());
+    const keys = this.keysByUri.get(this.uriKey(event.document.uri));
     if (!keys?.size) return;
 
     const changes = this.sortedContentChanges(event.contentChanges);
@@ -837,6 +840,22 @@ export class LiveRemediationManager implements vscode.Disposable {
     const transformed = this.transformTrackedRange(tracked.range, changes);
     tracked.range = clampRangeToDocument(document, transformed.range);
 
+    // A direct edit of the issue range takes precedence over global relocation.
+    // Otherwise an identical line elsewhere in the file can be mistaken for the
+    // unchanged issue and hide a real local modification.
+    if (transformed.touched) {
+      if (tracked.baseline && issueMatchesBaseline(document, tracked)) {
+        const matchingRange = matchingBaselineRangeInText(document.getText(), tracked);
+        if (matchingRange) {
+          return this.restoreTrackedServerState(
+            tracked,
+            clampRangeToDocument(document, matchingRange)
+          );
+        }
+      }
+      return this.markTrackedModified(key, tracked);
+    }
+
     if (tracked.baseline) {
       const matchingRange = matchingBaselineRangeInText(document.getText(), tracked);
       if (matchingRange) {
@@ -847,7 +866,7 @@ export class LiveRemediationManager implements vscode.Disposable {
       }
     }
 
-    return transformed.touched && this.markTrackedModified(key, tracked);
+    return false;
   }
 
   private transformTrackedRange(
@@ -866,7 +885,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   private queueTrackedFileSystemChange(uri: vscode.Uri): void {
     if (!this.enabled || uri.scheme !== 'file') return;
 
-    const uriString = uri.toString();
+    const uriString = this.uriKey(uri);
     if (!this.keysByUri.has(uriString) && !this.trackedFileUris.has(uriString)) return;
     this.fileChangeVersions.set(uriString, (this.fileChangeVersions.get(uriString) ?? 0) + 1);
     if (!this.keysByUri.has(uriString)) return;
@@ -918,7 +937,7 @@ export class LiveRemediationManager implements vscode.Disposable {
     missingMeansModified = false
   ): Promise<boolean> {
     if (!this.enabled || uri.scheme !== 'file') return false;
-    const keys = this.keysByUri.get(uri.toString());
+    const keys = this.keysByUri.get(this.uriKey(uri));
     if (!keys?.size) return false;
 
     const currentText = await this.readCurrentTrackedFileText(uri);
@@ -931,9 +950,8 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   private async readCurrentTrackedFileText(uri: vscode.Uri): Promise<string | undefined> {
-    const uriString = uri.toString();
     const openDocument = vscode.workspace.textDocuments.find(
-      candidate => candidate.uri.toString() === uriString
+      candidate => this.uriKey(candidate.uri) === this.uriKey(uri)
     );
     if (openDocument?.isDirty) return openDocument.getText();
 
@@ -979,7 +997,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   private scheduleExternalEvaluation(uri: vscode.Uri): void {
-    if (!this.enabled || uri.scheme !== 'file' || !this.keysByUri.has(uri.toString())) return;
+    if (!this.enabled || uri.scheme !== 'file' || !this.keysByUri.has(this.uriKey(uri))) return;
     if (!this.sonarIde.hasExternalSnapshotChanged(uri)) return;
 
     const key = uri.toString();
@@ -1062,7 +1080,7 @@ export class LiveRemediationManager implements vscode.Disposable {
 
   private trackedIssuesForUri(uri: vscode.Uri): TrackedIssue[] {
     const result: TrackedIssue[] = [];
-    for (const key of this.keysByUri.get(uri.toString()) ?? []) {
+    for (const key of this.keysByUri.get(this.uriKey(uri)) ?? []) {
       const tracked = this.trackedByKey.get(key);
       if (tracked) result.push(tracked);
     }
@@ -1080,7 +1098,7 @@ export class LiveRemediationManager implements vscode.Disposable {
     let baselineChanged = false;
     let stateChanged = false;
     await Promise.all(pending.map(async tracked => {
-      const uriString = tracked.issue.fileUri;
+      const uriString = this.uriKey(tracked.issue.fileUri);
       const captureVersion = versionsAtSnapshot?.get(uriString)
         ?? this.fileChangeVersions.get(uriString)
         ?? 0;
@@ -1110,7 +1128,7 @@ export class LiveRemediationManager implements vscode.Disposable {
   private async reconcileOpenTrackedDocuments(): Promise<boolean> {
     let changed = false;
     for (const document of vscode.workspace.textDocuments) {
-      if (document.uri.scheme !== 'file' || !this.keysByUri.has(document.uri.toString())) continue;
+      if (document.uri.scheme !== 'file' || !this.keysByUri.has(this.uriKey(document.uri))) continue;
       changed = await this.reconcileTrackedFileState(document.uri) || changed;
     }
     return changed;
@@ -1140,7 +1158,9 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.cancelActiveProblemsReveal();
     this.diagnostics.restoreServerSnapshot();
     if (!this.enabled) return;
-    const activeUri = vscode.window.activeTextEditor?.document.uri.toString();
+    const activeUri = vscode.window.activeTextEditor
+      ? this.uriKey(vscode.window.activeTextEditor.document.uri)
+      : undefined;
 
     for (const uriString of this.keysByUri.keys()) {
       if (uriString !== activeUri) this.publishUri(vscode.Uri.parse(uriString));
@@ -1228,6 +1248,14 @@ export class LiveRemediationManager implements vscode.Disposable {
     for (const uriString of this.fileChangeVersions.keys()) {
       if (!this.trackedFileUris.has(uriString)) this.fileChangeVersions.delete(uriString);
     }
+  }
+
+  private uriKey(value: string | vscode.Uri): string {
+    const uri = typeof value === 'string' ? vscode.Uri.parse(value) : value;
+    const normalized = uri.with({ query: '', fragment: '' }).toString();
+    return process.platform === 'win32' && uri.scheme === 'file'
+      ? normalized.toLowerCase()
+      : normalized;
   }
 
   private syncPersistedStateFromTracked(preserveMissing = false): void {

@@ -10,8 +10,11 @@ import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
 import { PIPELINE_INTEGRATION_SCRIPT } from '../src/modules/pipeline/webview/integration';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
 import { ANALYSIS_DIALOG_MARKUP } from '../src/modules/pipeline/webview/modals/analysisDialog';
-import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
+import { getConfigurationPageMarkup } from '../src/dashboard/webview/pages/configurationPage';
+import { PIPELINE_WEBVIEW_CONTRIBUTION } from '../src/modules/pipeline/webview';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
+
+const CONFIGURATION_PAGE_MARKUP = getConfigurationPageMarkup(PIPELINE_WEBVIEW_CONTRIBUTION);
 
 test('detecta compilación y tests desde los scripts de package.json', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-actions-'));

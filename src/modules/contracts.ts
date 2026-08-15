@@ -4,8 +4,34 @@ import type { DashboardLanguage } from '../i18n';
 import type { IssueDiagnosticSnapshot } from '../issueDiagnostics';
 import type { IssueLocalRemediationState } from '../issueLocalState';
 import type { DashboardIssue, FolderSonarFormConfig, RefreshSummary } from '../types';
-import type { DashboardModuleId } from './constants';
 import type { DashboardModuleState } from './manager';
+import type { LocalizationBundle } from '../i18n/types';
+
+export type DashboardModuleId = string;
+
+export interface ModuleWebviewContribution {
+  configurationTab?: string;
+  configurationPanel?: string;
+  styles?: string;
+  scripts?: string;
+  modals?: string;
+  pages?: string;
+  dataControls?: string;
+  emptyActions?: string;
+  moduleSettings?: string;
+  localization?: LocalizationBundle;
+}
+
+export interface DashboardModuleDefinition {
+  readonly id: DashboardModuleId;
+  readonly displayName: string;
+  readonly configurationKey: string;
+  readonly contextKey: string;
+  readonly defaultEnabled: boolean;
+  readonly description: string;
+  readonly localization?: LocalizationBundle;
+  create(): Promise<DashboardModule>;
+}
 
 export type ModuleWebviewMessage = Record<string, unknown> & {
   type?: string;
@@ -26,6 +52,7 @@ export interface DashboardModuleBridge {
   setRefreshSummary(summary: RefreshSummary, revealResults?: boolean): void;
   getRefreshSummary(): RefreshSummary;
   requestStateRefresh(): Promise<void>;
+  rebuildWebview(): void;
 }
 
 export interface ModuleConfigurationSaveContext {
@@ -42,12 +69,13 @@ export interface ModuleActivationContext {
   diagnostics: IssueDiagnosticSnapshot;
 }
 
-export type DashboardModuleCapability =
-  | 'analyzeRepository';
+/** Open capability token: modules can add providers without extending a core union. */
+export type DashboardModuleCapability = string;
 
 export interface DashboardModule extends vscode.Disposable {
   readonly id: DashboardModuleId;
   readonly displayName: string;
+  readonly webview: ModuleWebviewContribution;
   attachDashboard(bridge: DashboardModuleBridge): void;
   activate(context: ModuleActivationContext): void;
   deactivate(): void;
@@ -87,7 +115,7 @@ export interface DashboardModule extends vscode.Disposable {
 
 export interface DashboardModulesRuntime extends vscode.Disposable {
   attachDashboard(bridge: DashboardModuleBridge): void;
-  syncEnabledModules(): Promise<void>;
+  syncEnabledModules(): Promise<boolean>;
   affectsConfiguration(event: vscode.ConfigurationChangeEvent): boolean;
   affectsLifecycleConfiguration(event: vscode.ConfigurationChangeEvent): boolean;
   getState(): DashboardModuleState;
@@ -117,5 +145,6 @@ export interface DashboardModulesRuntime extends vscode.Disposable {
   collectDiagnosticsContribution(
     folder: vscode.WorkspaceFolder | undefined
   ): Promise<Record<string, unknown>>;
+  getWebviewContribution(): ModuleWebviewContribution;
   dispose(): void;
 }

@@ -2,6 +2,7 @@ import { EN_MESSAGES } from './en';
 import { ES_MESSAGES } from './es';
 import { SOURCE_MESSAGES } from './source';
 import { DashboardLanguage } from './types';
+import type { LocalizationBundle } from './types';
 import { getWebviewMessages, WebviewMessages } from './webview';
 
 export interface WebviewLocalizationBundle {
@@ -18,7 +19,8 @@ const CATALOGS = {
 } as const;
 
 export function getWebviewLocalizationBundle(
-  language: DashboardLanguage
+  language: DashboardLanguage,
+  moduleBundles: readonly LocalizationBundle[] = []
 ): WebviewLocalizationBundle {
   const targetCatalog = CATALOGS[language];
   const translations = new Map<string, string>();
@@ -32,6 +34,19 @@ export function getWebviewLocalizationBundle(
       EN_MESSAGES[key],
       ES_MESSAGES[key]
     );
+  }
+
+  for (const bundle of moduleBundles) {
+    const target = language === 'es' ? bundle.es : bundle.en;
+    for (const key of Object.keys(bundle.source)) {
+      addTranslationVariants(
+        translations,
+        target[key] ?? bundle.source[key],
+        bundle.source[key],
+        bundle.en[key],
+        bundle.es[key]
+      );
+    }
   }
 
   const targetMessages = getWebviewMessages(language);

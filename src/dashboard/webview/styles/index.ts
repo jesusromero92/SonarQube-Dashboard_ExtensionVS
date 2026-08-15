@@ -1,6 +1,6 @@
 import { DashboardWebviewAssets } from '../assets';
 import { getDashboardDesignStyles } from '../design';
-import { MODULE_STYLES } from '../../../modules/webview';
+import type { ModuleWebviewContribution } from '../../../modules';
 import { ANALYSIS_STYLES } from './analysis';
 import { getBaseStyles } from './base';
 import { CHART_STYLES } from './charts';
@@ -8,12 +8,15 @@ import { RESPONSIVE_STYLES } from './responsive';
 import { getTableStyles } from './tables';
 import { HISTORY_DIAGNOSTICS_STYLES } from './historyDiagnostics';
 
-export function getDashboardStyles(assets: DashboardWebviewAssets): string {
+export function getDashboardStyles(
+  assets: DashboardWebviewAssets,
+  modules: ModuleWebviewContribution
+): string {
   return [
     getBaseStyles(assets),
     getTableStyles(assets),
     CHART_STYLES,
-    MODULE_STYLES,
+    modules.styles ?? '',
     ANALYSIS_STYLES,
     HISTORY_DIAGNOSTICS_STYLES,
     getDashboardDesignStyles(),

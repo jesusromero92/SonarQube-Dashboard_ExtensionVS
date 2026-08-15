@@ -179,32 +179,38 @@
       {
         "command": "sonarQubeDashboard.openLocallyModifiedIssue",
         "title": "%command.liveRemediation.openIssue%",
-        "icon": "$(go-to-file)"
+        "icon": "$(go-to-file)",
+        "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
       },
       {
         "command": "sonarQubeDashboard.showLiveRemediationDiff",
         "title": "%command.liveRemediation.showDiff%",
-        "icon": "$(diff)"
+        "icon": "$(diff)",
+        "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
       },
       {
         "command": "sonarQubeDashboard.revertLiveRemediationChange",
         "title": "%command.liveRemediation.revert%",
-        "icon": "$(discard)"
+        "icon": "$(discard)",
+        "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
       },
       {
         "command": "sonarQubeDashboard.clearLiveRemediationSession",
         "title": "%command.liveRemediation.clearSession%",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
       },
       {
         "command": "sonarQubeDashboard.clearLastSolvedRemediationResults",
         "title": "%command.liveRemediation.clearSolvedResults%",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
       },
       {
         "command": "sonarQubeDashboard.clearLastStillDetectedRemediationResults",
         "title": "%command.liveRemediation.clearStillDetectedResults%",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
       }
     ],
     "configuration": {

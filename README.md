@@ -41,7 +41,8 @@ Version 2.0.0 separates **Core**, **Pipeline**, and **Live Remediation** as real
 - The Dashboard webview consumes one module-contribution facade. Each module owns its own tab, markup, scripts, styles, dialogs, and pages; reusable controls live under `src/shared/webview/`, eliminating Dashboard ↔ module UI cycles.
 - Modules can be enabled or disabled at runtime. When the dashboard opens or refreshes, optional configuration tabs are always rebuilt from the persisted module state, including modules that were already enabled before the view opened. Disabling Pipeline cancels/disposes its services and commands. Disabling Live Remediation disposes listeners/watchers and immediately restores the normal **Problems** snapshot, while **preserving its persisted remediation session** for later reactivation.
 - Clearing state and disabling a module are separate operations: only explicit trash/clear actions erase Live Remediation state. Disabling a module or restarting VS Code never reverts local files and does not erase the remediation session.
-- Disabling a module requires a native confirmation modal. If Pipeline is analyzing, the warning explicitly says the run will be cancelled. The switches are `sonarQubeDashboard.modules.pipeline.enabled` and `sonarQubeDashboard.modules.liveRemediation.enabled`; there is no second internal Live Remediation enable switch.
+- Enabling or disabling a module requires a native confirmation modal. The checkbox remains at its last confirmed value while the decision and lifecycle transition are pending, and the new value is persisted only after the module has been loaded or unloaded successfully. If Pipeline is analyzing, the disable warning explicitly says the run will be cancelled. The switches are `sonarQubeDashboard.modules.pipeline.enabled` and `sonarQubeDashboard.modules.liveRemediation.enabled`; there is no second internal Live Remediation enable switch.
+- Module lifecycle changes preserve **Configuration → Modules** while the Dashboard recomposes its module-owned HTML, CSS, and JavaScript. The rebuilt webview starts directly on the preserved page/tab instead of briefly displaying **Data** or **SonarQube**. If persisted state says that a module is enabled but its runtime is missing, synchronization repairs the mismatch and lazily loads the implementation again.
 
 ## Operating model
 
@@ -207,6 +208,8 @@ Remote Quick Fix actions use the SonarQube permissions associated with the confi
 ### Live remediation state
 
 Live Remediation operates when the `sonarQubeDashboard.modules.liveRemediation.enabled` module is enabled. Its model is deliberately conservative: **changing code does not mean an issue is solved**. SonarQube Server remains the only source of truth, and a remediation is confirmed only from the snapshot produced by a real repository analysis.
+
+File identity is normalized before matching editor, save, and filesystem events, including case differences in Windows file URIs. A direct edit on or adjacent to a synchronized issue range is therefore recorded immediately as **Modified locally**, even when an identical source line exists elsewhere in the same file.
 
 #### Local-change tracking
 
@@ -726,7 +729,7 @@ When the active folder changes, the extension selects the matching configuration
 }
 ```
 
-`sonarQubeDashboard.language` accepts `en` or `es` and is stored globally for the VS Code environment. `autoRefresh` enables synchronization when opening or changing the workspace, and a value greater than `0` for `refreshIntervalMinutes` enables periodic updates. `modules.pipeline.enabled` and `modules.liveRemediation.enabled` enable or disable the complete optional runtimes; both default to `true`. The `pipeline.*` settings belong exclusively to the Pipeline module. Disabling a module from **Configuration → Modules** requires confirmation through a native VS Code modal; disabling Live Remediation preserves its persisted session.
+`sonarQubeDashboard.language` accepts `en` or `es` and is stored globally for the VS Code environment. `autoRefresh` enables synchronization when opening or changing the workspace, and a value greater than `0` for `refreshIntervalMinutes` enables periodic updates. `modules.pipeline.enabled` and `modules.liveRemediation.enabled` enable or disable the complete optional runtimes; both default to `true`. The `pipeline.*` settings belong exclusively to the Pipeline module. Enabling and disabling a module from **Configuration → Modules** requires confirmation through a native VS Code modal; the checkbox changes only after confirmation and a successful lifecycle transition, the Modules tab remains selected during recomposition, and disabling Live Remediation preserves its persisted session.
 
 ## Operational limitations
 

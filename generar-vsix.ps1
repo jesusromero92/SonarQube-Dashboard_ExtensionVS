@@ -45,3 +45,5 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "VSIX generado: $((Resolve-Path $output).Path)" -ForegroundColor Green
+Write-Host 'Importante: generar el VSIX no actualiza la extensión que ya está ejecutándose.' -ForegroundColor Yellow
+Write-Host 'Instala el VSIX generado y ejecuta "Developer: Reload Window" en VS Code para probar estos cambios.' -ForegroundColor Yellow

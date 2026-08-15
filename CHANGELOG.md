@@ -60,6 +60,20 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
   *Se han añadido acciones de limpieza independientes con modales nativos de confirmación: una papelera en **Sesión de remediación** reinicia todos los pendientes/resultados/historial locales de la sesión sin modificar archivos fuente ni SonarQube Server; papeleras separadas eliminan únicamente **Solucionados** o únicamente **Siguen detectándose** del último análisis. Limpiar los solucionados del último análisis no borra el historial acumulado de solucionados.*
 
+### Fixed
+
+- Module activation and deactivation are now transactional and both require confirmation. Module checkboxes keep the last confirmed value while the modal/lifecycle transition is pending, enabled state is persisted only after lazy activation succeeds, failed activation is rolled back, and synchronization reloads an implementation when persisted state and the active runtime become inconsistent. This fixes Pipeline remaining absent after it was disabled and enabled again.
+
+  *La activación y desactivación de módulos son ahora transaccionales y ambas requieren confirmación. Los checkbox conservan el último valor confirmado mientras están pendientes el modal y la transición del ciclo de vida, el estado activo solo se persiste después de completar correctamente la activación lazy, una activación fallida se revierte y la sincronización vuelve a cargar una implementación cuando el estado persistido y el runtime activo quedan incoherentes. Esto corrige que Pipeline siguiera ausente después de desactivarlo y volverlo a activar.*
+
+- Dashboard recomposition now preserves **Configuration → Modules** from the first rendered frame. Enabling or disabling a module no longer switches to **SonarQube** or briefly flashes the **Data** page while module-owned HTML, CSS, and JavaScript are rebuilt.
+
+  *La recomposición del Dashboard conserva ahora **Configuración → Módulos** desde el primer frame renderizado. Activar o desactivar un módulo ya no cambia a **SonarQube** ni muestra brevemente la página **Datos** mientras se reconstruyen el HTML, CSS y JavaScript propiedad del módulo.*
+
+- Fixed Live Remediation event matching on Windows by normalizing file URI identity across server snapshots, editor changes, saves, watchers, open documents, and persisted sessions. Direct edits to an issue range now take precedence over global block relocation, preventing an identical line elsewhere in the file from hiding a real **Modified locally** change.
+
+  *Se ha corregido la asociación de eventos de Live Remediation en Windows normalizando la identidad de las URI entre snapshots del servidor, cambios del editor, guardados, watchers, documentos abiertos y sesiones persistidas. Las ediciones directas sobre un rango de issue tienen ahora prioridad sobre la relocalización global de bloques, evitando que una línea idéntica en otra parte del archivo oculte un cambio real **Modificado localmente**.*
+
 ## [1.4.0] - 2026-08-13
 
 ### Added

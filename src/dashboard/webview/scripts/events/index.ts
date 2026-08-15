@@ -12,7 +12,7 @@ export const EVENTS_SCRIPT = [
   MESSAGE_EVENTS_SCRIPT,
   `
     runDashboardModuleHooks('bindEvents');
-    navigate('data');
+    navigate(currentPage);
     vscode.postMessage({ type: 'ready' });
   `
 ].join('');

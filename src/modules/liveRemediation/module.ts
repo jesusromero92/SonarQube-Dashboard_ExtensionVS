@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { localizeRuntimeText } from '../../i18n';
+import { localizeRuntimeText } from './i18n/runtime';
 import type { IssueDiagnosticPresentation, IssueDiagnosticSnapshot } from '../../issueDiagnostics';
 import type { FolderSonarFormConfig } from '../../types';
 import type {
@@ -25,6 +25,7 @@ import {
 import { LiveRemediationManager } from './manager';
 import { clearPersistedRemediationState } from './persistence';
 import { LocallyModifiedIssuesTreeProvider } from './treeView';
+import { LIVE_REMEDIATION_WEBVIEW_CONTRIBUTION } from './webview';
 
 function issueKey(argument: unknown): string | undefined {
   if (typeof argument === 'string' && argument.trim()) return argument;
@@ -41,6 +42,7 @@ function issueKey(argument: unknown): string | undefined {
 export class LiveRemediationModule implements DashboardModule {
   readonly id = 'liveRemediation' as const;
   readonly displayName = 'Live Remediation';
+  readonly webview = LIVE_REMEDIATION_WEBVIEW_CONTRIBUTION;
 
   private bridge: DashboardModuleBridge | undefined;
   private manager: LiveRemediationManager | undefined;

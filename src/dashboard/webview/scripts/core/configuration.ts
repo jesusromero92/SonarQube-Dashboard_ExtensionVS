@@ -399,6 +399,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.branch.value = currentConfig.branch || '';
       elements.baseDir.value = currentConfig.baseDir || '';
       syncModuleConfigurationState(currentConfig);
+      restoreConfigurationTab(message.configurationTab);
       runDashboardModuleHooks('renderState', currentConfig, message, { connectionDraftDirty, hasWorkspace });
       elements.notificationsEnabled.checked = currentConfig.notificationsEnabled !== false;
       elements.significantIncreasePercent.value = String(

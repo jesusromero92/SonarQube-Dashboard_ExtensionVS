@@ -1,9 +1,8 @@
 import type { IssueDiagnosticManager } from '../issueDiagnostics';
 import type * as vscode from 'vscode';
 import { ANALYZE_REPOSITORY_CAPABILITY_COMMAND } from './constants';
-import type { DashboardModule } from './contracts';
-import { LiveRemediationModule } from './liveRemediation/module';
-import { PipelineModule } from './pipeline/module';
+import { defineLiveRemediationModule } from './liveRemediation/definition';
+import { definePipelineModule } from './pipeline/definition';
 import { DashboardModuleRuntime } from './runtime';
 
 export function createDashboardModuleRuntime(
@@ -11,9 +10,9 @@ export function createDashboardModuleRuntime(
   issueDiagnostics: IssueDiagnosticManager,
   onIssueOverlayChanged: () => void
 ): DashboardModuleRuntime {
-  const modules: readonly DashboardModule[] = [
-    new PipelineModule(context),
-    new LiveRemediationModule(
+  const definitions = [
+    definePipelineModule(context),
+    defineLiveRemediationModule(
       context,
       issueDiagnostics,
       ANALYZE_REPOSITORY_CAPABILITY_COMMAND,
@@ -22,7 +21,7 @@ export function createDashboardModuleRuntime(
   ];
 
   return new DashboardModuleRuntime(
-    modules,
+    definitions,
     issueDiagnostics,
     onIssueOverlayChanged
   );

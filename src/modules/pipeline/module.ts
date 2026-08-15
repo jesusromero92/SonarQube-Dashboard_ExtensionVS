@@ -12,10 +12,12 @@ import { PIPELINE_CONFIGURATION_SECTION, savePipelineFolderConfig } from './conf
 import { PIPELINE_COMMANDS, PIPELINE_EXECUTION_TREE_VIEW_ID } from './constants';
 import { PipelineDashboardController } from './controller';
 import { PipelineExecutionTreeProvider } from './executionTreeView';
+import { PIPELINE_WEBVIEW_CONTRIBUTION } from './webview';
 
 export class PipelineModule implements DashboardModule {
   readonly id = 'pipeline' as const;
   readonly displayName = 'Pipeline';
+  readonly webview = PIPELINE_WEBVIEW_CONTRIBUTION;
 
   private tree: PipelineExecutionTreeProvider | undefined;
   private readonly activeDisposables: vscode.Disposable[] = [];

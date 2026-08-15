@@ -86,7 +86,7 @@ test('Live Remediation se activa o desactiva como módulo completo desde Configu
   const events = read('src/dashboard/webview/scripts/events/configuration.ts');
   const runtime = read('src/modules/runtime.ts');
 
-  assert.match(facade, /data-module-toggle="liveRemediation"/);
+  assert.match(facade, /data-module-toggle="\$\{escapeHtml\(definition\.id\)\}"/);
   assert.match(liveConfiguration, /Integración con el editor/);
   assert.doesNotMatch(liveConfiguration, /liveRemediationEnabled/);
   assert.match(events, /type: 'setModule'/);
@@ -113,7 +113,7 @@ test('una edición adyacente al rango Sonar vuelve a pending validation', () => 
     + read('src/modules/liveRemediation/rangeTracking.ts');
 
   assert.match(source, /horizontalGap\(change\.range, range\) <= 2/);
-  assert.match(source, /transformed\.touched && this\.markTrackedModified\(key, tracked\)/);
+  assert.match(source, /if \(transformed\.touched\)[\s\S]*return this\.markTrackedModified\(key, tracked\)/);
   assert.match(source, /if \(tracked\.state === 'modified'\) return false;[\s\S]*tracked\.state = 'modified'/);
 });
 
@@ -403,4 +403,25 @@ test('los documentos ya abiertos se reconcilian después de capturar baselines',
   assert.match(manager, /reconcileOpenTrackedDocuments/);
   assert.match(manager, /for \(const document of vscode\.workspace\.textDocuments\)/);
   assert.match(manager, /reconcileTrackedFileState\(document\.uri\)/);
+});
+
+test('Live Remediation normaliza las URI de Windows antes de resolver eventos de edición', () => {
+  const manager = read('src/modules/liveRemediation/manager.ts');
+
+  assert.match(manager, /private uriKey\(value: string \| vscode\.Uri\)/);
+  assert.match(manager, /process\.platform === 'win32'/);
+  assert.match(manager, /normalized\.toLowerCase\(\)/);
+  assert.match(manager, /keysByUri\.get\(this\.uriKey\(event\.document\.uri\)\)/);
+  assert.match(manager, /this\.uriKey\(persisted\.fileUri\) !== this\.uriKey\(issue\.fileUri\)/);
+});
+
+test('una edición directa del rango prevalece sobre bloques duplicados del archivo', () => {
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const touchedStart = manager.indexOf('if (transformed.touched)');
+  const relocationStart = manager.indexOf('if (tracked.baseline)', touchedStart + 1);
+  const touchedBranch = manager.slice(touchedStart, relocationStart);
+
+  assert.ok(touchedStart >= 0 && relocationStart > touchedStart);
+  assert.match(touchedBranch, /issueMatchesBaseline\(document, tracked\)/);
+  assert.match(touchedBranch, /markTrackedModified\(key, tracked\)/);
 });

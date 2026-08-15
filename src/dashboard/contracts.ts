@@ -44,6 +44,7 @@ export interface DashboardWebviewMessage {
   notificationsEnabled?: boolean;
   moduleId?: string;
   moduleEnabled?: boolean;
+  configurationTab?: string;
   significantIncreasePercent?: number;
   significantIncreaseMinimum?: number;
   componentKind?: SonarCreatableComponentKind;

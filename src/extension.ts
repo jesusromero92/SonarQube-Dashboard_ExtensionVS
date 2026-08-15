@@ -882,6 +882,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   modules.attachDashboard(dashboardPanel);
+  // Resolve enabled modules before a command or serializer can build the
+  // dashboard. Restored panels must see the same contributions as new panels.
+  await modules.syncEnabledModules();
 
   const launcherProvider = new DashboardLauncherViewProvider(
     context,
@@ -1190,7 +1193,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           configureRefreshTimer(context);
           if (modules.affectsLifecycleConfiguration(event)) {
             runAsync(
-              modules.syncEnabledModules(),
+              modules.syncEnabledModules().then(changed => {
+                if (changed) dashboardPanel?.rebuildWebview();
+              }),
               'optional module lifecycle refresh'
             );
           }
@@ -1224,8 +1229,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
   );
-
-  await modules.syncEnabledModules();
 
   configureRefreshTimer(context);
   runAsync(showChangelogIfNeeded(context), 'changelog display');

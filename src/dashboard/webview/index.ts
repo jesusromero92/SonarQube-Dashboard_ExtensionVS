@@ -5,11 +5,16 @@ import { getDashboardWebviewAssets } from './assets';
 import { getDashboardBody } from './body';
 import { getDashboardScript } from './scripts';
 import { getDashboardStyles } from './styles';
+import type { ModuleWebviewContribution } from '../../modules';
+import type { DashboardPage } from '../contracts';
 
 export function getDashboardHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
-  language: DashboardLanguage
+  language: DashboardLanguage,
+  modules: ModuleWebviewContribution,
+  initialPage: DashboardPage = 'data',
+  configurationTab = 'configurationSonarPanel'
 ): string {
   const nonce = randomBytes(16).toString('hex');
   const assets = getDashboardWebviewAssets(webview, extensionUri);
@@ -24,13 +29,13 @@ export function getDashboardHtml(
   >
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style nonce="${nonce}">
-${getDashboardStyles(assets)}
+${getDashboardStyles(assets, modules)}
   </style>
 </head>
 <body>
-${getDashboardBody()}
+${getDashboardBody(modules, initialPage, configurationTab)}
   <script nonce="${nonce}">
-${getDashboardScript(language)}
+${getDashboardScript(language, modules, initialPage)}
   </script>
 </body>
 </html>`;

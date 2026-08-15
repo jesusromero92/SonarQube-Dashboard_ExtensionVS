@@ -10,16 +10,24 @@ import {
 } from '../src/modules/pipeline/templates';
 import { DIAGNOSTICS_PAGE_MARKUP } from '../src/dashboard/webview/pages/diagnosticsPage';
 import { HISTORY_PAGE_MARKUP } from '../src/modules/pipeline/webview/pages/historyPage';
-import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
+import { getConfigurationPageMarkup } from '../src/dashboard/webview/pages/configurationPage';
+import { PIPELINE_WEBVIEW_CONTRIBUTION } from '../src/modules/pipeline/webview';
+import { PIPELINE_LOCALIZATION } from '../src/modules/pipeline/i18n';
 import { DIAGNOSTICS_SCRIPT } from '../src/dashboard/webview/scripts/diagnostics';
 import { HISTORY_SCRIPT } from '../src/modules/pipeline/webview/history';
 import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
 import { PIPELINE_INTEGRATION_SCRIPT } from '../src/modules/pipeline/webview/integration';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
 import { NAVIGATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/navigation';
+
 import { SOURCE_MESSAGES } from '../src/i18n/source';
 import { EN_MESSAGES } from '../src/i18n/en';
 import { ES_MESSAGES } from '../src/i18n/es';
+
+const CONFIGURATION_PAGE_MARKUP = getConfigurationPageMarkup(PIPELINE_WEBVIEW_CONTRIBUTION);
+const ALL_SOURCE_MESSAGES: Record<string, string> = { ...SOURCE_MESSAGES, ...PIPELINE_LOCALIZATION.source };
+const ALL_EN_MESSAGES: Record<string, string> = { ...EN_MESSAGES, ...PIPELINE_LOCALIZATION.en };
+const ALL_ES_MESSAGES: Record<string, string> = { ...ES_MESSAGES, ...PIPELINE_LOCALIZATION.es };
 
 test('la versión 0.21.0 ofrece las cuatro plantillas integradas', () => {
   const templates = createBuiltinPipelineTemplates(
@@ -192,9 +200,9 @@ test('los textos nuevos están disponibles en español e inglés', () => {
     'executionSteps',
     'console'
   ] as const) {
-    assert.ok(SOURCE_MESSAGES[key]);
-    assert.ok(EN_MESSAGES[key]);
-    assert.ok(ES_MESSAGES[key]);
+    assert.ok(ALL_SOURCE_MESSAGES[key]);
+    assert.ok(ALL_EN_MESSAGES[key]);
+    assert.ok(ALL_ES_MESSAGES[key]);
   }
 });
 

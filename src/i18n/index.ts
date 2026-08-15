@@ -68,7 +68,8 @@ export function message(
  */
 export function localizeWebviewSource(
   source: string,
-  language: DashboardLanguage
+  language: DashboardLanguage,
+  bundles: readonly import('./types').LocalizationBundle[] = []
 ): string {
   let localized = source;
   const catalog = MESSAGE_CATALOGS[language];
@@ -90,6 +91,22 @@ export function localizeWebviewSource(
     }
   }
 
+  for (const bundle of bundles) {
+    const targetCatalog = language === 'es' ? bundle.es : bundle.en;
+    const entries = Object.entries(bundle.source)
+      .filter(([, value]) => Boolean(value))
+      .sort((left, right) => right[1].length - left[1].length);
+    for (const [key, sourceText] of entries) {
+      const targetText = targetCatalog[key] ?? sourceText;
+      localized = /^[\p{L}\p{N}]+$/u.test(sourceText)
+        ? localized.replace(
+            new RegExp(String.raw`(?<![\p{L}\p{N}_])${escapeRegExp(sourceText)}(?![\p{L}\p{N}_])`, 'gu'),
+            targetText
+          )
+        : localized.split(sourceText).join(targetText);
+    }
+  }
+
   return localized;
 }
 
@@ -99,9 +116,10 @@ export function localizeWebviewSource(
  */
 export function localizeRuntimeText(
   value: string,
-  language: DashboardLanguage
+  language: DashboardLanguage,
+  bundles: readonly import('./types').LocalizationBundle[] = []
 ): string {
-  return localizeWebviewSource(value, language);
+  return localizeWebviewSource(value, language, bundles);
 }
 
 function escapeRegExp(value: string): string {
@@ -110,18 +128,19 @@ function escapeRegExp(value: string): string {
 
 export function localizeAnalysisState<T extends LocalizedAnalysisState>(
   state: T,
-  language: DashboardLanguage
+  language: DashboardLanguage,
+  bundles: readonly import('./types').LocalizationBundle[] = []
 ): T {
   return {
     ...state,
-    message: localizeRuntimeText(state.message, language),
-    scanner: localizeRuntimeText(state.scanner, language),
-    log: state.log.map(line => localizeRuntimeText(line, language)),
+    message: localizeRuntimeText(state.message, language, bundles),
+    scanner: localizeRuntimeText(state.scanner, language, bundles),
+    log: state.log.map(line => localizeRuntimeText(line, language, bundles)),
     steps: state.steps?.map(step => ({
       ...step,
-      name: localizeRuntimeText(step.name, language),
+      name: localizeRuntimeText(step.name, language, bundles),
       message: step.message
-        ? localizeRuntimeText(step.message, language)
+        ? localizeRuntimeText(step.message, language, bundles)
         : undefined
     }))
   };

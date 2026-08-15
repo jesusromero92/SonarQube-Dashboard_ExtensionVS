@@ -76,6 +76,7 @@ export class DashboardPanel implements DashboardModuleBridge {
   private savingConfig = false;
   private loading = false;
   private currentPage: DashboardPage = 'data';
+  private currentConfigurationTab = 'configurationSonarPanel';
   private language: DashboardLanguage = getDashboardLanguage();
   private pendingIssueDetail: DashboardIssue | undefined;
   private pendingRuleIssue: DashboardIssue | undefined;
@@ -123,6 +124,8 @@ export class DashboardPanel implements DashboardModuleBridge {
       this.navigate(page);
       return;
     }
+
+    this.currentPage = page;
 
     const panel = vscode.window.createWebviewPanel(
       DASHBOARD_PANEL_VIEW_TYPE,
@@ -281,7 +284,10 @@ export class DashboardPanel implements DashboardModuleBridge {
     panel.webview.html = getDashboardHtml(
       panel.webview,
       this.context.extensionUri,
-      this.language
+      this.language,
+      this.modules.getWebviewContribution(),
+      this.currentPage,
+      this.currentConfigurationTab
     );
 
     this.panelDisposables.push(
@@ -363,6 +369,9 @@ export class DashboardPanel implements DashboardModuleBridge {
 
   private async handleSetModule(message: DashboardWebviewMessage): Promise<void> {
     if (!message.moduleId) return;
+    if (typeof message.configurationTab === 'string' && message.configurationTab) {
+      this.currentConfigurationTab = message.configurationTab;
+    }
     const changed = await this.modules.setEnabled(
       message.moduleId,
       message.moduleEnabled !== false
@@ -466,6 +475,18 @@ export class DashboardPanel implements DashboardModuleBridge {
     await this.sendState();
   }
 
+  rebuildWebview(): void {
+    if (!this.panel) return;
+    this.panel.webview.html = getDashboardHtml(
+      this.panel.webview,
+      this.context.extensionUri,
+      this.language,
+      this.modules.getWebviewContribution(),
+      this.currentPage,
+      this.currentConfigurationTab
+    );
+  }
+
   getWorkspaceFolder(folderUri?: string): vscode.WorkspaceFolder | undefined {
     if (!folderUri) {
       return undefined;
@@ -506,6 +527,7 @@ export class DashboardPanel implements DashboardModuleBridge {
         selectedFolderUri: '',
         workspaceTrusted: vscode.workspace.isTrusted,
         language: this.language,
+        configurationTab: this.currentConfigurationTab,
         config: {
           serverUrl: '',
           projectKey: '',
@@ -548,6 +570,7 @@ export class DashboardPanel implements DashboardModuleBridge {
       selectedFolderUri,
       workspaceTrusted: vscode.workspace.isTrusted,
       language: this.language,
+      configurationTab: this.currentConfigurationTab,
       connectionDraftDirty,
       creationCapabilities,
       config: {
@@ -1567,7 +1590,12 @@ export class DashboardPanel implements DashboardModuleBridge {
   private postLanguageChanged(): void {
     this.postMessage({
       type: 'languageChanged',
-      localization: getWebviewLocalizationBundle(this.language)
+      localization: getWebviewLocalizationBundle(
+        this.language,
+        this.modules.getWebviewContribution().localization
+          ? [this.modules.getWebviewContribution().localization!]
+          : []
+      )
     });
   }
 

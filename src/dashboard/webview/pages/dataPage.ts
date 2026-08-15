@@ -1,4 +1,4 @@
-import { MODULE_DATA_CONTROLS_MARKUP, MODULE_EMPTY_ACTIONS_MARKUP } from '../../../modules/webview';
+import type { ModuleWebviewContribution } from '../../../modules';
 import { ISSUES_EMPTY_STATE_MARKUP } from '../components/issuesEmptyState';
 import { ISSUES_TABLE_MARKUP } from '../components/issuesTable';
 import { RANKING_TABLES_MARKUP } from '../components/rankingTables';
@@ -7,7 +7,8 @@ import { HOTSPOTS_TABLE_MARKUP } from '../components/hotspotsTable';
 import { COVERAGE_VIEW_MARKUP } from '../components/coverageView';
 import { SYNC_STATUS_MARKUP } from '../components/syncStatus';
 
-const DATA_PAGE_PREFIX = `      <section id="dataPage" class="page">
+function getDataPagePrefix(modules: ModuleWebviewContribution, hidden: boolean): string {
+return `      <section id="dataPage" class="page"${hidden ? ' hidden' : ''}>
         <section id="dataLoading" class="dashboard-loading">
           <div>
             <div class="dashboard-spinner" aria-hidden="true"></div>
@@ -26,13 +27,13 @@ const DATA_PAGE_PREFIX = `      <section id="dataPage" class="page">
             <p id="emptyText">Vincula la carpeta abierta con un proyecto de SonarQube para consultar sus defectos.</p>
             <div class="empty-actions">
               <button id="goConfiguration" type="button">Ir a configuración</button>
-${MODULE_EMPTY_ACTIONS_MARKUP}
+${modules.emptyActions ?? ''}
               <button id="syncEmpty" class="secondary" type="button" hidden>Sincronizar datos</button>
             </div>
           </div>
         </section>
 
-${SYNC_STATUS_MARKUP}${MODULE_DATA_CONTROLS_MARKUP}        <section id="results" hidden>
+${SYNC_STATUS_MARKUP}${modules.dataControls ?? ''}        <section id="results" hidden>
           <div class="dashboard-controls">
             <nav class="segmented" aria-label="Vista de datos">
               <button id="issuesViewTab" class="active" type="button">Defectos</button>
@@ -55,10 +56,14 @@ ${ISSUES_EMPTY_STATE_MARKUP}          <div id="issuesContent">
           <div id="metricsSummary" class="metrics-summary" aria-label="Resumen de defectos"></div>
 
 `;
+}
 
-export function getDataPageMarkup(): string {
+export function getDataPageMarkup(
+  modules: ModuleWebviewContribution,
+  hidden = false
+): string {
   return [
-    DATA_PAGE_PREFIX,
+    getDataPagePrefix(modules, hidden),
     ISSUES_TABLE_MARKUP,
     RANKING_TABLES_MARKUP,
     EVOLUTION_CHARTS_MARKUP,

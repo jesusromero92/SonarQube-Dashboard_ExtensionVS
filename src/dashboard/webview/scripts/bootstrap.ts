@@ -12,12 +12,15 @@ import { ELEMENT_REGISTRY_SCRIPT } from './core/elements';
 import { EMPTY_STATE_SCRIPT } from './core/emptyState';
 import { NAVIGATION_CORE_SCRIPT } from './core/navigation';
 import { DASHBOARD_STATE_SCRIPT } from './core/state';
+import type { DashboardPage } from '../../contracts';
 
 export function getBootstrapScript(
-  language: DashboardLanguage
+  language: DashboardLanguage,
+  initialPage: DashboardPage = 'data'
 ): string {
   const environmentScript = `
     const vscode = acquireVsCodeApi();
+    const initialDashboardPage = ${JSON.stringify(initialPage)};
     const dashboardColors = ${JSON.stringify(DASHBOARD_COLORS)};
     const dashboardConstants = ${JSON.stringify(DASHBOARD_WEBVIEW_CONSTANTS)};
     const typeIconClasses = dashboardConstants.typeIconClasses;

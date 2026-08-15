@@ -7,6 +7,10 @@ import {
 } from '../src/i18n/runtimeWebview';
 import { MESSAGE_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/messages';
 import { getDashboardScript } from '../src/dashboard/webview/scripts';
+import { PIPELINE_LOCALIZATION } from '../src/modules/pipeline/i18n';
+import { PIPELINE_WEBVIEW_CONTRIBUTION } from '../src/modules/pipeline/webview';
+import { LIVE_REMEDIATION_WEBVIEW_CONTRIBUTION } from '../src/modules/liveRemediation/webview';
+import { composeModuleWebviewContributions } from '../src/modules/webview';
 
 test('el cambio de idioma se aplica en el DOM sin reconstruir el webview', () => {
   const panelSource = readFileSync(
@@ -60,11 +64,17 @@ test('el panel lateral actualiza idioma y estado sin recargar su HTML', () => {
 test('el JavaScript completo del dashboard mantiene una sintaxis válida', () => {
   assert.doesNotThrow(() => new Function(getDashboardScript('en')));
   assert.doesNotThrow(() => new Function(getDashboardScript('es')));
+  const enabledModules = composeModuleWebviewContributions(
+    [],
+    [PIPELINE_WEBVIEW_CONTRIBUTION, LIVE_REMEDIATION_WEBVIEW_CONTRIBUTION]
+  );
+  assert.doesNotThrow(() => new Function(getDashboardScript('en', enabledModules)));
+  assert.doesNotThrow(() => new Function(getDashboardScript('es', enabledModules)));
 });
 
 test('los textos dinámicos del pipeline están disponibles en ambos idiomas', () => {
-  const english = new Map(getWebviewLocalizationBundle('en').translations);
-  const spanish = new Map(getWebviewLocalizationBundle('es').translations);
+  const english = new Map(getWebviewLocalizationBundle('en', [PIPELINE_LOCALIZATION]).translations);
+  const spanish = new Map(getWebviewLocalizationBundle('es', [PIPELINE_LOCALIZATION]).translations);
 
   assert.equal(english.get('Scanner configurado'), 'Configured scanner');
   assert.equal(english.get('Paso previo '), 'Pre-analysis step ');

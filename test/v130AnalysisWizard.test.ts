@@ -49,8 +49,8 @@ test('documentación y traducciones registran el flujo 1.3.0', () => {
   const changelog = read('CHANGELOG.md');
   const readme = read('README.md');
   const readmeEs = read('README.es.md');
-  const source = read('src/i18n/source.ts');
-  const english = read('src/i18n/en.ts');
+  const source = read('src/modules/pipeline/i18n/source.ts');
+  const english = read('src/modules/pipeline/i18n/en.ts');
 
   assert.match(changelog, /## \[1\.3\.0\] - 2026-08-13/);
   assert.match(changelog, /two-step wizard/);

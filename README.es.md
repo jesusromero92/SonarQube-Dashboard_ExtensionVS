@@ -41,7 +41,8 @@ La 2.0.0 separa **Core**, **Pipeline** y **Live Remediation** como fronteras rea
 - El webview del Dashboard consume una única fachada de contribuciones de módulos. Cada módulo es dueño de su pestaña, markup, scripts, estilos, modales y páginas; los controles reutilizables están en `src/shared/webview/`, evitando dependencias circulares Dashboard ↔ módulo.
 - Los módulos pueden activarse y desactivarse en caliente. Al abrir o refrescar el dashboard, las pestañas opcionales de configuración se reconstruyen siempre desde el estado persistido de los módulos, incluso si ya estaban activados antes de abrir la vista. Al desactivar Pipeline se cancelan/liberan sus servicios y comandos. Al desactivar Live Remediation se liberan listeners/watchers y se restaura inmediatamente el snapshot normal de **Problems**, pero **su sesión persistida se conserva** para una reactivación posterior.
 - Borrar estado y desactivar un módulo son operaciones distintas: solo las acciones explícitas de papelera/limpieza eliminan el estado de Live Remediation. Desactivar o reiniciar VS Code no revierte archivos locales ni borra la sesión.
-- Al intentar **desactivar** un módulo aparece un modal nativo de confirmación. Si Pipeline tiene un análisis activo, el aviso indica expresamente que será cancelado. Los interruptores se guardan mediante `sonarQubeDashboard.modules.pipeline.enabled` y `sonarQubeDashboard.modules.liveRemediation.enabled`; no existe un segundo interruptor interno de Live Remediation.
+- Tanto **activar** como **desactivar** un módulo muestra un modal nativo de confirmación. El checkbox conserva su último valor confirmado mientras la decisión y la transición del ciclo de vida están pendientes, y el nuevo valor solo se persiste después de cargar o descargar correctamente el módulo. Si Pipeline tiene un análisis activo, el aviso de desactivación indica expresamente que será cancelado. Los interruptores se guardan mediante `sonarQubeDashboard.modules.pipeline.enabled` y `sonarQubeDashboard.modules.liveRemediation.enabled`; no existe un segundo interruptor interno de Live Remediation.
+- Los cambios de ciclo de vida conservan **Configuración → Módulos** mientras el Dashboard recompone el HTML, CSS y JavaScript propiedad de los módulos. El webview reconstruido nace directamente en la página/pestaña conservada, sin mostrar momentáneamente **Datos** ni **SonarQube**. Si el estado persistido indica que un módulo está activo pero falta su runtime, la sincronización repara la incoherencia y vuelve a cargar su implementación de forma lazy.
 
 ## Modelo de funcionamiento
 
@@ -207,6 +208,8 @@ Las acciones Quick Fix que modifican SonarQube respetan los permisos del token c
 ### Estado de remediación en vivo
 
 Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveRemediation.enabled` está activo. Su principio es deliberadamente conservador: **modificar código no significa solucionar un issue**. SonarQube Server sigue siendo la única fuente de verdad y una remediación solo se confirma a partir del snapshot producido por un análisis real del repositorio.
+
+La identidad del archivo se normaliza antes de relacionar eventos del editor, guardado y sistema de archivos, incluidas las diferencias de mayúsculas en URI de Windows. Por ello, una edición directa sobre un rango de issue sincronizado o junto a él se registra inmediatamente como **Modificado localmente**, aunque exista una línea de código idéntica en otra parte del archivo.
 
 #### Seguimiento de cambios locales
 
@@ -725,7 +728,7 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
 }
 ```
 
-`sonarQubeDashboard.language` acepta `en` o `es` y se guarda globalmente para el entorno de VS Code. `autoRefresh` activa la sincronización al abrir o cambiar el workspace y un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica. `modules.pipeline.enabled` y `modules.liveRemediation.enabled` activan o desactivan los runtimes opcionales completos; ambos valen `true` de forma predeterminada. Los ajustes `pipeline.*` pertenecen exclusivamente al módulo Pipeline. La desactivación desde **Configuración → Módulos** requiere confirmación mediante un modal nativo de VS Code; desactivar Live Remediation conserva su sesión persistida.
+`sonarQubeDashboard.language` acepta `en` o `es` y se guarda globalmente para el entorno de VS Code. `autoRefresh` activa la sincronización al abrir o cambiar el workspace y un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica. `modules.pipeline.enabled` y `modules.liveRemediation.enabled` activan o desactivan los runtimes opcionales completos; ambos valen `true` de forma predeterminada. Los ajustes `pipeline.*` pertenecen exclusivamente al módulo Pipeline. Activar y desactivar un módulo desde **Configuración → Módulos** requiere confirmación mediante un modal nativo de VS Code; el checkbox solo cambia tras confirmar y completar correctamente la transición, la pestaña Módulos permanece seleccionada durante la recomposición y desactivar Live Remediation conserva su sesión persistida.
 
 ## Limitaciones operativas
 

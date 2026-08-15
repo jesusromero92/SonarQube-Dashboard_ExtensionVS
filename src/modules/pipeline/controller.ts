@@ -1,12 +1,11 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { getFolderConfig } from '../../configuration';
-import type { DashboardLanguage } from '../../i18n';
+import { getDashboardLanguage, type DashboardLanguage } from '../../i18n';
 import {
-  getDashboardLanguage,
   localizeAnalysisState,
   localizeRuntimeText
-} from '../../i18n';
+} from './i18n/runtime';
 import {
   checkAnalysisPermission,
   fetchAnalysisBaselineData

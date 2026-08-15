@@ -1,64 +1,69 @@
-import {
-  PIPELINE_CONFIGURATION_PANEL_MARKUP,
-  PIPELINE_CONFIGURATION_TAB_MARKUP
-} from './pipeline/webview/configuration';
+import type {
+  DashboardModuleDefinition,
+  ModuleWebviewContribution
+} from './contracts';
 
-import { ANALYSIS_DIALOG_MARKUP } from './pipeline/webview/modals/analysisDialog';
-import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from './pipeline/webview/modals/analysisConfirmationDialog';
-import { PIPELINE_EDITOR_SCRIPT } from './pipeline/webview/editor';
+const join = (values: Array<string | undefined>): string =>
+  values.filter((value): value is string => Boolean(value)).join('\n');
 
-import { PIPELINE_INTEGRATION_SCRIPT } from './pipeline/webview/integration';
-import { ANALYSIS_SCRIPT } from './pipeline/webview/analysis';
-import { HISTORY_SCRIPT } from './pipeline/webview/history';
-import { BASELINE_SCRIPT } from './pipeline/webview/baseline';
-import { PIPELINE_STYLES } from './pipeline/webview/styles';
-import { PIPELINE_HISTORY_STYLES } from './pipeline/webview/historyStyles';
-import { LIVE_REMEDIATION_STYLES } from './liveRemediation/webview/styles';
-import {
-  LIVE_REMEDIATION_CONFIGURATION_PANEL_MARKUP,
-  LIVE_REMEDIATION_CONFIGURATION_TAB_MARKUP
-} from './liveRemediation/webview/configuration';
-import { LIVE_REMEDIATION_INTEGRATION_SCRIPT } from './liveRemediation/webview/integration';
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
-export const MODULE_CONFIGURATION_TABS_MARKUP = [
-  PIPELINE_CONFIGURATION_TAB_MARKUP,
-  LIVE_REMEDIATION_CONFIGURATION_TAB_MARKUP
-].join('\n');
+export function composeModuleWebviewContributions(
+  definitions: readonly DashboardModuleDefinition[],
+  contributions: readonly ModuleWebviewContribution[]
+): ModuleWebviewContribution {
+  const moduleSettings = definitions.map(definition => `
+                      <div class="field full-width-field checkbox-field module-setting">
+                        <label><input id="${escapeHtml(definition.id)}ModuleEnabled" data-module-toggle="${escapeHtml(definition.id)}" type="checkbox" checked> ${escapeHtml(definition.displayName)}</label>
+                        <div class="hint">${escapeHtml(definition.description)}</div>
+                      </div>`).join('');
 
-export const MODULE_CONFIGURATION_PANELS_MARKUP = [
-  PIPELINE_CONFIGURATION_PANEL_MARKUP,
-  LIVE_REMEDIATION_CONFIGURATION_PANEL_MARKUP
-].join('\n');
+  const localizationBundles = [
+    ...definitions.map(item => item.localization),
+    ...contributions.map(item => item.localization)
+  ]
+    .filter(item => item !== undefined);
+  return {
+    configurationTab: join(contributions.map(item => item.configurationTab)),
+    configurationPanel: join(contributions.map(item => item.configurationPanel)),
+    styles: join(contributions.map(item => item.styles)),
+    scripts: join(contributions.map(item => item.scripts)),
+    modals: join(contributions.map(item => item.modals)),
+    pages: join(contributions.map(item => item.pages)),
+    dataControls: join(contributions.map(item => item.dataControls)),
+    emptyActions: join(contributions.map(item => item.emptyActions)),
+    localization: localizationBundles.length === 0 ? undefined : {
+      source: Object.assign({}, ...localizationBundles.map(item => item.source)),
+      en: Object.assign({}, ...localizationBundles.map(item => item.en)),
+      es: Object.assign({}, ...localizationBundles.map(item => item.es))
+    },
+    moduleSettings
+  };
+}
 
-export const MODULES_CONFIGURATION_PANEL_MARKUP = `              <section id="configurationModulesPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationModulesTab" hidden>
+export function getModulesConfigurationPanelMarkup(
+  contribution: ModuleWebviewContribution,
+  selected = false
+): string {
+  const settings = contribution.moduleSettings ?? '';
+  return `              <section id="configurationModulesPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationModulesTab"${selected ? '' : ' hidden'}>
                 <details class="configuration-disclosure" open>
                   <summary>Módulos</summary>
                   <div class="configuration-disclosure-content">
                     <div class="configuration-section-intro">
                       <strong>Activa solo las funciones que necesitas</strong>
-                      <p class="hint">Cada módulo carga su runtime, comandos, vistas y configuración de forma independiente. Desactivarlo no borra su estado persistido.</p>
+                      <p class="hint">Cada módulo habilita su lógica, su vista lateral y su pestaña de configuración. Los cambios se aplican inmediatamente.</p>
                     </div>
-                    <div class="form-grid advanced-grid module-settings-grid">
-                      <div class="field full-width-field checkbox-field module-setting">
-                        <label><input id="pipelineModuleEnabled" data-module-toggle="pipeline" type="checkbox" checked> Pipeline</label>
-                        <div class="hint">Scanner, análisis, pasos, plantillas, integraciones, historial y comparación antes/después.</div>
-                      </div>
-                      <div class="field full-width-field checkbox-field module-setting">
-                        <label><input id="liveRemediationModuleEnabled" data-module-toggle="liveRemediation" type="checkbox" checked> Live Remediation</label>
-                        <div class="hint">Seguimiento local, baseline, diff/revert, sesión persistente y validación contra nuevos análisis del servidor.</div>
-                      </div>
+                    <div class="form-grid advanced-grid module-settings-grid">${settings}
                     </div>
                   </div>
                 </details>
               </section>`;
-
-
-export const MODULE_MODALS_MARKUP = `${ANALYSIS_DIALOG_MARKUP}\n${ANALYSIS_CONFIRMATION_DIALOG_MARKUP}`;
-export const MODULE_SCRIPTS = `${PIPELINE_EDITOR_SCRIPT}\n${ANALYSIS_SCRIPT}\n${HISTORY_SCRIPT}\n${BASELINE_SCRIPT}\n${PIPELINE_INTEGRATION_SCRIPT}\n${LIVE_REMEDIATION_INTEGRATION_SCRIPT}`;
-export const MODULE_STYLES = `${PIPELINE_STYLES}\n${PIPELINE_HISTORY_STYLES}\n${LIVE_REMEDIATION_STYLES}`;
-
-
-
-
-export {HISTORY_PAGE_MARKUP as MODULE_PAGES_MARKUP} from './pipeline/webview/pages/historyPage';
-export {ANALYSIS_CONTROL_MARKUP as MODULE_DATA_CONTROLS_MARKUP, PIPELINE_EMPTY_ACTION_MARKUP as MODULE_EMPTY_ACTIONS_MARKUP} from './pipeline/webview/components/analysisControl';
+}

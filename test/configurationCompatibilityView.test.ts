@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
+import { getConfigurationPageMarkup } from '../src/dashboard/webview/pages/configurationPage';
+import { PIPELINE_WEBVIEW_CONTRIBUTION } from '../src/modules/pipeline/webview';
 import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/modules/pipeline/webview/modals/analysisConfirmationDialog';
 import { CREATE_COMPONENT_DIALOG_MARKUP } from '../src/dashboard/webview/modals/createComponentDialog';
 import { ANALYSIS_STYLES } from '../src/dashboard/webview/styles/analysis';
@@ -15,6 +16,12 @@ import { SELECT_DROPDOWN_SCRIPT } from '../src/dashboard/webview/scripts/ui/sele
 import { EN_MESSAGES } from '../src/i18n/en';
 import { ES_MESSAGES } from '../src/i18n/es';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
+import { PIPELINE_LOCALIZATION } from '../src/modules/pipeline/i18n';
+
+const CONFIGURATION_PAGE_MARKUP = getConfigurationPageMarkup(PIPELINE_WEBVIEW_CONTRIBUTION);
+const ALL_SOURCE_MESSAGES: Record<string, string> = { ...SOURCE_MESSAGES, ...PIPELINE_LOCALIZATION.source };
+const ALL_EN_MESSAGES: Record<string, string> = { ...EN_MESSAGES, ...PIPELINE_LOCALIZATION.en };
+const ALL_ES_MESSAGES: Record<string, string> = { ...ES_MESSAGES, ...PIPELINE_LOCALIZATION.es };
 
 test('la configuración se divide en pestañas accesibles por categoría', () => {
   for (const id of [
@@ -63,9 +70,9 @@ test('las pestañas de configuración están traducidas en español e inglés', 
     'configurationPipelineTab',
     'configurationNotificationsTab'
   ] as const) {
-    assert.ok(SOURCE_MESSAGES[key]);
-    assert.ok(EN_MESSAGES[key]);
-    assert.ok(ES_MESSAGES[key]);
+    assert.ok(ALL_SOURCE_MESSAGES[key]);
+    assert.ok(ALL_EN_MESSAGES[key]);
+    assert.ok(ALL_ES_MESSAGES[key]);
   }
 });
 

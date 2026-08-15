@@ -1,9 +1,6 @@
 import { getSelectDropdownMarkup } from '../../../shared/webview/ui/selectDropdown';
-import {
-  MODULE_CONFIGURATION_PANELS_MARKUP,
-  MODULE_CONFIGURATION_TABS_MARKUP,
-  MODULES_CONFIGURATION_PANEL_MARKUP
-} from '../../../modules/webview';
+import type { ModuleWebviewContribution } from '../../../modules';
+import { getModulesConfigurationPanelMarkup } from '../../../modules/webview';
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -35,7 +32,13 @@ function configurationDropdown(
   });
 }
 
-export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" class="page" hidden>
+export function getConfigurationPageMarkup(
+  modules: ModuleWebviewContribution,
+  visible = false,
+  selectedTab = 'configurationSonarPanel'
+): string {
+const modulesSelected = selectedTab === 'configurationModulesPanel';
+return `      <section id="configurationPage" class="page"${visible ? '' : ' hidden'}>
         <section class="panel">
           <div class="panel-header">
             <h2>Configuración</h2>
@@ -50,13 +53,13 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
           <div id="configurationContent">
             <div class="panel-body configuration-panel-body">
               <nav class="configuration-tabs" role="tablist" aria-label="Secciones de configuración">
-                <button id="configurationSonarTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="configurationSonarPanel" tabindex="0">SonarQube</button>
-                <button id="configurationModulesTab" type="button" role="tab" aria-selected="false" aria-controls="configurationModulesPanel" tabindex="-1">Módulos</button>
-${MODULE_CONFIGURATION_TABS_MARKUP}
+                <button id="configurationSonarTab"${modulesSelected ? '' : ' class="active"'} type="button" role="tab" aria-selected="${modulesSelected ? 'false' : 'true'}" aria-controls="configurationSonarPanel" tabindex="${modulesSelected ? '-1' : '0'}">SonarQube</button>
+                <button id="configurationModulesTab"${modulesSelected ? ' class="active"' : ''} type="button" role="tab" aria-selected="${modulesSelected ? 'true' : 'false'}" aria-controls="configurationModulesPanel" tabindex="${modulesSelected ? '0' : '-1'}">Módulos</button>
+${modules.configurationTab ?? ''}
                 <button id="configurationNotificationsTab" type="button" role="tab" aria-selected="false" aria-controls="configurationNotificationsPanel" tabindex="-1">Notificaciones</button>
               </nav>
 
-              <section id="configurationSonarPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationSonarTab">
+              <section id="configurationSonarPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationSonarTab"${modulesSelected ? ' hidden' : ''}>
                 <details class="configuration-disclosure" open>
                   <summary>Conexión con SonarQube</summary>
                   <div class="configuration-disclosure-content">
@@ -139,9 +142,9 @@ ${configurationDropdown('projectKey', 'Proyecto o aplicación visible', DISCONNE
 
               </section>
 
-${MODULES_CONFIGURATION_PANEL_MARKUP}
+${getModulesConfigurationPanelMarkup(modules, modulesSelected)}
 
-${MODULE_CONFIGURATION_PANELS_MARKUP}
+${modules.configurationPanel ?? ''}
 
               <section id="configurationNotificationsPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationNotificationsTab" hidden>
               <details class="configuration-disclosure" open>
@@ -175,3 +178,7 @@ ${MODULE_CONFIGURATION_PANELS_MARKUP}
           </div>
         </section>
       </section>`;
+}
+
+/** Core-only markup retained for consumers that do not install module contributions. */
+export const CONFIGURATION_PAGE_MARKUP = getConfigurationPageMarkup({});

@@ -1,4 +1,5 @@
 export const CONFIGURATION_EVENTS_SCRIPT = `
+    const pendingModuleChanges = new Set();
     const configurationTabs = [...document.querySelectorAll('.configuration-tabs [role="tab"][aria-controls]')]
       .map(button => ({
         button,
@@ -27,6 +28,11 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
       if (focus) targetButton.focus();
     }
 
+    function restoreConfigurationTab(panelId) {
+      const entry = configurationTabs.find(candidate => candidate.panel.id === panelId);
+      if (entry && !entry.button.hidden) activateConfigurationTab(entry.button);
+    }
+
     function updateModuleConfigurationVisibility() {
       for (const tab of document.querySelectorAll('[data-module-tab]')) {
         const moduleId = tab.dataset.moduleTab;
@@ -50,6 +56,8 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
         if (typeof enabled === 'boolean') {
           toggle.checked = enabled;
         }
+        toggle.disabled = false;
+        pendingModuleChanges.delete(moduleId);
       }
       updateModuleConfigurationVisibility();
     }
@@ -78,17 +86,23 @@ export const CONFIGURATION_EVENTS_SCRIPT = `
     for (const toggle of document.querySelectorAll('[data-module-toggle]')) {
       toggle.addEventListener('change', () => {
         const moduleId = toggle.dataset.moduleToggle;
-        currentConfig[moduleId + 'ModuleEnabled'] = toggle.checked;
-        updateModuleConfigurationVisibility();
-        runDashboardModuleHooks('renderState', currentConfig, { type: 'moduleToggle' }, {
-          connectionDraftDirty,
-          hasWorkspace
-        });
-        renderEmptyState();
+        if (!moduleId) return;
+        const confirmedEnabled = currentConfig?.[moduleId + 'ModuleEnabled'] === true;
+        const requestedEnabled = toggle.checked;
+
+        // A checkbox is only a request. Keep showing the last confirmed state
+        // until the extension host accepts the modal confirmation and replies.
+        toggle.checked = confirmedEnabled;
+        if (requestedEnabled === confirmedEnabled || pendingModuleChanges.has(moduleId)) return;
+        toggle.disabled = true;
+        pendingModuleChanges.add(moduleId);
         vscode.postMessage({
           type: 'setModule',
           moduleId,
-          moduleEnabled: toggle.checked
+          moduleEnabled: requestedEnabled,
+          configurationTab: configurationTabs.find(
+            entry => entry.button.classList.contains('active')
+          )?.panel.id
         });
       });
     }

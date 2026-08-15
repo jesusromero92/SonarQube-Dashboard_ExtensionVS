@@ -2,99 +2,250 @@ import * as vscode from 'vscode';
 import { DASHBOARD_CONFIGURATION_SECTION } from '../constants';
 import type { IssueDiagnosticManager } from '../issueDiagnostics';
 import type { DashboardIssue, FolderSonarFormConfig } from '../types';
-import {
-  ANALYZE_REPOSITORY_CAPABILITY_COMMAND,
-  MODULE_CONFIGURATION_KEYS
-} from './constants';
+import { ANALYZE_REPOSITORY_CAPABILITY_COMMAND } from './constants';
 import type {
   DashboardModule,
   DashboardModuleBridge,
   DashboardModuleCapability,
+  DashboardModuleDefinition,
   DashboardModulesRuntime,
   IssueOverlaySnapshot,
   ModuleConfigurationSaveContext,
+  ModuleWebviewContribution,
   ModuleWebviewMessage
 } from './contracts';
 import {
   getDashboardModuleState,
   isDashboardModuleEnabled,
+  registerDashboardModuleDefinitions,
   setDashboardModuleEnabled,
   updateDashboardModuleContexts,
   type DashboardModuleState
 } from './manager';
+import { composeModuleWebviewContributions } from './webview';
 
 export class DashboardModuleRuntime implements DashboardModulesRuntime {
   private bridge: DashboardModuleBridge | undefined;
-  private readonly moduleList: readonly DashboardModule[];
+  private readonly loadedModules = new Map<string, DashboardModule>();
   private readonly disposables: vscode.Disposable[] = [];
+  private syncQueue: Promise<void> = Promise.resolve();
+  private lastSyncedSignature = '';
 
   constructor(
-    modules: readonly DashboardModule[],
+    private readonly definitions: readonly DashboardModuleDefinition[],
     private readonly issueDiagnostics: IssueDiagnosticManager,
     private readonly onIssueOverlayChanged: () => void
   ) {
-    this.moduleList = [...modules];
-
-    this.disposables.push(
-      vscode.commands.registerCommand(
-        ANALYZE_REPOSITORY_CAPABILITY_COMMAND,
-        () => this.executeCapability('analyzeRepository')
-      )
-    );
+    registerDashboardModuleDefinitions(definitions);
+    this.disposables.push(vscode.commands.registerCommand(
+      ANALYZE_REPOSITORY_CAPABILITY_COMMAND,
+      () => this.executeCapability('analyzeRepository')
+    ));
   }
 
   attachDashboard(bridge: DashboardModuleBridge): void {
     this.bridge = bridge;
-    for (const module of this.moduleList) module.attachDashboard(bridge);
+    for (const module of this.loadedModules.values()) module.attachDashboard(bridge);
   }
 
   getState(): DashboardModuleState {
     return getDashboardModuleState();
   }
 
-  affectsConfiguration(event: vscode.ConfigurationChangeEvent): boolean {
-    return this.affectsLifecycleConfiguration(event)
-      || this.moduleList.some(module => module.affectsConfiguration(event));
-  }
-
-  affectsLifecycleConfiguration(event: vscode.ConfigurationChangeEvent): boolean {
-    return Object.values(MODULE_CONFIGURATION_KEYS).some(key =>
-      event.affectsConfiguration(`${DASHBOARD_CONFIGURATION_SECTION}.${key}`)
+  getWebviewContribution(): ModuleWebviewContribution {
+    const state = getDashboardModuleState();
+    return composeModuleWebviewContributions(
+      this.definitions,
+      [...this.loadedModules.values()]
+        .filter(module => state[module.id])
+        .map(module => module.webview)
     );
   }
 
-  async syncEnabledModules(): Promise<void> {
-    const state = getDashboardModuleState();
-    await updateDashboardModuleContexts(state);
-    const summary = this.bridge?.getRefreshSummary();
-    const activationContext = {
-      issues: summary?.issues ?? [],
-      diagnostics: this.issueDiagnostics.getServerSnapshot()
-    };
+  affectsConfiguration(event: vscode.ConfigurationChangeEvent): boolean {
+    return this.affectsLifecycleConfiguration(event)
+      || [...this.loadedModules.values()].some(module => module.affectsConfiguration(event));
+  }
 
-    for (const module of this.moduleList) {
-      if (state[module.id]) module.activate(activationContext);
-      else module.deactivate();
+  affectsLifecycleConfiguration(event: vscode.ConfigurationChangeEvent): boolean {
+    return this.definitions.some(definition => event.affectsConfiguration(
+      `${DASHBOARD_CONFIGURATION_SECTION}.${definition.configurationKey}`
+    ));
+  }
+
+  async syncEnabledModules(): Promise<boolean> {
+    return this.enqueueLifecycle(() => this.performModuleSync());
+  }
+
+  private enqueueLifecycle<T>(operation: () => Promise<T>): Promise<T> {
+    const scheduled = this.syncQueue
+      .catch(() => undefined)
+      .then(operation);
+    this.syncQueue = scheduled.then(() => undefined, () => undefined);
+    return scheduled;
+  }
+
+  private async performModuleSync(): Promise<boolean> {
+    const state = getDashboardModuleState();
+    const signature = this.definitions
+      .map(definition => `${definition.id}:${state[definition.id] ? '1' : '0'}`)
+      .join('|');
+    const runtimeMatchesState = this.definitions.every(
+      definition => Boolean(state[definition.id]) === this.loadedModules.has(definition.id)
+    );
+    if (signature === this.lastSyncedSignature && runtimeMatchesState) return false;
+
+    let changed = signature !== this.lastSyncedSignature || !runtimeMatchesState;
+
+    for (const definition of this.definitions) {
+      const module = this.loadedModules.get(definition.id);
+      if (state[definition.id]) {
+        try {
+          if (await this.loadAndActivate(definition)) changed = true;
+        } catch (error) {
+          // Never leave the persisted state claiming that a module is enabled
+          // when its lazy implementation could not be started.
+          state[definition.id] = false;
+          await setDashboardModuleEnabled(definition.id, false);
+          this.reportModuleError(definition, error);
+          changed = true;
+        }
+      } else if (module) {
+        try {
+          this.unloadModule(definition.id);
+        } catch (error) {
+          this.reportModuleError(definition, error);
+        }
+        changed = true;
+      }
     }
+
+    await updateDashboardModuleContexts(state);
     this.onIssueOverlayChanged();
+    this.lastSyncedSignature = this.getStateSignature(state);
+    return changed;
   }
 
   async setEnabled(moduleId: string, enabled: boolean): Promise<boolean> {
-    const module = this.resolveModule(moduleId);
-    if (!module) return false;
-    const currentlyEnabled = isDashboardModuleEnabled(module.id);
-    if (currentlyEnabled === enabled) return true;
+    const definition = this.definitions.find(item => item.id === moduleId);
+    if (!definition) return false;
+    const currentlyEnabled = isDashboardModuleEnabled(moduleId);
+    if (currentlyEnabled !== enabled && !(await this.confirmModuleChange(definition, enabled))) {
+      return false;
+    }
 
-    if (!enabled && !(await module.confirmDisable())) return false;
+    const applied = await this.enqueueLifecycle(async () => {
+      const latestEnabled = isDashboardModuleEnabled(moduleId);
+      if (latestEnabled === enabled) {
+        const repaired = await this.performModuleSync();
+        if (repaired) this.bridge?.rebuildWebview();
+        return isDashboardModuleEnabled(moduleId) === enabled;
+      }
 
-    await setDashboardModuleEnabled(module.id, enabled);
-    await this.syncEnabledModules();
-    await this.bridge?.requestStateRefresh();
-    return true;
+      if (enabled) {
+        let loadedForTransition = false;
+        try {
+          loadedForTransition = await this.loadAndActivate(definition);
+          await setDashboardModuleEnabled(moduleId, true);
+        } catch (error) {
+          if (loadedForTransition) {
+            try {
+              this.unloadModule(moduleId);
+            } catch {
+              // Keep reporting the original activation/configuration failure.
+            }
+          }
+          this.reportModuleError(definition, error);
+          return false;
+        }
+      } else {
+        try {
+          await setDashboardModuleEnabled(moduleId, false);
+        } catch (error) {
+          this.reportModuleError(definition, error);
+          return false;
+        }
+      }
+
+      await this.performModuleSync();
+      this.bridge?.rebuildWebview();
+      return true;
+    });
+    return applied;
+  }
+
+  private getStateSignature(state: DashboardModuleState): string {
+    return this.definitions
+      .map(definition => `${definition.id}:${state[definition.id] ? '1' : '0'}`)
+      .join('|');
+  }
+
+  private async loadAndActivate(definition: DashboardModuleDefinition): Promise<boolean> {
+    const existing = this.loadedModules.get(definition.id);
+    if (existing) {
+      existing.activate(this.getActivationContext());
+      return false;
+    }
+
+    const module = await definition.create();
+    try {
+      if (this.bridge) module.attachDashboard(this.bridge);
+      module.activate(this.getActivationContext());
+      this.loadedModules.set(definition.id, module);
+      return true;
+    } catch (error) {
+      module.dispose();
+      throw error;
+    }
+  }
+
+  private getActivationContext(): { issues: readonly DashboardIssue[]; diagnostics: import('../issueDiagnostics').IssueDiagnosticSnapshot } {
+    const summary = this.bridge?.getRefreshSummary();
+    return {
+      issues: summary?.issues ?? [],
+      diagnostics: this.issueDiagnostics.getServerSnapshot()
+    };
+  }
+
+  private unloadModule(moduleId: string): void {
+    const module = this.loadedModules.get(moduleId);
+    this.loadedModules.delete(moduleId);
+    module?.dispose();
+  }
+
+  private async confirmModuleChange(
+    definition: DashboardModuleDefinition,
+    enabled: boolean
+  ): Promise<boolean> {
+    const module = this.loadedModules.get(definition.id);
+    if (!enabled && module) return module.confirmDisable();
+
+    const spanish = this.bridge?.getLanguage() === 'es';
+    const action = enabled
+      ? (spanish ? 'Activar' : 'Enable')
+      : (spanish ? 'Desactivar' : 'Disable');
+    const message = enabled
+      ? (spanish
+          ? `¿Quieres activar el módulo ${definition.displayName}? Sus vistas y funciones se cargarán al confirmar.`
+          : `Do you want to enable the ${definition.displayName} module? Its views and features will be loaded after confirmation.`)
+      : (spanish
+          ? `¿Quieres desactivar el módulo ${definition.displayName}? Sus vistas y funciones dejarán de estar disponibles.`
+          : `Do you want to disable the ${definition.displayName} module? Its views and features will no longer be available.`);
+    const selected = await vscode.window.showWarningMessage(message, { modal: true }, action);
+    return selected === action;
+  }
+
+  private reportModuleError(definition: DashboardModuleDefinition, error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    const message = this.bridge?.getLanguage() === 'es'
+      ? `No se pudo cambiar el estado del módulo ${definition.displayName}: ${detail}`
+      : `The state of the ${definition.displayName} module could not be changed: ${detail}`;
+    this.bridge?.postStatus('error', message);
+    void vscode.window.showErrorMessage(message);
   }
 
   async handleWebviewMessage(message: ModuleWebviewMessage): Promise<boolean> {
-    const owner = this.moduleList.find(module => module.ownsMessage(message.type));
+    const owner = [...this.loadedModules.values()].find(module => module.ownsMessage(message.type));
     if (!owner) return false;
     if (!isDashboardModuleEnabled(owner.id)) {
       this.bridge?.postStatus(
@@ -114,21 +265,21 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
     connectionDraftDirty: boolean
   ): Promise<Record<string, unknown>> {
     const state = getDashboardModuleState();
+    const result: Record<string, unknown> = Object.fromEntries(
+      this.definitions.map(definition => [`${definition.id}ModuleEnabled`, state[definition.id]])
+    );
     const contributions = await Promise.all(
-      this.moduleList.map(module => module.getConfigurationState(
-        folder,
-        form,
-        connectionDraftDirty,
-        state[module.id]
+      [...this.loadedModules.values()].map(module => module.getConfigurationState(
+        folder, form, connectionDraftDirty, Boolean(state[module.id])
       ))
     );
-    return Object.assign({}, ...contributions);
+    return Object.assign(result, ...contributions);
   }
 
   async resetConnectionScopedConfiguration(folder: vscode.WorkspaceFolder): Promise<void> {
-    await Promise.all(
-      this.moduleList.map(module => module.resetConnectionScopedConfiguration(folder))
-    );
+    await Promise.all([...this.loadedModules.values()].map(
+      module => module.resetConnectionScopedConfiguration(folder)
+    ));
   }
 
   async saveConfiguration(
@@ -138,13 +289,10 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   ): Promise<Record<string, unknown>> {
     const state = getDashboardModuleState();
     const result: Record<string, unknown> = {};
-    for (const module of this.moduleList) {
-      Object.assign(
-        result,
-        state[module.id]
-          ? await module.saveConfiguration(folder, message, saveContext)
-          : await module.getConfigurationState(folder, undefined, false, false)
-      );
+    for (const module of this.loadedModules.values()) {
+      Object.assign(result, state[module.id]
+        ? await module.saveConfiguration(folder, message, saveContext)
+        : await module.getConfigurationState(folder, undefined, false, false));
     }
     return result;
   }
@@ -156,13 +304,9 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   ): number {
     const state = getDashboardModuleState();
     let confirmations = 0;
-    for (const module of this.moduleList) {
+    for (const module of this.loadedModules.values()) {
       if (!state[module.id] || !module.applyServerSnapshot) continue;
-      confirmations += module.applyServerSnapshot(
-        issues,
-        diagnostics,
-        confirmLocalRemediation
-      );
+      confirmations += module.applyServerSnapshot(issues, diagnostics, confirmLocalRemediation);
     }
     return confirmations;
   }
@@ -171,7 +315,7 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
     const state = getDashboardModuleState();
     const states = new Map<string, import('../issueLocalState').IssueLocalRemediationState>();
     const ranges = new Map<string, vscode.Range>();
-    for (const module of this.moduleList) {
+    for (const module of this.loadedModules.values()) {
       if (!state[module.id] || !module.getIssueOverlay) continue;
       const overlay = module.getIssueOverlay();
       for (const [key, value] of overlay.states) states.set(key, value);
@@ -181,21 +325,21 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   }
 
   clearWorkspaceState(): void {
-    for (const module of this.moduleList) module.clearWorkspaceState();
+    for (const module of this.loadedModules.values()) module.clearWorkspaceState();
   }
 
   refreshLanguage(): void {
-    for (const module of this.moduleList) module.refreshLanguage();
+    for (const module of this.loadedModules.values()) module.refreshLanguage();
   }
 
   onDashboardReady(): void {
-    for (const module of this.moduleList) {
+    for (const module of this.loadedModules.values()) {
       if (isDashboardModuleEnabled(module.id)) module.onDashboardReady();
     }
   }
 
   onDashboardVisible(): void {
-    for (const module of this.moduleList) {
+    for (const module of this.loadedModules.values()) {
       if (isDashboardModuleEnabled(module.id)) module.onDashboardVisible();
     }
   }
@@ -205,28 +349,23 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   ): Promise<Record<string, unknown>> {
     const state = getDashboardModuleState();
     const result: Record<string, unknown> = {};
-    for (const module of this.moduleList) {
-      if (!state[module.id]) continue;
-      Object.assign(result, await module.collectDiagnosticsContribution(folder));
+    for (const module of this.loadedModules.values()) {
+      if (state[module.id]) Object.assign(result, await module.collectDiagnosticsContribution(folder));
     }
     return result;
   }
 
   dispose(): void {
-    for (const module of this.moduleList) module.dispose();
+    for (const module of this.loadedModules.values()) module.dispose();
+    this.loadedModules.clear();
     while (this.disposables.length > 0) this.disposables.pop()?.dispose();
   }
 
-  private resolveModule(moduleId: string): DashboardModule | undefined {
-    return this.moduleList.find(module => module.id === moduleId);
-  }
-
   private async executeCapability(capability: DashboardModuleCapability): Promise<void> {
-    for (const module of this.moduleList) {
+    for (const module of this.loadedModules.values()) {
       if (!isDashboardModuleEnabled(module.id) || !module.hasCapability(capability)) continue;
       if (await module.executeCapability(capability)) return;
     }
-
     await vscode.window.showInformationMessage(
       this.bridge?.getLanguage() === 'es'
         ? 'No hay ningún módulo activo que proporcione esta capacidad. Activa el módulo correspondiente en Configuración > Módulos.'
