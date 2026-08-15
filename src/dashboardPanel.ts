@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   DASHBOARD_CONFIGURATION_KEYS,
@@ -6,23 +5,17 @@ import {
   DASHBOARD_PANEL_VIEW_TYPE
 } from './constants';
 import {
-  LIVE_REMEDIATION_CONFIGURATION_KEY,
-  SONARQUBE_FOR_IDE_EXTENSION_ID
-} from './liveRemediation';
-import {
   DashboardLanguage,
   getDashboardLanguage,
-  localizeAnalysisState,
   localizeRuntimeText,
   normalizeDashboardLanguage,
   setDashboardLanguage
 } from './i18n';
 import { getWebviewLocalizationBundle } from './i18n/runtimeWebview';
-import {
-  getDashboardModuleState,
-  isDashboardModuleEnabled,
-  setDashboardModuleEnabled,
-  type DashboardModuleId
+import type {
+  DashboardModuleBridge,
+  DashboardModulesRuntime,
+  ModuleWebviewMessage
 } from './modules';
 import {
   getFolderConfig,
@@ -49,35 +42,10 @@ import {
   ExtensionDiagnosticsSnapshot,
   formatDiagnosticsReport
 } from './dashboard/diagnostics';
-import {
-  AnalysisService,
-  emptyAnalysisState,
-  compareAnalysisBaselines,
-  createAnalysisBaselineSnapshot,
-  createBuiltinPipelineTemplates,
-  createDefaultPipelineSteps,
-  createRunningPipelineHistoryEntry,
-  detectProjectActions,
-  mergePipelineTemplates,
-  normalizeRequestedPipelineSteps,
-  parsePipelineTemplateYaml,
-  PipelineTemplateStore,
-  serializePipelineTemplateYaml
-} from './pipeline';
-import type {
-  AnalysisBaselineSnapshot,
-  AnalysisExecutionOptions,
-  AnalysisRequest,
-  AnalysisState,
-  PipelineRunHistoryEntry,
-  PipelineTemplate
-} from './pipeline';
 import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { DuplicationComparisonPanel } from './dashboard/duplicationComparisonPanel';
 import {
-  checkAnalysisPermission,
-  fetchAnalysisBaselineData,
   fetchHotspotDetail,
   fetchIssueLifecycle,
   fetchRuleDetail,
@@ -89,27 +57,17 @@ import {
   validateSonarToken
 } from './sonarClient';
 import {
-  AnalysisPermissionStatus,
   DashboardHotspot,
   DashboardIssue,
   FolderSonarConfig,
   IssueMutationRequest,
   RefreshSummary,
-  ScannerMode,
   SonarCreationCapabilities,
   SonarCreatableComponentKind
 } from './types';
 
-function firstNonEmpty(...values: Array<string | undefined>): string {
-  for (const value of values) {
-    if (value) {
-      return value;
-    }
-  }
-  return '';
-}
 
-export class DashboardPanel {
+export class DashboardPanel implements DashboardModuleBridge {
   private panel: vscode.WebviewPanel | undefined;
   private selectedFolderUri: string | undefined;
   private projectLoadController: AbortController | undefined;
@@ -123,7 +81,6 @@ export class DashboardPanel {
   private pendingRuleIssue: DashboardIssue | undefined;
   private managedIssue: DashboardIssue | undefined;
   private pendingHotspotDetail: DashboardHotspot | undefined;
-  private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private readonly dirtyConnectionFolders = new Set<string>();
   private readonly validatedConnections = new Map<string, string>();
   private readonly creationCapabilities = new Map<
@@ -138,12 +95,6 @@ export class DashboardPanel {
   private readonly loadingEmitter = new vscode.EventEmitter<boolean>();
   private readonly pageEmitter = new vscode.EventEmitter<DashboardPage>();
   private readonly languageEmitter = new vscode.EventEmitter<DashboardLanguage>();
-  private readonly analysisEmitter = new vscode.EventEmitter<AnalysisState>();
-  private pipelineRuntime: {
-    analysisService: AnalysisService;
-    templateStore: PipelineTemplateStore;
-  } | undefined;
-  private pendingHistoryEntryId = '';
   private readonly latestDiagnostics = new Map<string, ExtensionDiagnosticsSnapshot>();
   private readonly duplicationComparison: DuplicationComparisonPanel;
 
@@ -151,18 +102,17 @@ export class DashboardPanel {
   readonly onDidChangeLoading = this.loadingEmitter.event;
   readonly onDidChangePage = this.pageEmitter.event;
   readonly onDidChangeLanguage = this.languageEmitter.event;
-  readonly onDidChangeAnalysis = this.analysisEmitter.event;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    readonly context: vscode.ExtensionContext,
     private readonly refreshCallback: RefreshCallback,
     private readonly clearCallback: ClearCallback,
     private readonly coverageDecorations: CoverageDecorationManager,
     private readonly flowController: IssueFlowController,
+    private readonly modules: DashboardModulesRuntime,
     private readonly scopeCallback: (scope: 'overall' | 'newCode') => void
   ) {
     this.duplicationComparison = new DuplicationComparisonPanel(coverageDecorations);
-    this.syncPipelineRuntime();
   }
 
   async show(page: DashboardPage = this.currentPage): Promise<void> {
@@ -201,7 +151,6 @@ export class DashboardPanel {
     if (this.savingConfig) {
       return;
     }
-    this.analysisPermissions.clear();
     await this.sendState();
   }
 
@@ -239,32 +188,11 @@ export class DashboardPanel {
     return this.currentPage;
   }
 
-  getAnalysisState(): AnalysisState {
-    return localizeAnalysisState(this.pipelineAnalysisState(), this.language);
-  }
 
   async refreshModuleState(): Promise<void> {
-    this.syncPipelineRuntime();
     await this.sendState();
   }
 
-  async getPipelineExecutions(): Promise<PipelineRunHistoryEntry[]> {
-    if (!isDashboardModuleEnabled('pipeline')) return [];
-    const folder = this.getWorkspaceFolder(this.selectedFolderUri) ??
-      vscode.workspace.workspaceFolders?.[0];
-    if (!folder) return [];
-    try {
-      return await this.pipelineHistoryEntries(folder);
-    } catch {
-      return [];
-    }
-  }
-
-  async showPipelineExecution(executionId: string): Promise<void> {
-    if (!isDashboardModuleEnabled('pipeline')) return;
-    this.pendingHistoryEntryId = executionId;
-    await this.show('history');
-  }
 
   async showPage(page: DashboardPage): Promise<void> {
     await this.show(page);
@@ -274,33 +202,6 @@ export class DashboardPanel {
     await this.refreshFromPanel();
   }
 
-  async analyze(): Promise<void> {
-    if (!isDashboardModuleEnabled('pipeline')) {
-      await vscode.window.showInformationMessage(
-        localizeRuntimeText(
-          'El módulo Pipeline está desactivado. Actívalo en Configuración > Módulos para analizar el repositorio.',
-          this.language
-        )
-      );
-      await this.showPage('configuration');
-      return;
-    }
-    const confirmed = await vscode.window.showWarningMessage(
-      localizeRuntimeText(
-        'El análisis puede ejecutar herramientas, compilaciones y scripts del repositorio. ¿Quieres continuar?',
-        this.language
-      ),
-      { modal: true },
-      localizeRuntimeText('Analizar', this.language)
-    );
-    if (confirmed) {
-      await this.analyzeRepository(this.selectedFolderUri);
-    }
-  }
-
-  cancelAnalysis(): void {
-    this.pipelineRuntime?.analysisService.cancel();
-  }
 
   async showQualityGate(): Promise<void> {
     await this.show('data');
@@ -340,7 +241,7 @@ export class DashboardPanel {
     }
   }
 
-  private navigate(page: DashboardPage): void {
+  navigate(page: DashboardPage): void {
     this.currentPage = page;
     this.postMessage({ type: 'navigate', page });
     this.pageEmitter.fire(page);
@@ -348,7 +249,6 @@ export class DashboardPanel {
 
   dispose(): void {
     this.projectLoadController?.abort();
-    this.deactivatePipelineRuntime();
     this.duplicationComparison.dispose();
     this.disposePanelListeners();
     this.panel?.dispose();
@@ -357,7 +257,6 @@ export class DashboardPanel {
     this.loadingEmitter.dispose();
     this.pageEmitter.dispose();
     this.languageEmitter.dispose();
-    this.analysisEmitter.dispose();
   }
 
   private attachPanel(panel: vscode.WebviewPanel): void {
@@ -402,10 +301,7 @@ export class DashboardPanel {
         if (event.webviewPanel.visible) {
           this.runBackgroundTask(this.sendState());
           this.setRefreshSummary(this.lastSummary);
-          this.postMessage({
-            type: 'analysisState',
-            state: localizeAnalysisState(this.pipelineAnalysisState(), this.language)
-          });
+          this.modules.onDashboardVisible();
         }
       })
     );
@@ -418,17 +314,9 @@ export class DashboardPanel {
   }
 
   private async handleMessage(message: DashboardWebviewMessage): Promise<void> {
-    if (this.isPipelineMessage(message.type) && !isDashboardModuleEnabled('pipeline')) {
-      this.postStatus(
-        'error',
-        'El módulo Pipeline está desactivado. Actívalo en Configuración > Módulos para usar esta función.'
-      );
-      return;
-    }
-
     if (await this.handleConfigurationMessage(message)) return;
     if (await this.handleSonarDataMessage(message)) return;
-    if (await this.handlePipelineWebviewMessage(message)) return;
+    if (await this.modules.handleWebviewMessage(message as ModuleWebviewMessage)) return;
     await this.handleUtilityMessage(message);
   }
 
@@ -442,10 +330,7 @@ export class DashboardPanel {
         await this.sendState();
         this.setRefreshSummary(this.lastSummary);
         this.postMessage({ type: 'loading', loading: this.loading });
-        this.postMessage({
-          type: 'analysisState',
-          state: localizeAnalysisState(this.pipelineAnalysisState(), this.language)
-        });
+        this.modules.onDashboardReady();
         this.navigate(this.currentPage);
         this.postPendingIssueDetail();
         this.postPendingRuleDetail();
@@ -465,15 +350,6 @@ export class DashboardPanel {
       case 'setModule':
         await this.handleSetModule(message);
         return true;
-      case 'setLiveRemediation':
-        await vscode.workspace
-          .getConfiguration(DASHBOARD_CONFIGURATION_SECTION)
-          .update(
-            LIVE_REMEDIATION_CONFIGURATION_KEY,
-            message.liveRemediationEnabled !== false,
-            vscode.ConfigurationTarget.Global
-          );
-        return true;
       case 'scopeChanged':
         if (message.scope) this.scopeCallback(message.scope);
         return true;
@@ -487,21 +363,13 @@ export class DashboardPanel {
 
   private async handleSetModule(message: DashboardWebviewMessage): Promise<void> {
     if (!message.moduleId) return;
-
-    const requestedEnabled = message.moduleEnabled !== false;
-    const currentlyEnabled = isDashboardModuleEnabled(message.moduleId);
-    const shouldConfirmDisable = currentlyEnabled && !requestedEnabled;
-    if (shouldConfirmDisable && !(await this.confirmModuleDisable(message.moduleId))) {
+    const changed = await this.modules.setEnabled(
+      message.moduleId,
+      message.moduleEnabled !== false
+    );
+    if (!changed) {
       await this.sendState();
       return;
-    }
-
-    const moduleState = await setDashboardModuleEnabled(
-      message.moduleId,
-      requestedEnabled
-    );
-    if (message.moduleId === 'pipeline' && !moduleState.pipeline) {
-      this.deactivatePipelineRuntime();
     }
     await this.sendState();
   }
@@ -540,51 +408,11 @@ export class DashboardPanel {
       case 'save':
         await this.save(message);
         return true;
-      case 'saveAnalysisScope':
-        await this.saveAnalysisScope(message);
-        return true;
       default:
         return false;
     }
   }
 
-  private async handlePipelineWebviewMessage(
-    message: DashboardWebviewMessage
-  ): Promise<boolean> {
-    switch (message.type) {
-      case 'savePipeline':
-        await this.savePipeline(message);
-        return true;
-      case 'savePipelineTemplate':
-        await this.savePipelineTemplate(message);
-        return true;
-      case 'deletePipelineTemplate':
-        await this.deletePipelineTemplate(message);
-        return true;
-      case 'exportPipelineTemplate':
-        await this.exportPipelineTemplate(message);
-        return true;
-      case 'importPipelineTemplate':
-        await this.importPipelineTemplate(message);
-        return true;
-      case 'loadPipelineHistory':
-        await this.sendPipelineHistory(message.folderUri);
-        return true;
-      case 'clearPipelineHistory':
-        await this.clearPipelineHistory(message.folderUri);
-        return true;
-      case 'analyze':
-        await this.analyzeRepository(message.folderUri, {
-          steps: normalizeRequestedPipelineSteps(message.analysisSteps)
-        });
-        return true;
-      case 'cancelAnalysis':
-        this.pipelineRuntime?.analysisService.cancel();
-        return true;
-      default:
-        return false;
-    }
-  }
 
   private async handleUtilityMessage(
     message: DashboardWebviewMessage
@@ -619,98 +447,26 @@ export class DashboardPanel {
     }
   }
 
-  private async confirmModuleDisable(
-    moduleId: DashboardModuleId
-  ): Promise<boolean> {
-    const confirmLabel = localizeRuntimeText('Desactivar', this.language);
-    let confirmationText: string;
 
-    if (moduleId === 'pipeline') {
-      confirmationText = this.pipelineRuntime?.analysisService.isRunning()
-        ? 'Hay un análisis de Pipeline en ejecución. Si desactivas el módulo Pipeline, el análisis se cancelará y sus vistas y funciones dejarán de estar disponibles. ¿Quieres continuar?'
-        : '¿Seguro que quieres desactivar el módulo Pipeline? Sus vistas y funciones dejarán de estar disponibles hasta que vuelvas a activarlo.';
-    } else {
-      confirmationText =
-        '¿Seguro que quieres desactivar el módulo Live Remediation? Se detendrá el seguimiento local y se ocultará su vista. Los diagnósticos normales de SonarQube seguirán funcionando.';
-    }
 
-    const selected = await vscode.window.showWarningMessage(
-      localizeRuntimeText(confirmationText, this.language),
-      { modal: true },
-      confirmLabel
-    );
-    return selected === confirmLabel;
+
+  getSelectedFolderUri(): string | undefined {
+    return this.selectedFolderUri;
   }
 
-  private syncPipelineRuntime(
-    enabled = isDashboardModuleEnabled('pipeline')
-  ): void {
-    if (!enabled) {
-      this.deactivatePipelineRuntime();
-      return;
-    }
-    if (this.pipelineRuntime) return;
-
-    const analysisService = new AnalysisService(this.context, state => {
-      const localizedState = localizeAnalysisState(state, this.language);
-      this.postMessage({
-        type: 'analysisState',
-        state: localizedState
-      });
-      this.analysisEmitter.fire(localizedState);
-    });
-    this.pipelineRuntime = {
-      analysisService,
-      templateStore: new PipelineTemplateStore(this.context)
-    };
+  isConnectionDraftDirty(folderUri: string): boolean {
+    return this.dirtyConnectionFolders.has(folderUri);
   }
 
-  private deactivatePipelineRuntime(): void {
-    if (!this.pipelineRuntime) return;
-    this.pipelineRuntime.analysisService.cancel();
-    this.pipelineRuntime.analysisService.dispose();
-    this.pipelineRuntime = undefined;
-
-    const state = localizeAnalysisState(emptyAnalysisState(), this.language);
-    this.postMessage({ type: 'analysisState', state });
-    this.analysisEmitter.fire(state);
+  async refreshFromModule(source: 'sync' | 'analysis'): Promise<RefreshSummary> {
+    return this.refreshCallback(source);
   }
 
-  private pipelineAnalysisState(): AnalysisState {
-    return this.pipelineRuntime?.analysisService.getState() ?? emptyAnalysisState();
+  async requestStateRefresh(): Promise<void> {
+    await this.sendState();
   }
 
-  private get analysisService(): AnalysisService {
-    this.syncPipelineRuntime();
-    if (!this.pipelineRuntime) {
-      throw new Error('El módulo Pipeline está desactivado.');
-    }
-    return this.pipelineRuntime.analysisService;
-  }
-
-  private get pipelineTemplateStore(): PipelineTemplateStore {
-    this.syncPipelineRuntime();
-    if (!this.pipelineRuntime) {
-      throw new Error('El módulo Pipeline está desactivado.');
-    }
-    return this.pipelineRuntime.templateStore;
-  }
-
-  private isPipelineMessage(type: string | undefined): boolean {
-    return type !== undefined && [
-      'savePipeline',
-      'savePipelineTemplate',
-      'deletePipelineTemplate',
-      'exportPipelineTemplate',
-      'importPipelineTemplate',
-      'loadPipelineHistory',
-      'clearPipelineHistory',
-      'analyze',
-      'cancelAnalysis'
-    ].includes(type);
-  }
-
-  private getWorkspaceFolder(folderUri?: string): vscode.WorkspaceFolder | undefined {
+  getWorkspaceFolder(folderUri?: string): vscode.WorkspaceFolder | undefined {
     if (!folderUri) {
       return undefined;
     }
@@ -719,23 +475,30 @@ export class DashboardPanel {
     return folders.find(folder => folder.uri.toString() === folderUri);
   }
 
-  private sonarIdeIntegrationState(): { installed: boolean; active: boolean } {
-    const extension = vscode.extensions.getExtension(SONARQUBE_FOR_IDE_EXTENSION_ID);
-    return {
-      installed: Boolean(extension),
-      active: extension?.isActive === true
-    };
-  }
 
   private async sendState(): Promise<void> {
-    if (!this.panel) {
-      return;
-    }
+    if (!this.panel) return;
 
     const folders = vscode.workspace.workspaceFolders ?? [];
-    const moduleState = getDashboardModuleState();
-    this.syncPipelineRuntime(moduleState.pipeline);
     await this.refreshConfiguredFolderCount(folders);
+    const dashboardConfiguration = vscode.workspace.getConfiguration(
+      DASHBOARD_CONFIGURATION_SECTION
+    );
+    const notificationState = {
+      notificationsEnabled: dashboardConfiguration.get<boolean>(
+        DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled,
+        true
+      ),
+      significantIncreasePercent: dashboardConfiguration.get<number>(
+        DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent,
+        20
+      ),
+      significantIncreaseMinimum: dashboardConfiguration.get<number>(
+        DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum,
+        5
+      )
+    };
+
     if (folders.length === 0) {
       this.postMessage({
         type: 'state',
@@ -750,25 +513,8 @@ export class DashboardPanel {
           branch: '',
           baseDir: '',
           hasToken: false,
-          scannerMode: 'auto',
-          analysisInclusions: '',
-          analysisExclusions: '',
-          buildCommand: '',
-          testCommand: '',
-          detectedBuildCommand: '',
-          detectedTestCommand: '',
-          detectedIntegrations: [],
-          pipelineTemplates: [],
-          customScannerCommand: '',
-          preAnalysisCommands: '',
-          postAnalysisCommands: '',
-          pipelineModuleEnabled: moduleState.pipeline,
-          liveRemediationModuleEnabled: moduleState.liveRemediation,
-          notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
-          liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(LIVE_REMEDIATION_CONFIGURATION_KEY, true),
-          sonarIdeIntegration: this.sonarIdeIntegrationState(),
-          significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
-          significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
+          ...(await this.modules.getConfigurationState(undefined, undefined, false)),
+          ...notificationState
         }
       });
       return;
@@ -777,38 +523,21 @@ export class DashboardPanel {
     const activeFolder = vscode.window.activeTextEditor
       ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
       : undefined;
-
     const selectedFolder =
       this.getWorkspaceFolder(this.selectedFolderUri) ?? activeFolder ?? folders[0];
     const selectedFolderUri = selectedFolder.uri.toString();
     this.selectedFolderUri = selectedFolderUri;
 
     const config = await getFolderFormConfig(this.context, selectedFolder);
-    const configuredRoot = this.analysisRoot(selectedFolder, config.baseDir) ?? selectedFolder.uri.fsPath;
-    const detectedProjectActions = moduleState.pipeline
-      ? await detectProjectActions(configuredRoot)
-      : { integrations: [] };
-    const pipelineTemplates = moduleState.pipeline
-      ? mergePipelineTemplates(
-          createBuiltinPipelineTemplates(
-            detectedProjectActions,
-            firstNonEmpty(config.buildCommand, detectedProjectActions.buildCommand),
-            firstNonEmpty(config.testCommand, detectedProjectActions.testCommand)
-          ),
-          await this.pipelineTemplateStore.list(selectedFolder.uri.toString())
-        )
-      : [];
-    const connectionDraftDirty = this.dirtyConnectionFolders.has(
-      selectedFolderUri
+    const connectionDraftDirty = this.dirtyConnectionFolders.has(selectedFolderUri);
+    const creationCapabilities = connectionDraftDirty
+      ? this.emptyCreationCapabilities()
+      : await this.creationCapabilitiesForFolder(selectedFolder, config);
+    const moduleConfig = await this.modules.getConfigurationState(
+      selectedFolder,
+      config,
+      connectionDraftDirty
     );
-    let analysisPermission: AnalysisPermissionStatus = 'unknown';
-    let creationCapabilities = this.emptyCreationCapabilities();
-    if (!connectionDraftDirty) {
-      [analysisPermission, creationCapabilities] = await Promise.all([
-        this.analysisPermission(selectedFolder),
-        this.creationCapabilitiesForFolder(selectedFolder, config)
-      ]);
-    }
 
     this.postMessage({
       type: 'state',
@@ -816,30 +545,18 @@ export class DashboardPanel {
         name: folder.name,
         uri: folder.uri.toString()
       })),
-      selectedFolderUri: this.selectedFolderUri,
+      selectedFolderUri,
       workspaceTrusted: vscode.workspace.isTrusted,
       language: this.language,
       connectionDraftDirty,
       creationCapabilities,
       config: {
         ...config,
-        detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
-        detectedTestCommand: detectedProjectActions.testCommand ?? '',
-        detectedIntegrations: detectedProjectActions.integrations,
-        pipelineTemplates,
         projectKey: connectionDraftDirty ? '' : config.projectKey,
         projectName: connectionDraftDirty ? '' : config.projectName,
         hasToken: connectionDraftDirty ? false : config.hasToken,
-        analysisInclusions: connectionDraftDirty ? '' : config.analysisInclusions,
-        analysisExclusions: connectionDraftDirty ? '' : config.analysisExclusions,
-        analysisPermission,
-        pipelineModuleEnabled: moduleState.pipeline,
-        liveRemediationModuleEnabled: moduleState.liveRemediation,
-        notificationsEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, true),
-        liveRemediationEnabled: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<boolean>(LIVE_REMEDIATION_CONFIGURATION_KEY, true),
-        sonarIdeIntegration: this.sonarIdeIntegrationState(),
-        significantIncreasePercent: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, 20),
-        significantIncreaseMinimum: vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION).get<number>(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, 5)
+        ...moduleConfig,
+        ...notificationState
       }
     });
     if (!connectionDraftDirty) {
@@ -881,7 +598,7 @@ export class DashboardPanel {
     this.projectLoadController = new AbortController();
     this.dirtyConnectionFolders.add(folderUri);
     this.validatedConnections.delete(folderUri);
-    await this.persistAnalysisScope(folder, '', '');
+    await this.modules.resetConnectionScopedConfiguration(folder);
     await this.refreshConfiguredFolderCount(
       vscode.workspace.workspaceFolders ?? []
     );
@@ -1083,363 +800,12 @@ export class DashboardPanel {
     );
   }
 
-  private async persistAnalysisScope(
-    folder: vscode.WorkspaceFolder,
-    analysisInclusions: string,
-    analysisExclusions: string
-  ): Promise<void> {
-    const current = await getFolderFormConfig(this.context, folder);
-    await saveFolderConfig(this.context, folder, {
-      serverUrl: current.serverUrl,
-      projectKey: current.projectKey,
-      projectName: current.projectName,
-      branch: current.branch,
-      baseDir: current.baseDir,
-      scannerMode: current.scannerMode,
-      analysisInclusions,
-      analysisExclusions,
-      buildCommand: current.buildCommand,
-      testCommand: current.testCommand,
-      customScannerCommand: current.customScannerCommand,
-      preAnalysisCommands: current.preAnalysisCommands,
-      postAnalysisCommands: current.postAnalysisCommands
-    });
-  }
-
-  private async saveAnalysisScope(
-    message: DashboardWebviewMessage
-  ): Promise<void> {
-    const folder = this.getWorkspaceFolder(message.folderUri);
-    if (!folder) {
-      this.postMessage({
-        type: 'analysisScopeSaveError',
-        message: 'Abre una carpeta antes de guardar las inclusiones y exclusiones.'
-      });
-      return;
-    }
-
-    const current = await getFolderFormConfig(this.context, folder);
-    if (
-      !current.projectKey ||
-      this.dirtyConnectionFolders.has(folder.uri.toString())
-    ) {
-      this.postMessage({
-        type: 'analysisScopeSaveError',
-        message: 'Sincroniza primero un proyecto antes de guardar las inclusiones y exclusiones.'
-      });
-      return;
-    }
-
-    const analysisInclusions = (message.analysisInclusions ?? '').trim();
-    const analysisExclusions = (message.analysisExclusions ?? '').trim();
-
-    try {
-      await this.persistAnalysisScope(
-        folder,
-        analysisInclusions,
-        analysisExclusions
-      );
-      this.postMessage({
-        type: 'analysisScopeSaved',
-        analysisInclusions,
-        analysisExclusions
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'analysisScopeSaveError',
-        message: `No se pudieron guardar las inclusiones y exclusiones: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async savePipeline(message: DashboardWebviewMessage): Promise<void> {
-    const folder = this.getWorkspaceFolder(message.folderUri);
-    if (!folder) {
-      this.postMessage({
-        type: 'pipelineSaveError',
-        message: 'Abre una carpeta antes de guardar el pipeline.'
-      });
-      return;
-    }
-
-    try {
-      const current = await getFolderFormConfig(this.context, folder);
-      await saveFolderConfig(this.context, folder, {
-        serverUrl: current.serverUrl,
-        projectKey: current.projectKey,
-        projectName: current.projectName,
-        branch: current.branch,
-        baseDir: current.baseDir,
-        scannerMode: current.scannerMode,
-        analysisInclusions: current.analysisInclusions,
-        analysisExclusions: current.analysisExclusions,
-        buildCommand: message.buildCommand ?? '',
-        testCommand: message.testCommand ?? '',
-        customScannerCommand: current.customScannerCommand,
-        preAnalysisCommands: message.preAnalysisCommands ?? '',
-        postAnalysisCommands: message.postAnalysisCommands ?? ''
-      });
-
-      const configuredRoot = this.analysisRoot(folder, current.baseDir) ??
-        folder.uri.fsPath;
-      const detectedProjectActions = await detectProjectActions(configuredRoot);
-      const customTemplates = await this.pipelineTemplateStore.list(folder.uri.toString());
-      const pipelineTemplates = mergePipelineTemplates(
-        createBuiltinPipelineTemplates(
-          detectedProjectActions,
-          message.buildCommand ?? detectedProjectActions.buildCommand ?? '',
-          message.testCommand ?? detectedProjectActions.testCommand ?? ''
-        ),
-        customTemplates
-      );
-      this.postMessage({
-        type: 'pipelineSaved',
-        config: {
-          buildCommand: message.buildCommand ?? '',
-          testCommand: message.testCommand ?? '',
-          detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
-          detectedTestCommand: detectedProjectActions.testCommand ?? '',
-          detectedIntegrations: detectedProjectActions.integrations,
-          pipelineTemplates,
-          preAnalysisCommands: message.preAnalysisCommands ?? '',
-          postAnalysisCommands: message.postAnalysisCommands ?? ''
-        }
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'pipelineSaveError',
-        message: `No se pudo guardar el pipeline: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async pipelineTemplatesForFolder(
-    folder: vscode.WorkspaceFolder
-  ): Promise<PipelineTemplate[]> {
-    const config = await getFolderFormConfig(this.context, folder);
-    const rootPath = this.analysisRoot(folder, config.baseDir) ?? folder.uri.fsPath;
-    const actions = await detectProjectActions(rootPath);
-    const builtinTemplates = createBuiltinPipelineTemplates(
-      actions,
-      firstNonEmpty(config.buildCommand, actions.buildCommand),
-      firstNonEmpty(config.testCommand, actions.testCommand)
-    );
-    const savedTemplates = await this.pipelineTemplateStore.list(
-      folder.uri.toString()
-    );
-    return mergePipelineTemplates(builtinTemplates, savedTemplates);
-  }
-
-  private async savePipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
-    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
-    const name = message.templateName?.trim() ?? '';
-    if (!folder || !name || !message.analysisSteps?.length) {
-      this.postMessage({
-        type: 'pipelineTemplateError',
-        message: 'Indica un nombre y al menos un paso para guardar la plantilla.'
-      });
-      return;
-    }
-    try {
-      const templateId = firstNonEmpty(
-        message.templateId?.trim(),
-        `custom-${Date.now().toString(36)}`
-      );
-      const builtin = templateId.startsWith('builtin-');
-      const defaultDescription = builtin
-        ? 'Plantilla integrada personalizada para este workspace.'
-        : 'Plantilla personalizada del workspace.';
-      await this.pipelineTemplateStore.save(folder.uri.toString(), {
-        id: templateId,
-        name,
-        description: firstNonEmpty(
-          message.templateDescription?.trim(),
-          defaultDescription
-        ),
-        builtin,
-        steps: message.analysisSteps
-      });
-      this.postMessage({
-        type: 'pipelineTemplatesUpdated',
-        templates: await this.pipelineTemplatesForFolder(folder),
-        templateId,
-        message: 'Plantilla guardada.'
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'pipelineTemplateError',
-        message: `No se pudo guardar la plantilla: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async deletePipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
-    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
-    if (!folder || !message.templateId) return;
-
-    try {
-      const selected = (await this.pipelineTemplatesForFolder(folder))
-        .find(template => template.id === message.templateId);
-      if (!selected) return;
-
-      const resetBuiltin = selected.builtin === true;
-      const confirmationAction = localizeRuntimeText(
-        resetBuiltin ? 'Restablecer' : 'Eliminar',
-        this.language
-      );
-      const confirmationQuestion = localizeRuntimeText(
-        resetBuiltin
-          ? '¿Restablecer la plantilla seleccionada a su configuración integrada?'
-          : '¿Eliminar la plantilla seleccionada? Esta acción no se puede deshacer.',
-        this.language
-      );
-      const confirmation = await vscode.window.showWarningMessage(
-        `${confirmationQuestion}
-
-${selected.name}`,
-        { modal: true },
-        confirmationAction
-      );
-      if (confirmation !== confirmationAction) {
-        this.postMessage({
-          type: 'pipelineTemplateActionCancelled',
-          templateId: selected.id
-        });
-        return;
-      }
-
-      await this.pipelineTemplateStore.delete(folder.uri.toString(), message.templateId);
-      this.postMessage({
-        type: 'pipelineTemplatesUpdated',
-        templates: await this.pipelineTemplatesForFolder(folder),
-        templateId: resetBuiltin ? message.templateId : '',
-        message: resetBuiltin
-          ? 'Plantilla integrada restablecida.'
-          : 'Plantilla eliminada.'
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'pipelineTemplateError',
-        message: `No se pudo eliminar la plantilla: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async exportPipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
-    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
-    if (!folder || !message.templateId) return;
-    try {
-      const template = (await this.pipelineTemplatesForFolder(folder))
-        .find(item => item.id === message.templateId);
-      if (!template) throw new Error('No se encontró la plantilla seleccionada.');
-      const target = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.joinPath(folder.uri, '.sonarqube-dashboard.yml'),
-        filters: { 'SonarQube Dashboard pipeline': ['yml', 'yaml'] },
-        saveLabel: 'Exportar pipeline'
-      });
-      if (!target) return;
-      await vscode.workspace.fs.writeFile(
-        target,
-        Buffer.from(serializePipelineTemplateYaml(template), 'utf8')
-      );
-      this.postMessage({
-        type: 'pipelineTemplatesUpdated',
-        templates: await this.pipelineTemplatesForFolder(folder),
-        message: 'Plantilla exportada.'
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'pipelineTemplateError',
-        message: `No se pudo exportar la plantilla: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async importPipelineTemplate(message: DashboardWebviewMessage): Promise<void> {
-    const folder = this.getWorkspaceFolder(message.folderUri ?? this.selectedFolderUri);
-    if (!folder) return;
-    try {
-      const selected = await vscode.window.showOpenDialog({
-        defaultUri: folder.uri,
-        canSelectMany: false,
-        filters: { 'SonarQube Dashboard pipeline': ['yml', 'yaml'] },
-        openLabel: 'Importar pipeline'
-      });
-      if (!selected?.[0]) return;
-      const bytes = await vscode.workspace.fs.readFile(selected[0]);
-      const template = parsePipelineTemplateYaml(Buffer.from(bytes).toString('utf8'));
-      await this.pipelineTemplateStore.save(folder.uri.toString(), template);
-      this.postMessage({
-        type: 'pipelineTemplatesUpdated',
-        templates: await this.pipelineTemplatesForFolder(folder),
-        templateId: template.id,
-        message: 'Plantilla importada.'
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'pipelineTemplateError',
-        message: `No se pudo importar la plantilla: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async pipelineHistoryEntries(
-    folder: vscode.WorkspaceFolder
-  ): Promise<PipelineRunHistoryEntry[]> {
-    const config = await getFolderFormConfig(this.context, folder);
-    const rootPath = this.analysisRoot(folder, config.baseDir) ?? folder.uri.fsPath;
-    const saved = await this.analysisService.listHistory(rootPath);
-    const state = this.analysisService.getState();
-    if (!state.running) return saved;
-
-    return [
-      createRunningPipelineHistoryEntry(
-        rootPath,
-        config,
-        folder.name,
-        state
-      ),
-      ...saved
-    ];
-  }
-
-  private async sendPipelineHistory(folderUri?: string): Promise<void> {
-    const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
-    if (!folder) {
-      this.postMessage({
-        type: 'pipelineHistory',
-        entries: [],
-        selectedEntryId: this.pendingHistoryEntryId
-      });
-      return;
-    }
-    try {
-      this.postMessage({
-        type: 'pipelineHistory',
-        entries: await this.pipelineHistoryEntries(folder),
-        selectedEntryId: this.pendingHistoryEntryId
-      });
-    } catch (error) {
-      this.postMessage({
-        type: 'pipelineHistoryError',
-        message: `No se pudo cargar el historial: ${this.errorMessage(error)}`
-      });
-    }
-  }
-
-  private async clearPipelineHistory(folderUri?: string): Promise<void> {
-    const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
-    if (!folder) return;
-    const config = await getFolderFormConfig(this.context, folder);
-    const rootPath = this.analysisRoot(folder, config.baseDir) ?? folder.uri.fsPath;
-    await this.analysisService.clearHistory(rootPath);
-    await this.sendPipelineHistory(folder.uri.toString());
-  }
 
   private async sendDiagnostics(folderUri?: string): Promise<void> {
     const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
     try {
-      const snapshot = await collectExtensionDiagnostics(this.context, folder);
+      const contribution = await this.modules.collectDiagnosticsContribution(folder);
+      const snapshot = await collectExtensionDiagnostics(this.context, folder, contribution);
       this.latestDiagnostics.set(folder?.uri.toString() ?? '', snapshot);
       this.postMessage({ type: 'diagnostics', snapshot });
     } catch (error) {
@@ -1454,7 +820,11 @@ ${selected.name}`,
     const folder = this.getWorkspaceFolder(folderUri ?? this.selectedFolderUri);
     const key = folder?.uri.toString() ?? '';
     const snapshot = this.latestDiagnostics.get(key) ??
-      await collectExtensionDiagnostics(this.context, folder);
+      await collectExtensionDiagnostics(
+        this.context,
+        folder,
+        await this.modules.collectDiagnosticsContribution(folder)
+      );
     this.latestDiagnostics.set(key, snapshot);
     await vscode.env.clipboard.writeText(formatDiagnosticsReport(snapshot));
     this.postMessage({ type: 'diagnosticsCopied' });
@@ -1479,15 +849,9 @@ ${selected.name}`,
     const token = (message.token ?? '').trim();
     const existingToken = await this.context.secrets.get(tokenKey(folder));
     const savedConnection = await getFolderFormConfig(this.context, folder);
-    const resetAnalysisScope =
+    const connectionChanged =
       this.dirtyConnectionFolders.has(folder.uri.toString()) ||
       savedConnection.projectKey !== projectKey;
-    const analysisInclusions = resetAnalysisScope
-      ? ''
-      : (message.analysisInclusions ?? '').trim();
-    const analysisExclusions = resetAnalysisScope
-      ? ''
-      : (message.analysisExclusions ?? '').trim();
 
     if (!this.isValidHttpUrl(serverUrl)) {
       this.postStatus('error', 'Introduce una URL válida de SonarQube.');
@@ -1504,16 +868,14 @@ ${selected.name}`,
       return;
     }
 
-    const effectiveToken = firstNonEmpty(token, existingToken);
+    const effectiveToken = token || existingToken || '';
     const requiresValidation = connectionNeedsValidation(
       savedConnection.serverUrl,
       existingToken,
       serverUrl,
       token
     );
-    const validatedConnection = this.validatedConnections.get(
-      folder.uri.toString()
-    );
+    const validatedConnection = this.validatedConnections.get(folder.uri.toString());
     if (
       requiresValidation &&
       validatedConnection !== connectionFingerprint(serverUrl, effectiveToken)
@@ -1527,54 +889,54 @@ ${selected.name}`,
 
     this.savingConfig = true;
     try {
-      const scannerMode = this.normalizeScannerMode(message.scannerMode);
-      const dashboardConfiguration = vscode.workspace.getConfiguration(DASHBOARD_CONFIGURATION_SECTION);
+      const notificationsEnabled = message.notificationsEnabled !== false;
+      const significantIncreasePercent = Math.max(
+        1,
+        Number(message.significantIncreasePercent) || 20
+      );
+      const significantIncreaseMinimum = Math.max(
+        1,
+        Number(message.significantIncreaseMinimum) || 5
+      );
+      const dashboardConfiguration = vscode.workspace.getConfiguration(
+        DASHBOARD_CONFIGURATION_SECTION
+      );
       await Promise.all([
-        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled, message.notificationsEnabled !== false, vscode.ConfigurationTarget.Global),
-        dashboardConfiguration.update(LIVE_REMEDIATION_CONFIGURATION_KEY, message.liveRemediationEnabled !== false, vscode.ConfigurationTarget.Global),
-        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent, Math.max(1, Number(message.significantIncreasePercent) || 20), vscode.ConfigurationTarget.Global),
-        dashboardConfiguration.update(DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum, Math.max(1, Number(message.significantIncreaseMinimum) || 5), vscode.ConfigurationTarget.Global)
+        dashboardConfiguration.update(
+          DASHBOARD_CONFIGURATION_KEYS.notificationsEnabled,
+          notificationsEnabled,
+          vscode.ConfigurationTarget.Global
+        ),
+        dashboardConfiguration.update(
+          DASHBOARD_CONFIGURATION_KEYS.significantIncreasePercent,
+          significantIncreasePercent,
+          vscode.ConfigurationTarget.Global
+        ),
+        dashboardConfiguration.update(
+          DASHBOARD_CONFIGURATION_KEYS.significantIncreaseMinimum,
+          significantIncreaseMinimum,
+          vscode.ConfigurationTarget.Global
+        )
       ]);
+
       await saveFolderConfig(this.context, folder, {
         serverUrl,
         projectKey,
         projectName,
         branch: message.branch ?? '',
         baseDir: message.baseDir ?? '',
-        token,
-        scannerMode,
-        analysisInclusions,
-        analysisExclusions,
-        buildCommand: message.buildCommand ?? '',
-        testCommand: message.testCommand ?? '',
-        customScannerCommand: message.customScannerCommand ?? '',
-        preAnalysisCommands: message.preAnalysisCommands ?? '',
-        postAnalysisCommands: message.postAnalysisCommands ?? ''
+        token
       });
-      this.analysisPermissions.delete(folder.uri.toString());
+
       const savedConfig = await getFolderConfig(this.context, folder);
-      const [analysisPermission, sonarCompatibility] = savedConfig
-        ? await Promise.all([
-            checkAnalysisPermission(savedConfig),
-            fetchSonarCompatibilityInfo(savedConfig.serverUrl, savedConfig.token)
-          ])
-        : ['unknown' as const, undefined];
-      this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
-      const savedRoot = this.analysisRoot(folder, message.baseDir ?? '') ?? folder.uri.fsPath;
-      const moduleState = getDashboardModuleState();
-      const detectedProjectActions = moduleState.pipeline
-        ? await detectProjectActions(savedRoot)
-        : { integrations: [] };
-      const pipelineTemplates = moduleState.pipeline
-        ? mergePipelineTemplates(
-            createBuiltinPipelineTemplates(
-              detectedProjectActions,
-              message.buildCommand ?? detectedProjectActions.buildCommand ?? '',
-              message.testCommand ?? detectedProjectActions.testCommand ?? ''
-            ),
-            await this.pipelineTemplateStore.list(folder.uri.toString())
-          )
-        : [];
+      const sonarCompatibility = savedConfig
+        ? await fetchSonarCompatibilityInfo(savedConfig.serverUrl, savedConfig.token)
+        : undefined;
+      const moduleConfig = await this.modules.saveConfiguration(
+        folder,
+        message as ModuleWebviewMessage,
+        { connectionChanged }
+      );
 
       const configurationSavedMessage = {
         type: 'configurationSaved',
@@ -1585,28 +947,14 @@ ${selected.name}`,
           branch: message.branch ?? '',
           baseDir: message.baseDir ?? '',
           hasToken: Boolean(token || existingToken),
-          analysisPermission,
-          scannerMode,
-          analysisInclusions,
-          analysisExclusions,
-          buildCommand: message.buildCommand ?? '',
-          testCommand: message.testCommand ?? '',
-          detectedBuildCommand: detectedProjectActions.buildCommand ?? '',
-          detectedTestCommand: detectedProjectActions.testCommand ?? '',
-          detectedIntegrations: detectedProjectActions.integrations,
-          pipelineTemplates,
-          customScannerCommand: message.customScannerCommand ?? '',
-          preAnalysisCommands: message.preAnalysisCommands ?? '',
-          postAnalysisCommands: message.postAnalysisCommands ?? '',
           sonarCompatibility,
-          pipelineModuleEnabled: moduleState.pipeline,
-          liveRemediationModuleEnabled: moduleState.liveRemediation,
-          notificationsEnabled: message.notificationsEnabled !== false,
-          liveRemediationEnabled: message.liveRemediationEnabled !== false,
-          significantIncreasePercent: Math.max(1, Number(message.significantIncreasePercent) || 20),
-          significantIncreaseMinimum: Math.max(1, Number(message.significantIncreaseMinimum) || 5)
+          notificationsEnabled,
+          significantIncreasePercent,
+          significantIncreaseMinimum,
+          ...moduleConfig
         }
       };
+
       this.postStatus('loading', 'Configuración guardada. Sincronizando issues…');
       const summary = await this.refreshCallback('sync');
       this.dirtyConnectionFolders.delete(folder.uri.toString());
@@ -1617,10 +965,7 @@ ${selected.name}`,
       if (summary.errors.length > 0) {
         this.postStatus('error', summary.errors.join(' | '));
       } else {
-        this.postStatus(
-          'success',
-          `${summary.published} issues encontrados.`
-        );
+        this.postStatus('success', `${summary.published} issues encontrados.`);
         this.navigate('data');
       }
     } catch (error) {
@@ -1630,241 +975,6 @@ ${selected.name}`,
     }
   }
 
-  private async analyzeRepository(
-    folderUri?: string,
-    requestedActions?: Partial<AnalysisExecutionOptions>
-  ): Promise<void> {
-    if (!isDashboardModuleEnabled('pipeline')) {
-      this.postStatus(
-        'error',
-        'El módulo Pipeline está desactivado. Actívalo en Configuración > Módulos para analizar el repositorio.'
-      );
-      return;
-    }
-    if (this.analysisService.isRunning()) {
-      this.postMessage({ type: 'showAnalysisDialog' });
-      return;
-    }
-
-    const folder = this.resolveAnalysisFolder(folderUri);
-    if (!folder) {
-      this.postStatus('error', 'Abre una carpeta antes de iniciar el análisis.');
-      return;
-    }
-
-    if (!(await this.ensureTrustedWorkspace())) {
-      return;
-    }
-
-    const analysisContext = await this.prepareAnalysis(folder, requestedActions);
-    if (!analysisContext || !isDashboardModuleEnabled('pipeline')) {
-      return;
-    }
-    const analysisService = this.pipelineRuntime?.analysisService;
-    if (!analysisService) {
-      return;
-    }
-
-    this.navigate('data');
-    this.postMessage({ type: 'showAnalysisDialog' });
-
-    try {
-      await this.runAnalysis(analysisContext, analysisService);
-    } catch (error) {
-      this.handleAnalysisFailure(error, analysisService);
-    } finally {
-      if (this.isActivePipelineService(analysisService)) {
-        await this.sendPipelineHistory(folder.uri.toString());
-      }
-    }
-  }
-
-  private resolveAnalysisFolder(folderUri?: string): vscode.WorkspaceFolder | undefined {
-    const requestedFolderUri = folderUri ?? this.selectedFolderUri;
-    const configuredFolder = this.getWorkspaceFolder(requestedFolderUri);
-    const activeEditorUri = vscode.window.activeTextEditor?.document.uri;
-    const activeFolder = activeEditorUri
-      ? vscode.workspace.getWorkspaceFolder(activeEditorUri)
-      : undefined;
-
-    return configuredFolder ?? activeFolder ?? vscode.workspace.workspaceFolders?.[0];
-  }
-
-  private async ensureTrustedWorkspace(): Promise<boolean> {
-    if (vscode.workspace.isTrusted) {
-      return true;
-    }
-
-    const manageTrust = localizeRuntimeText('Gestionar confianza', this.language);
-    const action = await vscode.window.showWarningMessage(
-      localizeRuntimeText(
-        'Analizar el repositorio puede ejecutar herramientas y comandos del proyecto. Confía en el workspace antes de continuar.',
-        this.language
-      ),
-      manageTrust
-    );
-    if (action === manageTrust) {
-      await vscode.commands.executeCommand('workbench.trust.manage');
-    }
-    this.postStatus('error', 'Analizar el repositorio requiere confiar en el workspace.');
-    return false;
-  }
-
-  private async prepareAnalysis(
-    folder: vscode.WorkspaceFolder,
-    requestedActions?: Partial<AnalysisExecutionOptions>
-  ): Promise<AnalysisRequest | undefined> {
-    const config = await getFolderConfig(this.context, folder);
-    if (!config) {
-      this.postStatus('error', 'Configura primero el servidor, el token y el proyecto.');
-      this.navigate('configuration');
-      return undefined;
-    }
-
-    const analysisPermission = await checkAnalysisPermission(config);
-    this.analysisPermissions.set(folder.uri.toString(), analysisPermission);
-    if (analysisPermission === 'denied') {
-      await this.sendState();
-      this.postStatus(
-        'error',
-        'El token no tiene el permiso Ejecutar análisis para este proyecto de SonarQube.'
-      );
-      return undefined;
-    }
-
-    const rootPath = this.analysisRoot(folder, config.baseDir);
-    if (!rootPath) {
-      this.postStatus('error', 'La subcarpeta configurada no pertenece al workspace.');
-      return undefined;
-    }
-
-    const baseline = await this.captureAnalysisBaseline(config);
-    const detectedActions = await detectProjectActions(rootPath);
-    const buildCommand = firstNonEmpty(
-      config.buildCommand?.trim(),
-      detectedActions.buildCommand
-    );
-    const testCommand = firstNonEmpty(
-      config.testCommand?.trim(),
-      detectedActions.testCommand
-    );
-    const requestedSteps = requestedActions?.steps ?? [];
-    const steps = requestedSteps.length > 0
-      ? requestedSteps
-      : createDefaultPipelineSteps(config, buildCommand, testCommand);
-
-    return { config, rootPath, actions: { steps }, baseline };
-  }
-
-  private async captureAnalysisBaseline(
-    config: FolderSonarConfig
-  ): Promise<AnalysisBaselineSnapshot | undefined> {
-    try {
-      const data = await fetchAnalysisBaselineData(config);
-      return createAnalysisBaselineSnapshot(data);
-    } catch (error) {
-      console.warn(
-        '[SonarQube Dashboard] no se pudo capturar la línea base previa al pipeline',
-        error
-      );
-      return undefined;
-    }
-  }
-
-  private async runAnalysis(
-    analysisContext: AnalysisRequest,
-    analysisService: AnalysisService
-  ): Promise<void> {
-    await analysisService.analyze(analysisContext);
-    if (!this.isActivePipelineService(analysisService)) return;
-    analysisService.setRefreshing();
-
-    const summary = await this.refreshCallback('analysis');
-    if (!this.isActivePipelineService(analysisService)) return;
-    this.setRefreshSummary(summary, true);
-    if (summary.errors.length === 0) {
-      await this.updateAnalysisBaselineComparison(analysisContext, analysisService);
-    }
-    this.reportAnalysisRefreshResult(summary, analysisService);
-    this.navigate('data');
-  }
-
-  private async updateAnalysisBaselineComparison(
-    analysisContext: AnalysisRequest,
-    analysisService: AnalysisService
-  ): Promise<void> {
-    if (!analysisContext.baseline) {
-      return;
-    }
-    try {
-      const data = await fetchAnalysisBaselineData(analysisContext.config);
-      const after = createAnalysisBaselineSnapshot(data);
-      await analysisService.setBaselineComparison(
-        analysisContext,
-        compareAnalysisBaselines(analysisContext.baseline, after, {
-          projectKey: analysisContext.config.projectKey,
-          branch: analysisContext.config.branch,
-          serverUrl: analysisContext.config.serverUrl
-        })
-      );
-    } catch (error) {
-      console.warn(
-        '[SonarQube Dashboard] no se pudo completar la comparación antes/después',
-        error
-      );
-    }
-  }
-
-  private reportAnalysisRefreshResult(
-    summary: RefreshSummary,
-    analysisService: AnalysisService
-  ): void {
-    if (summary.errors.length > 0) {
-      const message = summary.errors.join(' | ');
-      analysisService.setRefreshError(message);
-      return;
-    }
-
-    const message = `Análisis finalizado. ${summary.published} issues encontrados.`;
-    analysisService.setRefreshCompleted(message);
-  }
-
-  private handleAnalysisFailure(
-    error: unknown,
-    analysisService: AnalysisService
-  ): void {
-    const analysisState = analysisService.getState();
-    if (analysisState.phase === 'cancelled') {
-      return;
-    }
-
-    const message = this.errorMessage(error);
-    if (analysisState.phase === 'refreshing') {
-      analysisService.setRefreshError(message);
-    }
-  }
-
-  private isActivePipelineService(service: AnalysisService): boolean {
-    return isDashboardModuleEnabled('pipeline')
-      && this.pipelineRuntime?.analysisService === service;
-  }
-
-  private analysisRoot(folder: vscode.WorkspaceFolder, baseDir?: string): string | undefined {
-    const normalized = (baseDir ?? '').trim().replaceAll('\\', '/');
-    const segments = normalized
-      .split('/')
-      .map(segment => segment.trim())
-      .filter(Boolean);
-    if (segments.includes('..')) {
-      return undefined;
-    }
-    const root = path.resolve(folder.uri.fsPath, ...segments);
-    const relative = path.relative(folder.uri.fsPath, root);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return undefined;
-    }
-    return root;
-  }
 
   private emptyCreationCapabilities(): SonarCreationCapabilities {
     return {
@@ -1918,24 +1028,6 @@ ${selected.name}`,
     }
   }
 
-  private async analysisPermission(
-    folder: vscode.WorkspaceFolder
-  ): Promise<AnalysisPermissionStatus> {
-    const key = folder.uri.toString();
-    const cached = this.analysisPermissions.get(key);
-    if (cached) {
-      return cached;
-    }
-
-    const config = await getFolderConfig(this.context, folder);
-    if (!config) {
-      return 'unknown';
-    }
-
-    const permission = await checkAnalysisPermission(config);
-    this.analysisPermissions.set(key, permission);
-    return permission;
-  }
 
   private async refreshFromPanel(): Promise<void> {
     this.postStatus('loading', 'Actualizando issues…');
@@ -2024,7 +1116,7 @@ ${selected.name}`,
     this.creationCapabilities.delete(folderUri);
     const folder = this.getWorkspaceFolder(folderUri);
     if (folder) {
-      await this.persistAnalysisScope(folder, '', '');
+      await this.modules.resetConnectionScopedConfiguration(folder);
     }
     await this.refreshConfiguredFolderCount(
       vscode.workspace.workspaceFolders ?? []
@@ -2359,7 +1451,7 @@ ${selected.name}`,
     }
   }
 
-  private postStatus(kind: 'loading' | 'success' | 'error', message: string): void {
+  postStatus(kind: 'loading' | 'success' | 'error', message: string): void {
     this.postMessage({
       type: 'status',
       kind,
@@ -2367,7 +1459,7 @@ ${selected.name}`,
     });
   }
 
-  private postMessage(message: unknown): void {
+  postMessage(message: Record<string, unknown>): void {
     const webview = this.panel?.webview;
     if (!webview) {
       return;
@@ -2445,11 +1537,6 @@ ${selected.name}`,
     }
   }
 
-  private normalizeScannerMode(value?: ScannerMode): ScannerMode {
-    return ['auto', 'maven', 'gradle', 'dotnet', 'npm', 'docker', 'custom'].includes(value ?? '')
-      ? value as ScannerMode
-      : 'auto';
-  }
 
   private errorMessage(error: unknown): string {
     const value = error instanceof Error ? error.message : String(error);

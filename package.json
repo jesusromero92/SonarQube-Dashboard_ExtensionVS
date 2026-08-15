@@ -279,13 +279,7 @@
           "scope": "window",
           "description": "%configuration.modules.liveRemediation.enabled.description%"
         },
-        "sonarQubeDashboard.liveRemediation.enabled": {
-          "type": "boolean",
-          "default": true,
-          "scope": "window",
-          "description": "%configuration.liveRemediation.enabled.description%"
-        },
-        "sonarQubeDashboard.sonar.scannerMode": {
+        "sonarQubeDashboard.pipeline.scannerMode": {
           "type": "string",
           "default": "auto",
           "scope": "resource",
@@ -307,43 +301,43 @@
             "%configuration.scannerMode.docker%",
             "%configuration.scannerMode.custom%"
           ],
-          "description": "%configuration.sonar_scannerMode.description%"
+          "description": "%configuration.pipeline_scannerMode.description%"
         },
-        "sonarQubeDashboard.sonar.analysisInclusions": {
+        "sonarQubeDashboard.pipeline.analysisInclusions": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "%configuration.sonar_analysisInclusions.description%"
+          "description": "%configuration.pipeline_analysisInclusions.description%"
         },
-        "sonarQubeDashboard.sonar.analysisExclusions": {
+        "sonarQubeDashboard.pipeline.analysisExclusions": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "%configuration.sonar_analysisExclusions.description%"
+          "description": "%configuration.pipeline_analysisExclusions.description%"
         },
-        "sonarQubeDashboard.sonar.buildCommand": {
+        "sonarQubeDashboard.pipeline.buildCommand": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "%configuration.sonar_buildCommand.description%"
+          "description": "%configuration.pipeline_buildCommand.description%"
         },
-        "sonarQubeDashboard.sonar.customScannerCommand": {
+        "sonarQubeDashboard.pipeline.customScannerCommand": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "%configuration.sonar_customScannerCommand.description%"
+          "description": "%configuration.pipeline_customScannerCommand.description%"
         },
-        "sonarQubeDashboard.sonar.preAnalysisCommands": {
+        "sonarQubeDashboard.pipeline.preAnalysisCommands": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "%configuration.sonar_preAnalysisCommands.description%"
+          "description": "%configuration.pipeline_preAnalysisCommands.description%"
         },
-        "sonarQubeDashboard.sonar.postAnalysisCommands": {
+        "sonarQubeDashboard.pipeline.postAnalysisCommands": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "%configuration.sonar_postAnalysisCommands.description%"
+          "description": "%configuration.pipeline_postAnalysisCommands.description%"
         },
         "sonarQubeDashboard.notifications.enabled": {
           "type": "boolean",
@@ -532,10 +526,10 @@
       "supported": "limited",
       "description": "%capabilities.untrusted.description%",
       "restrictedConfigurations": [
-        "sonarQubeDashboard.sonar.buildCommand",
-        "sonarQubeDashboard.sonar.customScannerCommand",
-        "sonarQubeDashboard.sonar.preAnalysisCommands",
-        "sonarQubeDashboard.sonar.postAnalysisCommands"
+        "sonarQubeDashboard.pipeline.buildCommand",
+        "sonarQubeDashboard.pipeline.customScannerCommand",
+        "sonarQubeDashboard.pipeline.preAnalysisCommands",
+        "sonarQubeDashboard.pipeline.postAnalysisCommands"
       ]
     }
   },

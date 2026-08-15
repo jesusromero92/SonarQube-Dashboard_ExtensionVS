@@ -21,6 +21,44 @@ export function getBootstrapScript(
     const dashboardColors = ${JSON.stringify(DASHBOARD_COLORS)};
     const dashboardConstants = ${JSON.stringify(DASHBOARD_WEBVIEW_CONSTANTS)};
     const typeIconClasses = dashboardConstants.typeIconClasses;
+    const dashboardModuleHooks = {
+      values: [],
+      renderState: [],
+      renderConfigurationSaved: [],
+      resetConnectionScopedFields: [],
+      updateSaveAvailability: [],
+      refreshConfigurationDropdowns: [],
+      message: [],
+      bindEvents: [],
+      page: new Map(),
+      capability: new Map()
+    };
+    function registerDashboardModuleHooks(hooks) {
+      for (const name of ['values', 'renderState', 'renderConfigurationSaved', 'resetConnectionScopedFields', 'updateSaveAvailability', 'refreshConfigurationDropdowns', 'message', 'bindEvents']) {
+        if (typeof hooks?.[name] === 'function') dashboardModuleHooks[name].push(hooks[name]);
+      }
+      if (hooks?.pages) {
+        for (const [page, handler] of Object.entries(hooks.pages)) dashboardModuleHooks.page.set(page, handler);
+      }
+      if (hooks?.capabilities) {
+        for (const [name, handler] of Object.entries(hooks.capabilities)) dashboardModuleHooks.capability.set(name, handler);
+      }
+    }
+    function runDashboardModuleHooks(name, ...args) {
+      for (const hook of dashboardModuleHooks[name] || []) hook(...args);
+    }
+    function collectDashboardModuleValues() {
+      const result = {};
+      for (const hook of dashboardModuleHooks.values) Object.assign(result, hook() || {});
+      return result;
+    }
+    function dispatchDashboardModuleMessage(message) {
+      return dashboardModuleHooks.message.some(hook => hook(message) === true);
+    }
+    function moduleCapabilityAvailable(name) {
+      const handler = dashboardModuleHooks.capability.get(name);
+      return typeof handler === 'function' ? Boolean(handler()) : false;
+    }
 `;
 
   const localizationScript = getRuntimeLocalizationScript(

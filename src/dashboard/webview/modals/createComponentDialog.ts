@@ -1,4 +1,4 @@
-import { getSelectDropdownMarkup } from '../components/ui/selectDropdown';
+import { getSelectDropdownMarkup } from '../../../shared/webview/ui/selectDropdown';
 
 const COMPONENT_TYPE_OPTIONS = [
   { value: 'project', label: 'Proyecto' },

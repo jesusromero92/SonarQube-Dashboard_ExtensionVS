@@ -31,14 +31,17 @@ Para realizar una primera configuración guiada, abre la paleta de comandos y ej
 
 ## Arquitectura modular en 2.0.0
 
-Abre **Configuración → Módulos** para controlar de forma independiente las funciones opcionales:
+La 2.0.0 separa **Core**, **Pipeline** y **Live Remediation** como fronteras reales de código y de runtime. Abre **Configuración → Módulos** para controlar las funciones opcionales de forma independiente:
 
-- **Pipeline** activa el análisis del repositorio, pasos y plantillas reutilizables, integraciones detectadas, historial de ejecuciones, comparación de línea base y la vista nativa **Ejecuciones del pipeline**. Su runtime se crea de forma diferida únicamente mientras el módulo está activo; al desactivarlo se cancelan y liberan sus servicios, se ocultan sus vistas/pestañas y se bloquean sus comandos y handlers específicos.
-- **Live Remediation** activa el seguimiento de estados locales de issues, la correlación opcional con SonarQube for IDE, el indicador pendiente de la barra de estado y la vista nativa **Issues modificados localmente**. Sus listeners, watcher de archivos, timers y vista nativa solo existen mientras el módulo está activo.
-- Los diagnósticos normales de SonarQube publicados en **Problems** pertenecen al core mediante un gestor de diagnósticos independiente. Live Remediation puede modificar temporalmente su presentación, pero desactivar o desmontar el módulo restaura inmediatamente el snapshot normal del servidor.
-- Al intentar **desactivar** un módulo aparece primero un modal nativo de confirmación de VS Code. Si Pipeline tiene un análisis en ejecución, el aviso indica expresamente que se cancelará. Si se cancela o se cierra el modal, no cambia el estado del módulo ni se detiene el análisis.
-- Los módulos pueden activarse y desactivarse en caliente, sin reiniciar VS Code. Los interruptores se guardan mediante `sonarQubeDashboard.modules.pipeline.enabled` y `sonarQubeDashboard.modules.liveRemediation.enabled`.
-- La opción `sonarQubeDashboard.liveRemediation.enabled` permanece dentro de la pestaña **Live Remediation** como interruptor propio del seguimiento local; el módulo debe estar activo para que tenga efecto.
+- **Core** conserva exclusivamente la conexión/sincronización con SonarQube, Dashboard, navegación, decoraciones y el snapshot normal de diagnósticos publicado en **Problems**. No importa clases, servicios, tipos de scanner ni managers internos de los módulos opcionales.
+- **Pipeline** vive íntegramente en `src/modules/pipeline/` y es propietario de scanner, alcance del análisis, ejecución, pasos, plantillas, integraciones, historial, comparación de baseline, comandos, vista nativa, configuración y contribución webview. Su configuración propia usa el namespace `sonarQubeDashboard.pipeline.*`.
+- **Live Remediation** vive íntegramente en `src/modules/liveRemediation/` y es propietario de tracking local, watchers, baseline, diff/revert, persistencia, sesión, resultados del último análisis, historial, comandos y vista nativa. No importa Pipeline ni conoce sus comandos concretos.
+- Los dos módulos implementan un contrato común y se montan mediante un **registro/runtime genérico de módulos**. El core se comunica con ellos únicamente mediante contratos, contribuciones y capacidades; añadir otro módulo no requiere introducir su implementación dentro de `DashboardPanel` o `extension.ts`.
+- Las capacidades entre módulos pasan por un broker genérico. Por ejemplo, **Analizar repositorio** desde Live Remediation solicita la capacidad `analyzeRepository`; Pipeline la proporciona solo cuando está activo. No existe una dependencia `Live Remediation → Pipeline`.
+- El webview del Dashboard consume una única fachada de contribuciones de módulos. Cada módulo es dueño de su pestaña, markup, scripts, estilos, modales y páginas; los controles reutilizables están en `src/shared/webview/`, evitando dependencias circulares Dashboard ↔ módulo.
+- Los módulos pueden activarse y desactivarse en caliente. Al abrir o refrescar el dashboard, las pestañas opcionales de configuración se reconstruyen siempre desde el estado persistido de los módulos, incluso si ya estaban activados antes de abrir la vista. Al desactivar Pipeline se cancelan/liberan sus servicios y comandos. Al desactivar Live Remediation se liberan listeners/watchers y se restaura inmediatamente el snapshot normal de **Problems**, pero **su sesión persistida se conserva** para una reactivación posterior.
+- Borrar estado y desactivar un módulo son operaciones distintas: solo las acciones explícitas de papelera/limpieza eliminan el estado de Live Remediation. Desactivar o reiniciar VS Code no revierte archivos locales ni borra la sesión.
+- Al intentar **desactivar** un módulo aparece un modal nativo de confirmación. Si Pipeline tiene un análisis activo, el aviso indica expresamente que será cancelado. Los interruptores se guardan mediante `sonarQubeDashboard.modules.pipeline.enabled` y `sonarQubeDashboard.modules.liveRemediation.enabled`; no existe un segundo interruptor interno de Live Remediation.
 
 ## Modelo de funcionamiento
 
@@ -203,7 +206,7 @@ Las acciones Quick Fix que modifican SonarQube respetan los permisos del token c
 
 ### Estado de remediación en vivo
 
-Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveRemediation.enabled` y su interruptor interno `sonarQubeDashboard.liveRemediation.enabled` están activos. Su principio es deliberadamente conservador: **modificar código no significa solucionar un issue**. SonarQube Server sigue siendo la única fuente de verdad y una remediación solo se confirma a partir del snapshot producido por un análisis real del repositorio.
+Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveRemediation.enabled` está activo. Su principio es deliberadamente conservador: **modificar código no significa solucionar un issue**. SonarQube Server sigue siendo la única fuente de verdad y una remediación solo se confirma a partir del snapshot producido por un análisis real del repositorio.
 
 #### Seguimiento de cambios locales
 
@@ -211,7 +214,7 @@ Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveReme
 - Live Remediation compara el **cambio neto** con la baseline capturada desde el servidor. Si el código vuelve exactamente al contenido original —también mediante `Ctrl+Z`— el issue deja de estar pendiente inmediatamente, sin exigir una edición adicional.
 - El módulo observa también operaciones de archivos fuera del editor: cambios, guardados, creación, eliminación, rename, copia y sustitución desde Explorer, terminal u otras herramientas. Los eventos rápidos de múltiples archivos se agrupan y se realiza una reconciliación adicional del conjunto de archivos seguidos para no perder cambios por ordenación/coalescencia de eventos del sistema.
 - Cuando un reemplazo externo desplaza líneas pero el bloque original del issue sigue intacto, la baseline se relocaliza en lugar de marcar un falso cambio. Cuando no existe información suficiente para demostrar equivalencia, el comportamiento es conservador y el issue afectado se mantiene como modificado.
-- Si la extensión oficial **SonarQube for IDE** había informado previamente del mismo hallazgo, sus diagnósticos pueden utilizarse únicamente como señal adicional para pasar de **pendiente de validación** a **pendiente de confirmación de SonarQube**. Esa señal local nunca confirma una solución.
+- Si la extensión oficial **SonarQube for IDE** había informado previamente del mismo hallazgo, sus diagnósticos pueden utilizarse únicamente como señal adicional para pasar de **Modificado localmente · pendiente de validación** a **Modificado localmente · pendiente de confirmación de SonarQube**. Esa señal local nunca confirma una solución.
 
 #### Diff y revert seguro
 
@@ -243,7 +246,7 @@ Después de un análisis real aparece el acordeón **Tras último análisis**, q
 - **Siguen detectándose (N)** contiene los issues modificados que SonarQube volvió a devolver. Cada entrada conserva los datos y la **ubicación nueva del último análisis**, por lo que al seleccionarla se abre el archivo en la línea actual devuelta por el servidor;
 - **Historial de solucionados** conserva hasta 20 confirmaciones anteriores. El historial solo contiene remediaciones realmente confirmadas por SonarQube Server.
 
-Los resultados del último análisis son independientes del historial acumulado: un análisis posterior sustituye las listas **Solucionados** y **Siguen detectándose**, mientras el historial de solucionados continúa conservando las confirmaciones anteriores.
+Los resultados del último análisis son independientes del historial acumulado: cada análisis real sustituye las listas **Solucionados** y **Siguen detectándose**; si no hay nada pendiente que validar, ambas quedan vacías. El **Historial de solucionados** continúa conservando las confirmaciones anteriores.
 
 #### Persistencia y limpieza
 
@@ -640,7 +643,7 @@ El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados
 
 El flujo de conexión es explícito: **Conectar** valida la URL y el token y carga los componentes visibles sin seleccionar ninguno. Si la validación falla, el desplegable de proyectos permanece vacío y deshabilitado. El proyecto solo queda vinculado cuando el usuario lo selecciona y pulsa **Sincronizar**. Los borradores no guardados del servidor y del token se conservan al cambiar entre Datos y Configuración.
 
-La página de configuración se organiza en **SonarQube**, **Módulos** y **Notificaciones**, junto con las pestañas opcionales **Pipeline** y **Live Remediation**. **SonarQube** contiene la conexión, el proyecto, la configuración avanzada del scanner y el alcance de inclusiones/exclusiones; **Módulos** controla qué funciones opcionales están cargadas; **Pipeline** y **Live Remediation** solo se muestran mientras su módulo correspondiente está activo; y **Notificaciones** agrupa los avisos automáticos.
+La página de configuración se organiza en **SonarQube**, **Módulos** y **Notificaciones**, junto con las pestañas opcionales **Pipeline** y **Live Remediation**. **SonarQube** contiene únicamente conexión, proyecto, rama y mapeo local; **Módulos** controla qué runtimes opcionales están cargados; **Pipeline** es propietario del scanner, alcance, comandos, pasos y plantillas; **Live Remediation** muestra su integración/estado propio; y **Notificaciones** agrupa los avisos automáticos.
 
 La página permite gestionar:
 
@@ -654,16 +657,15 @@ La página permite gestionar:
 - **Exclusiones del análisis:** patrones comodín opcionales de `sonar.exclusions`. Puede escribirse un patrón por línea o separarlos por comas.
 - **Módulo Pipeline:** `sonarQubeDashboard.modules.pipeline.enabled` controla si se cargan el runtime, comandos, vistas y configuración de Pipeline. Está activado de forma predeterminada.
 - **Módulo Live Remediation:** `sonarQubeDashboard.modules.liveRemediation.enabled` controla si se cargan su seguimiento, watcher, vista y recursos de runtime. Está activado de forma predeterminada.
-- **Seguimiento de Live Remediation:** `sonarQubeDashboard.liveRemediation.enabled` controla el seguimiento local dentro del módulo Live Remediation. Está activado de forma predeterminada y solo tiene efecto cuando el módulo está activo.
 - **Comando de compilación:** comando opcional previo al scanner genérico o sustituto de `dotnet build`.
 - **Comando personalizado:** permite integrar herramientas o procesos propios sin guardar el token en el comando.
-- **Comandos previos al análisis:** `sonarQubeDashboard.sonar.preAnalysisCommands` ejecuta comandos del pipeline antes del paso SonarQube; admite uno por línea y el prefijo opcional `Nombre ::`.
-- **Comandos posteriores al análisis:** `sonarQubeDashboard.sonar.postAnalysisCommands` ejecuta comandos después de que SonarQube procese correctamente el análisis; admite uno por línea y el prefijo opcional `Nombre ::`.
+- **Comandos previos al análisis:** `sonarQubeDashboard.pipeline.preAnalysisCommands` ejecuta comandos del pipeline antes del paso SonarQube; admite uno por línea y el prefijo opcional `Nombre ::`.
+- **Comandos posteriores al análisis:** `sonarQubeDashboard.pipeline.postAnalysisCommands` ejecuta comandos después de que SonarQube procese correctamente el análisis; admite uno por línea y el prefijo opcional `Nombre ::`.
 - **Pipeline de análisis:** comandos de compilación y tests detectados, pasos personalizados, orden y política de fallo.
 
 El acordeón **Inclusiones y exclusiones del análisis** envía el alcance configurado a los flujos integrados de Maven, Gradle, .NET, NPM y Docker. Si ambos campos están vacíos y se utiliza el scanner genérico sin `sonar-project.properties`, la extensión conserva sus exclusiones automáticas para carpetas de dependencias y contenido generado. Los comandos de scanner personalizados pueden utilizar las variables normalizadas `${analysisInclusions}` y `${analysisExclusions}`.
 
-Usa **Guardar inclusiones y exclusiones** para persistir estos dos campos de forma independiente al resto de la configuración de SonarQube. El estado mostrado junto al botón confirma el resultado del guardado. Como este alcance es específico de cada proyecto, la extensión vacía ambos campos al volver a cargar la conexión de SonarQube y al sincronizar un proyecto o aplicación diferente; configura y guarda de nuevo el alcance para el nuevo componente vinculado.
+Usa **Guardar inclusiones y exclusiones** para persistir estos dos campos dentro de la configuración propia del módulo Pipeline. El estado mostrado junto al botón confirma el resultado del guardado. Como este alcance es específico de cada proyecto, la extensión vacía ambos campos al volver a cargar la conexión de SonarQube y al sincronizar un proyecto o aplicación diferente; configura y guarda de nuevo el alcance para el nuevo componente vinculado.
 
 ### Seguridad del token
 
@@ -706,25 +708,24 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
   "sonarQubeDashboard.sonar.projectName": "",
   "sonarQubeDashboard.sonar.branch": "",
   "sonarQubeDashboard.sonar.baseDir": "",
-  "sonarQubeDashboard.sonar.scannerMode": "auto",
-  "sonarQubeDashboard.sonar.analysisInclusions": "",
-  "sonarQubeDashboard.sonar.analysisExclusions": "",
-  "sonarQubeDashboard.sonar.buildCommand": "",
-  "sonarQubeDashboard.sonar.customScannerCommand": "",
-  "sonarQubeDashboard.sonar.preAnalysisCommands": "",
-  "sonarQubeDashboard.sonar.postAnalysisCommands": "",
+  "sonarQubeDashboard.pipeline.scannerMode": "auto",
+  "sonarQubeDashboard.pipeline.analysisInclusions": "",
+  "sonarQubeDashboard.pipeline.analysisExclusions": "",
+  "sonarQubeDashboard.pipeline.buildCommand": "",
+  "sonarQubeDashboard.pipeline.customScannerCommand": "",
+  "sonarQubeDashboard.pipeline.preAnalysisCommands": "",
+  "sonarQubeDashboard.pipeline.postAnalysisCommands": "",
   "sonarQubeDashboard.autoRefresh": true,
   "sonarQubeDashboard.refreshIntervalMinutes": 0,
   "sonarQubeDashboard.modules.pipeline.enabled": true,
   "sonarQubeDashboard.modules.liveRemediation.enabled": true,
-  "sonarQubeDashboard.liveRemediation.enabled": true,
   "sonarQubeDashboard.notifications.enabled": true,
   "sonarQubeDashboard.notifications.significantIncreasePercent": 20,
   "sonarQubeDashboard.notifications.significantIncreaseMinimum": 5
 }
 ```
 
-`sonarQubeDashboard.language` acepta `en` o `es` y se guarda globalmente para el entorno de VS Code. `autoRefresh` activa la sincronización al abrir o cambiar el workspace y un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica. `modules.pipeline.enabled` y `modules.liveRemediation.enabled` activan o desactivan los runtimes opcionales completos; ambos valen `true` de forma predeterminada. `liveRemediation.enabled` controla únicamente el seguimiento local interno cuando el módulo Live Remediation está activo y también vale `true` de forma predeterminada. La desactivación desde **Configuración → Módulos** requiere confirmación mediante un modal nativo de VS Code.
+`sonarQubeDashboard.language` acepta `en` o `es` y se guarda globalmente para el entorno de VS Code. `autoRefresh` activa la sincronización al abrir o cambiar el workspace y un valor mayor que `0` en `refreshIntervalMinutes` habilita la actualización periódica. `modules.pipeline.enabled` y `modules.liveRemediation.enabled` activan o desactivan los runtimes opcionales completos; ambos valen `true` de forma predeterminada. Los ajustes `pipeline.*` pertenecen exclusivamente al módulo Pipeline. La desactivación desde **Configuración → Módulos** requiere confirmación mediante un modal nativo de VS Code; desactivar Live Remediation conserva su sesión persistida.
 
 ## Limitaciones operativas
 

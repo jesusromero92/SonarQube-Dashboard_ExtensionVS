@@ -1,11 +1,5 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { getFolderFormConfig, tokenKey } from '../configuration';
-import { detectScanner } from '../scanner/detector';
-import {
-  detectProjectActions,
-  type DetectedProjectIntegration
-} from '../pipeline';
 import {
   fetchSonarCompatibilityInfo,
   probeSonarServer
@@ -64,7 +58,8 @@ const LAST_FAILED_REQUEST_KEY_PREFIX =
 
 export async function collectExtensionDiagnostics(
   context: vscode.ExtensionContext,
-  folder?: vscode.WorkspaceFolder
+  folder?: vscode.WorkspaceFolder,
+  moduleContribution: Record<string, unknown> = {}
 ): Promise<ExtensionDiagnosticsSnapshot> {
   const errors: string[] = [];
   const snapshot: ExtensionDiagnosticsSnapshot = {
@@ -81,13 +76,25 @@ export async function collectExtensionDiagnostics(
     errors
   };
 
+  Object.assign(snapshot, {
+    scanner: typeof moduleContribution.scanner === 'string' ? moduleContribution.scanner : '',
+    scannerKind: typeof moduleContribution.scannerKind === 'string' ? moduleContribution.scannerKind : '',
+    scannerEvidence: typeof moduleContribution.scannerEvidence === 'string' ? moduleContribution.scannerEvidence : '',
+    commands: Array.isArray(moduleContribution.commands) ? moduleContribution.commands : [],
+    tools: Array.isArray(moduleContribution.tools) ? moduleContribution.tools : []
+  });
+  if (Array.isArray(moduleContribution.moduleDiagnosticErrors)) {
+    errors.push(...moduleContribution.moduleDiagnosticErrors.filter(
+      (item): item is string => typeof item === 'string'
+    ));
+  }
+
   if (!folder) {
     errors.push('No hay ninguna carpeta del workspace seleccionada.');
     return snapshot;
   }
 
   const form = await getFolderFormConfig(context, folder);
-  const rootPath = analysisRoot(folder, form.baseDir);
 
   snapshot.sonarServer = form.serverUrl;
   snapshot.projectKey = form.projectKey;
@@ -96,37 +103,6 @@ export async function collectExtensionDiagnostics(
     `${LAST_FAILED_REQUEST_KEY_PREFIX}${folder.uri.toString()}`
   );
 
-  try {
-    const actions = await detectProjectActions(rootPath);
-    if (actions.buildCommand) {
-      snapshot.commands.push({
-        name: 'Compilar el proyecto',
-        command: actions.buildCommand,
-        source: 'Detectado automáticamente',
-        evidence: actions.evidence
-      });
-    }
-    if (actions.testCommand) {
-      snapshot.commands.push({
-        name: 'Ejecutar tests',
-        command: actions.testCommand,
-        source: 'Detectado automáticamente',
-        evidence: actions.evidence
-      });
-    }
-    snapshot.tools = actions.integrations.map(toDiagnosticTool);
-  } catch (error) {
-    errors.push(`No se pudieron detectar comandos y herramientas: ${errorMessage(error)}`);
-  }
-
-  try {
-    const scanner = await detectScanner(rootPath, form.scannerMode);
-    snapshot.scanner = scanner.label;
-    snapshot.scannerKind = scanner.kind;
-    snapshot.scannerEvidence = scanner.evidence;
-  } catch (error) {
-    errors.push(`No se pudo detectar el scanner: ${errorMessage(error)}`);
-  }
 
   const token = await context.secrets.get(tokenKey(folder));
   if (!form.serverUrl || !token) {
@@ -223,30 +199,12 @@ export function formatDiagnosticsReport(
   return lines.join('\n');
 }
 
-function analysisRoot(
-  folder: vscode.WorkspaceFolder,
-  baseDir: string
-): string {
-  return baseDir
-    ? path.resolve(folder.uri.fsPath, baseDir)
-    : folder.uri.fsPath;
-}
 
 function extensionVersion(context: vscode.ExtensionContext): string {
   const packageJson = context.extension.packageJSON as { version?: unknown };
   return typeof packageJson.version === 'string' ? packageJson.version : '';
 }
 
-function toDiagnosticTool(
-  integration: DetectedProjectIntegration
-): ExtensionDiagnosticTool {
-  return {
-    name: integration.name,
-    command: integration.command,
-    category: integration.category,
-    evidence: integration.evidence
-  };
-}
 
 function formatCommands(commands: readonly ExtensionDiagnosticCommand[]): string[] {
   if (commands.length === 0) return ['- Ninguno'];

@@ -13,17 +13,23 @@ test('v2.0.0 mantiene seguimiento conservador de remediación local', () => {
     version?: string;
     contributes?: { configuration?: { properties?: Record<string, unknown> } };
   };
-  const source = read('src/liveRemediation/manager.ts')
-    + read('src/liveRemediation/sonarIde.ts')
-    + read('src/liveRemediation/diagnostics.ts')
-    + read('src/liveRemediation/rangeTracking.ts')
-    + read('src/liveRemediation/persistence.ts');
+  const source = read('src/modules/liveRemediation/manager.ts')
+    + read('src/modules/liveRemediation/sonarIde.ts')
+    + read('src/modules/liveRemediation/diagnostics.ts')
+    + read('src/modules/liveRemediation/rangeTracking.ts')
+    + read('src/modules/liveRemediation/persistence.ts');
 
   assert.equal(manifest.version, '2.0.0');
   assert.ok(
     manifest.contributes?.configuration?.properties?.[
-      'sonarQubeDashboard.liveRemediation.enabled'
+      'sonarQubeDashboard.modules.liveRemediation.enabled'
     ]
+  );
+  assert.equal(
+    manifest.contributes?.configuration?.properties?.[
+      'sonarQubeDashboard.liveRemediation.enabled'
+    ],
+    undefined
   );
   assert.match(source, /onDidChangeTextDocument/);
   assert.match(source, /onDidChangeDiagnostics/);
@@ -36,7 +42,7 @@ test('v2.0.0 mantiene seguimiento conservador de remediación local', () => {
 });
 
 test('Live Remediation nunca presenta un issue como fixed antes del análisis de servidor', () => {
-  const diagnostics = read('src/liveRemediation/diagnostics.ts')
+  const diagnostics = read('src/modules/liveRemediation/diagnostics.ts')
     + read('src/issueLocalState.ts');
   const decorations = read('src/issueDecorations.ts');
   const navigation = read('src/issueNavigation.ts');
@@ -51,7 +57,7 @@ test('Live Remediation nunca presenta un issue como fixed antes del análisis de
 });
 
 test('la desaparición en SonarQube for IDE solo cambia a pendiente de confirmación', () => {
-  const source = read('src/liveRemediation/manager.ts') + read('src/liveRemediation/sonarIde.ts') + read('src/liveRemediation/diagnostics.ts');
+  const source = read('src/modules/liveRemediation/manager.ts') + read('src/modules/liveRemediation/sonarIde.ts') + read('src/modules/liveRemediation/diagnostics.ts');
 
   assert.match(
     source,
@@ -65,7 +71,7 @@ test('la desaparición en SonarQube for IDE solo cambia a pendiente de confirmac
 });
 
 test('los issues modificados siguen visibles en Problems y navegación normal', () => {
-  const manager = read('src/liveRemediation/manager.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
   const navigation = read('src/issueNavigation.ts');
 
   assert.match(manager, /tracked\.state === 'server'[\s\S]*DiagnosticSeverity\.Information/);
@@ -74,20 +80,21 @@ test('los issues modificados siguen visibles en Problems y navegación normal', 
   assert.doesNotMatch(navigation, /filter\(issue => !this\./);
 });
 
-test('la configuración del dashboard permite activar o desactivar la remediación al instante', () => {
-  const page = read('src/dashboard/webview/pages/configurationPage.ts');
+test('Live Remediation se activa o desactiva como módulo completo desde Configuración', () => {
+  const facade = read('src/modules/webview.ts');
+  const liveConfiguration = read('src/modules/liveRemediation/webview/configuration.ts');
   const events = read('src/dashboard/webview/scripts/events/configuration.ts');
-  const panel = read('src/dashboardPanel.ts');
+  const runtime = read('src/modules/runtime.ts');
 
-  assert.match(page, /id="liveRemediationEnabled"/);
-  assert.match(page, /Integración con el editor/);
-  assert.match(events, /type: 'setLiveRemediation'/);
-  assert.match(panel, /case 'setLiveRemediation'/);
-  assert.match(panel, /LIVE_REMEDIATION_CONFIGURATION_KEY/);
+  assert.match(facade, /data-module-toggle="liveRemediation"/);
+  assert.match(liveConfiguration, /Integración con el editor/);
+  assert.doesNotMatch(liveConfiguration, /liveRemediationEnabled/);
+  assert.match(events, /type: 'setModule'/);
+  assert.match(runtime, /setEnabled\(moduleId: string, enabled: boolean\)/);
 });
 
 test('los archivos reemplazados fuera del editor también aparecen como modificados localmente', () => {
-  const source = read('src/liveRemediation/manager.ts');
+  const source = read('src/modules/liveRemediation/manager.ts');
 
   assert.match(source, /createFileSystemWatcher/);
   assert.match(source, /trackedFilesWatcher\.onDidChange/);
@@ -102,8 +109,8 @@ test('los archivos reemplazados fuera del editor también aparecen como modifica
 });
 
 test('una edición adyacente al rango Sonar vuelve a pending validation', () => {
-  const source = read('src/liveRemediation/manager.ts')
-    + read('src/liveRemediation/rangeTracking.ts');
+  const source = read('src/modules/liveRemediation/manager.ts')
+    + read('src/modules/liveRemediation/rangeTracking.ts');
 
   assert.match(source, /horizontalGap\(change\.range, range\) <= 2/);
   assert.match(source, /transformed\.touched && this\.markTrackedModified\(key, tracked\)/);
@@ -111,10 +118,10 @@ test('una edición adyacente al rango Sonar vuelve a pending validation', () => 
 });
 
 test('el estado pendiente y la sesión completa sobreviven a reinicios con esquema v4', () => {
-  const persistence = read('src/liveRemediation/persistence.ts');
-  const constants = read('src/liveRemediation/constants.ts');
-  const models = read('src/liveRemediation/models.ts');
-  const manager = read('src/liveRemediation/manager.ts');
+  const persistence = read('src/modules/liveRemediation/persistence.ts');
+  const constants = read('src/modules/liveRemediation/constants.ts');
+  const models = read('src/modules/liveRemediation/models.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
 
   assert.match(constants, /state\.v4/);
   assert.match(constants, /pending\.v3/);
@@ -140,9 +147,9 @@ test('la vista nativa lista todos los issues modificados localmente', () => {
   const manifest = JSON.parse(read('package.json')) as {
     contributes?: { views?: Record<string, Array<{ id?: string }>> };
   };
-  const manager = read('src/liveRemediation/manager.ts');
-  const provider = read('src/liveRemediation/treeView.ts');
-  const extension = read('src/extension.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const provider = read('src/modules/liveRemediation/treeView.ts');
+  const liveModule = read('src/modules/liveRemediation/module.ts');
   const views = manifest.contributes?.views?.sonarQubeDashboardContainer ?? [];
 
   assert.ok(views.some(view => view.id === 'sonarQubeDashboard.locallyModifiedIssues'));
@@ -152,14 +159,14 @@ test('la vista nativa lista todos los issues modificados localmente', () => {
   assert.match(provider, /class LocallyModifiedIssuesTreeProvider/);
   assert.match(provider, /new vscode\.ThemeIcon\([\s\S]*'edit'/);
   assert.match(provider, /SHOW_LIVE_REMEDIATION_DIFF_COMMAND/);
-  assert.match(extension, /LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID/);
-  assert.match(extension, /revealLocallyModifiedIssue/);
+  assert.match(liveModule, /registerTreeDataProvider\(LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID/);
+  assert.match(liveModule, /revealLocallyModifiedIssue/);
   assert.match(read('README.md'), /\*\*Issues modified locally\*\*/);
   assert.match(read('README.es.md'), /\*\*Issues modificados localmente\*\*/);
 });
 
 test('el análisis cuenta cualquier issue modificado que desaparece y lo notifica sin afirmar un fix previo', () => {
-  const remediation = read('src/liveRemediation/manager.ts');
+  const remediation = read('src/modules/liveRemediation/manager.ts');
   const extension = read('src/extension.ts');
   const notifications = read('src/notificationManager.ts');
 
@@ -175,13 +182,13 @@ test('el análisis cuenta cualquier issue modificado que desaparece y lo notific
 });
 
 test('Live Remediation permanece completamente encapsulado en su módulo', () => {
-  const index = read('src/liveRemediation/index.ts');
-  const manager = read('src/liveRemediation/manager.ts');
-  const persistence = read('src/liveRemediation/persistence.ts');
-  const sonarIde = read('src/liveRemediation/sonarIde.ts');
-  const rangeTracking = read('src/liveRemediation/rangeTracking.ts');
-  const tree = read('src/liveRemediation/treeView.ts');
-  const constants = read('src/liveRemediation/constants.ts');
+  const index = read('src/modules/liveRemediation/index.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const persistence = read('src/modules/liveRemediation/persistence.ts');
+  const sonarIde = read('src/modules/liveRemediation/sonarIde.ts');
+  const rangeTracking = read('src/modules/liveRemediation/rangeTracking.ts');
+  const tree = read('src/modules/liveRemediation/treeView.ts');
+  const constants = read('src/modules/liveRemediation/constants.ts');
 
   assert.equal(existsSync(path.resolve(process.cwd(), 'src/liveRemediation.ts')), false);
   assert.equal(existsSync(path.resolve(process.cwd(), 'src/locallyFixedIssuesTreeView.ts')), false);
@@ -206,19 +213,19 @@ test('README y changelog documentan la semántica conservadora de v2.0.0', () =>
   assert.doesNotMatch(read('README.es.md'), /Issues corregidos localmente/);
 });
 
-test('los comandos inline de Live Remediation resuelven la key del nodo del TreeView', () => {
-  const extension = read('src/extension.ts');
-  assert.match(extension, /function liveRemediationIssueKey\(argument: unknown\)/);
-  assert.match(extension, /candidate\.issue\?\.key/);
-  assert.match(extension, /SHOW_LIVE_REMEDIATION_DIFF_COMMAND,[\s\S]*liveRemediationIssueKey\(argument\)/);
-  assert.match(extension, /REVERT_LIVE_REMEDIATION_CHANGE_COMMAND,[\s\S]*liveRemediationIssueKey\(argument\)/);
-  assert.match(extension, /OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,[\s\S]*liveRemediationIssueKey\(argument\)/);
+test('los comandos inline de Live Remediation pertenecen al módulo y resuelven la key del TreeView', () => {
+  const module = read('src/modules/liveRemediation/module.ts');
+  assert.match(module, /function issueKey\(argument: unknown\)/);
+  assert.match(module, /candidate\.issue\?\.key/);
+  assert.match(module, /SHOW_LIVE_REMEDIATION_DIFF_COMMAND,[\s\S]*issueKey\(argument\)/);
+  assert.match(module, /REVERT_LIVE_REMEDIATION_CHANGE_COMMAND,[\s\S]*issueKey\(argument\)/);
+  assert.match(module, /OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,[\s\S]*issueKey\(argument\)/);
 });
 
 test('la sesión separa estado actual de resultados del último análisis', () => {
-  const manager = read('src/liveRemediation/manager.ts');
-  const models = read('src/liveRemediation/models.ts');
-  const tree = read('src/liveRemediation/treeView.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const models = read('src/modules/liveRemediation/models.ts');
+  const tree = read('src/modules/liveRemediation/treeView.ts');
   assert.match(models, /confirmed: number/);
   assert.match(models, /stillDetected: number/);
   assert.match(manager, /this\.remediationSession\.confirmed = confirmed/);
@@ -233,7 +240,7 @@ test('la sesión separa estado actual de resultados del último análisis', () =
 });
 
 test('el revert seguro prueba el rango vivo y el rango baseline antes de rendirse', () => {
-  const baseline = read('src/liveRemediation/baseline.ts');
+  const baseline = read('src/modules/liveRemediation/baseline.ts');
   assert.match(baseline, /const candidates = \[tracked\.range, tracked\.baselineRange\]/);
   assert.match(baseline, /anchoredReplacementRange/);
   assert.match(baseline, /baseline\.beforeAnchor/);
@@ -241,8 +248,8 @@ test('el revert seguro prueba el rango vivo y el rango baseline antes de rendirs
 });
 
 test('tras el último análisis agrupa solucionados, los que siguen y el historial', () => {
-  const manager = read('src/liveRemediation/manager.ts');
-  const tree = read('src/liveRemediation/treeView.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const tree = read('src/modules/liveRemediation/treeView.ts');
   assert.match(manager, /this\.lastConfirmedResults\.length = 0/);
   assert.match(manager, /this\.stillDetectedHistory\.length = 0/);
   assert.match(manager, /getLastConfirmedResults/);
@@ -255,10 +262,25 @@ test('tras el último análisis agrupa solucionados, los que siguen y el histori
   assert.match(tree, /liveRemediationStillDetected/);
 });
 
+test('un análisis real sin pendientes vacía los resultados del análisis anterior y conserva el historial', () => {
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const validationMethod = manager.match(
+    /private recordValidationResults\([\s\S]*?private validationEntryFromServerIssue/
+  )?.[0] ?? '';
+
+  const clearSolved = validationMethod.indexOf('this.lastConfirmedResults.length = 0');
+  const emptyPendingBranch = validationMethod.indexOf('if (pending.size === 0)');
+  assert.ok(clearSolved >= 0 && clearSolved < emptyPendingBranch);
+  assert.match(validationMethod, /if \(pending\.size === 0\) \{[\s\S]*this\.remediationSession\.confirmed = 0/);
+  assert.match(validationMethod, /if \(pending\.size === 0\) \{[\s\S]*this\.remediationSession\.stillDetected = 0/);
+  assert.match(validationMethod, /if \(pending\.size === 0\) \{[\s\S]*this\.persistSessionState\(\);[\s\S]*return 0/);
+  assert.doesNotMatch(validationMethod, /this\.remediationHistory\.length = 0/);
+});
+
 test('el reinicio y los refresh normales conservan Cambios pendientes hasta un análisis real', () => {
   const extension = read('src/extension.ts');
-  const manager = read('src/liveRemediation/manager.ts');
-  const persistence = read('src/liveRemediation/persistence.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const persistence = read('src/modules/liveRemediation/persistence.ts');
 
   assert.match(extension, /applyServerSnapshot\([\s\S]*source === 'analysis'/);
   assert.match(manager, /syncPersistedStateFromTracked\(!confirmLocalRemediation\)/);
@@ -269,8 +291,8 @@ test('el reinicio y los refresh normales conservan Cambios pendientes hasta un a
 
 
 test('los issues que siguen detectándose usan la ubicación nueva del último análisis y son navegables', () => {
-  const manager = read('src/liveRemediation/manager.ts');
-  const tree = read('src/liveRemediation/treeView.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const tree = read('src/modules/liveRemediation/treeView.ts');
 
   assert.match(manager, /const serverIssuesByKey = new Map\(issues\.map/);
   assert.match(manager, /validationEntryFromServerIssue\(currentServerIssue, validatedAt, key\)/);
@@ -283,17 +305,17 @@ test('los issues que siguen detectándose usan la ubicación nueva del último a
 
 test('la sesión de remediación tiene una papelera inline que limpia solo el estado local de sesión', () => {
   const manifest = read('package.json');
-  const constants = read('src/liveRemediation/constants.ts');
-  const extension = read('src/extension.ts');
-  const manager = read('src/liveRemediation/manager.ts');
-  const tree = read('src/liveRemediation/treeView.ts');
+  const constants = read('src/modules/liveRemediation/constants.ts');
+  const module = read('src/modules/liveRemediation/module.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const tree = read('src/modules/liveRemediation/treeView.ts');
 
   assert.match(constants, /CLEAR_LIVE_REMEDIATION_SESSION_COMMAND/);
   assert.match(manifest, /sonarQubeDashboard\.clearLiveRemediationSession/);
   assert.match(manifest, /viewItem == liveRemediationSession/);
   assert.match(manifest, /\$\(trash\)/);
   assert.match(tree, /item\.contextValue = 'liveRemediationSession'/);
-  assert.match(extension, /CLEAR_LIVE_REMEDIATION_SESSION_COMMAND,[\s\S]*clearRemediationSession/);
+  assert.match(module, /CLEAR_LIVE_REMEDIATION_SESSION_COMMAND,[\s\S]*clearRemediationSession/);
   assert.match(manager, /async clearRemediationSession\(\): Promise<void>/);
   assert.match(manager, /showWarningMessage[\s\S]*\{ modal: true \}/);
   assert.match(manager, /tracked\.state = 'server'/);
@@ -302,10 +324,10 @@ test('la sesión de remediación tiene una papelera inline que limpia solo el es
 });
 
 test('Solucionados y Siguen detectándose pueden limpiarse de forma independiente', () => {
-  const manager = read('src/liveRemediation/manager.ts');
-  const tree = read('src/liveRemediation/treeView.ts');
-  const constants = read('src/liveRemediation/constants.ts');
-  const extension = read('src/extension.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const tree = read('src/modules/liveRemediation/treeView.ts');
+  const constants = read('src/modules/liveRemediation/constants.ts');
+  const module = read('src/modules/liveRemediation/module.ts');
   const packageJson = read('package.json');
 
   assert.match(constants, /CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND/);
@@ -317,15 +339,15 @@ test('Solucionados y Siguen detectándose pueden limpiarse de forma independient
   assert.match(manager, /this\.persistSessionState\(\)/);
   assert.match(tree, /liveRemediationSolvedGroup/);
   assert.match(tree, /liveRemediationStillDetectedGroup/);
-  assert.match(extension, /CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND/);
-  assert.match(extension, /CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND/);
+  assert.match(module, /CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND/);
+  assert.match(module, /CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND/);
   assert.match(packageJson, /clearLastSolvedRemediationResults/);
   assert.match(packageJson, /clearLastStillDetectedRemediationResults/);
 });
 
 test('Live Remediation reconcilia pegados/reemplazos de varios archivos como un lote', () => {
-  const manager = read('src/liveRemediation/manager.ts');
-  const constants = read('src/liveRemediation/constants.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const constants = read('src/modules/liveRemediation/constants.ts');
 
   assert.match(manager, /queueTrackedFileSystemChange/);
   assert.match(manager, /trackedFileReconciliationTimers/);
@@ -337,7 +359,7 @@ test('Live Remediation reconcilia pegados/reemplazos de varios archivos como un 
 });
 
 test('los cambios externos en archivos abiertos se comparan contra baseline y no se descartan por coincidir con disco', () => {
-  const manager = read('src/liveRemediation/manager.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
 
   assert.doesNotMatch(manager, /openDocumentMatchesDisk/);
   assert.match(manager, /openDocument\?\.isDirty/);
@@ -346,8 +368,8 @@ test('los cambios externos en archivos abiertos se comparan contra baseline y no
 });
 
 test('un bloque desplazado sin cambios se relocaliza y no genera un Modified locally falso', () => {
-  const manager = read('src/liveRemediation/manager.ts');
-  const baseline = read('src/liveRemediation/baseline.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
+  const baseline = read('src/modules/liveRemediation/baseline.ts');
 
   assert.match(baseline, /matchingBaselineRangeInText/);
   assert.match(baseline, /matchingBlockStarts/);
@@ -357,7 +379,7 @@ test('un bloque desplazado sin cambios se relocaliza y no genera un Modified loc
 });
 
 test('las operaciones de archivos de VS Code y los saves refuerzan el watcher para lotes', () => {
-  const manager = read('src/liveRemediation/manager.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
 
   assert.match(manager, /onDidCreateFiles/);
   assert.match(manager, /onDidDeleteFiles/);
@@ -366,7 +388,7 @@ test('las operaciones de archivos de VS Code y los saves refuerzan el watcher pa
 });
 
 test('una baseline no se acepta si el archivo cambia mientras se está capturando', () => {
-  const manager = read('src/liveRemediation/manager.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
 
   assert.match(manager, /fileChangeVersions/);
   assert.match(manager, /const fileChangeVersionsAtSnapshot = new Map\(this\.fileChangeVersions\)/);
@@ -376,7 +398,7 @@ test('una baseline no se acepta si el archivo cambia mientras se está capturand
 });
 
 test('los documentos ya abiertos se reconcilian después de capturar baselines', () => {
-  const manager = read('src/liveRemediation/manager.ts');
+  const manager = read('src/modules/liveRemediation/manager.ts');
 
   assert.match(manager, /reconcileOpenTrackedDocuments/);
   assert.match(manager, /for \(const document of vscode\.workspace\.textDocuments\)/);

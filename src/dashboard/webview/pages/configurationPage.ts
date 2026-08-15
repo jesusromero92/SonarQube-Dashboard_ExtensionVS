@@ -1,5 +1,9 @@
-import { SCANNER_MODES } from '../../../constants';
-import { getSelectDropdownMarkup } from '../components/ui/selectDropdown';
+import { getSelectDropdownMarkup } from '../../../shared/webview/ui/selectDropdown';
+import {
+  MODULE_CONFIGURATION_PANELS_MARKUP,
+  MODULE_CONFIGURATION_TABS_MARKUP,
+  MODULES_CONFIGURATION_PANEL_MARKUP
+} from '../../../modules/webview';
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -48,8 +52,7 @@ export const CONFIGURATION_PAGE_MARKUP = `      <section id="configurationPage" 
               <nav class="configuration-tabs" role="tablist" aria-label="Secciones de configuración">
                 <button id="configurationSonarTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="configurationSonarPanel" tabindex="0">SonarQube</button>
                 <button id="configurationModulesTab" type="button" role="tab" aria-selected="false" aria-controls="configurationModulesPanel" tabindex="-1">Módulos</button>
-                <button id="configurationPipelineTab" type="button" role="tab" aria-selected="false" aria-controls="configurationPipelinePanel" tabindex="-1" hidden>Pipeline</button>
-                <button id="configurationLiveRemediationTab" type="button" role="tab" aria-selected="false" aria-controls="configurationLiveRemediationPanel" tabindex="-1" hidden>Live Remediation</button>
+${MODULE_CONFIGURATION_TABS_MARKUP}
                 <button id="configurationNotificationsTab" type="button" role="tab" aria-selected="false" aria-controls="configurationNotificationsPanel" tabindex="-1">Notificaciones</button>
               </nav>
 
@@ -119,228 +122,26 @@ ${configurationDropdown('projectKey', 'Proyecto o aplicación visible', DISCONNE
                 </details>
 
               <details class="configuration-disclosure">
-                <summary>Configuración avanzada del proyecto y del scanner</summary>
+                <summary>Configuración avanzada del proyecto</summary>
                 <div class="form-grid advanced-grid">
                   <div class="field">
                     <label for="branch">Rama</label>
                     <input id="branch" type="text" placeholder="main" spellcheck="false">
-                    <div class="hint">Déjala vacía para consultar y analizar la rama principal.</div>
+                    <div class="hint">Déjala vacía para consultar la rama principal.</div>
                   </div>
                   <div class="field">
                     <label for="baseDir">Subcarpeta local</label>
                     <input id="baseDir" type="text" placeholder="packages/backend" spellcheck="false">
-                    <div class="hint">La detección y el análisis se ejecutarán desde esta subcarpeta.</div>
-                  </div>
-                  <div class="field">
-                    <label for="scannerMode">Método de análisis</label>
-${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'auto')}
-                    <div class="hint">Automático detecta Maven, Gradle y .NET; usa NPM si existe package.json o Docker para proyectos genéricos como Python.</div>
-                  </div>
-                  <div id="customScannerField" class="field full-width-field" hidden>
-                    <label for="customScannerCommand">Comando personalizado</label>
-                    <input id="customScannerCommand" type="text" placeholder="sonar-scanner -Dsonar.projectKey=\${projectKey}" spellcheck="false">
-                    <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code>, <code>\${branch}</code>, <code>\${analysisInclusions}</code>, <code>\${analysisExclusions}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
-                  </div>
-                </div>
-              </details>
-
-              <details class="configuration-disclosure">
-                <summary>Inclusiones y exclusiones del análisis</summary>
-                <div class="configuration-disclosure-content">
-                  <div class="configuration-section-intro">
-                    <strong>Define el alcance de archivos enviado al scanner</strong>
-                    <p class="hint">Usa patrones comodín compatibles con SonarQube. Puedes escribir un patrón por línea o separarlos por comas.</p>
-                  </div>
-                  <div class="form-grid advanced-grid analysis-scope-grid">
-                    <div class="field">
-                      <label for="analysisInclusions">Inclusiones <code>sonar.inclusions</code></label>
-                      <textarea id="analysisInclusions" rows="4" placeholder="src/**&#10;packages/*/src/**" spellcheck="false"></textarea>
-                      <div class="hint">Si se indica, solo los archivos de código fuente que coincidan con estos patrones entrarán en el alcance del análisis.</div>
-                    </div>
-                    <div class="field">
-                      <label for="analysisExclusions">Exclusiones <code>sonar.exclusions</code></label>
-                      <textarea id="analysisExclusions" rows="4" placeholder="**/generated/**&#10;**/*.min.js" spellcheck="false"></textarea>
-                      <div class="hint">Los archivos que coincidan con estos patrones se excluirán del análisis.</div>
-                    </div>
-                  </div>
-                  <div class="hint analysis-scope-note">Si ambos campos están vacíos, el scanner genérico mantiene las exclusiones técnicas automáticas de la extensión cuando no existe <code>sonar-project.properties</code>.</div>
-                  <div class="pipeline-save-row analysis-scope-save-row">
-                    <span id="analysisScopeSaveStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>
-                    <button id="saveAnalysisScope" type="button" disabled>Guardar inclusiones y exclusiones</button>
+                    <div class="hint">Ruta local base usada para resolver archivos del proyecto.</div>
                   </div>
                 </div>
               </details>
 
               </section>
 
-              <section id="configurationModulesPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationModulesTab" hidden>
-                <details class="configuration-disclosure" open>
-                  <summary>Módulos</summary>
-                  <div class="configuration-disclosure-content">
-                    <div class="configuration-section-intro">
-                      <strong>Activa solo las funciones que necesitas</strong>
-                      <p class="hint">Cada módulo habilita su lógica, su vista lateral y su pestaña de configuración. Los cambios se aplican inmediatamente.</p>
-                    </div>
-                    <div class="form-grid advanced-grid module-settings-grid">
-                      <div class="field full-width-field checkbox-field module-setting">
-                        <label>
-                          <input id="pipelineModuleEnabled" type="checkbox" checked>
-                          Pipeline
-                        </label>
-                        <div class="hint">Análisis del repositorio, pasos y plantillas, integraciones, historial de ejecuciones y comparación antes/después.</div>
-                      </div>
-                      <div class="field full-width-field checkbox-field module-setting">
-                        <label>
-                          <input id="liveRemediationModuleEnabled" type="checkbox" checked>
-                          Live Remediation
-                        </label>
-                        <div class="hint">Seguimiento de cambios locales sobre issues sincronizados, validación opcional con SonarQube for IDE y vista de issues modificados localmente.</div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              </section>
+${MODULES_CONFIGURATION_PANEL_MARKUP}
 
-              <section id="configurationPipelinePanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationPipelineTab" hidden>
-                <details class="configuration-disclosure" open>
-                  <summary>Pasos del pipeline</summary>
-                  <div class="configuration-disclosure-content">
-                    <div class="configuration-section-intro">
-                      <strong>Configura los pasos disponibles</strong>
-                      <p class="hint">Define los comandos reutilizables del proyecto. Después podrás elegirlos al crear plantillas o iniciar un análisis.</p>
-                    </div>
-
-                    <div class="form-grid advanced-grid pipeline-commands-grid">
-                      <div class="field">
-                        <label for="buildCommand">Comando de compilación</label>
-                        <input id="buildCommand" type="text" placeholder="npm run build" spellcheck="false">
-                        <div id="detectedBuildCommandHint" class="hint">Se detecta automáticamente según el proyecto. Déjalo vacío para usar el comando detectado.</div>
-                      </div>
-                      <div class="field">
-                        <label for="testCommand">Comando de tests</label>
-                        <input id="testCommand" type="text" placeholder="npm test" spellcheck="false">
-                        <div id="detectedTestCommandHint" class="hint">Se detecta automáticamente según el proyecto. Déjalo vacío para usar el comando detectado.</div>
-                      </div>
-                    </div>
-
-                    <section class="pipeline-subsection" aria-labelledby="customPipelineStepsTitle">
-                      <div class="pipeline-editor-heading">
-                        <div>
-                          <h3 id="customPipelineStepsTitle">Pasos personalizados</h3>
-                          <div class="hint">Crea aquí los pasos reutilizables y arrástralos para cambiar su orden.</div>
-                        </div>
-                        <button id="addPipelineStep" class="secondary" type="button">+ Añadir paso</button>
-                      </div>
-                      <div id="pipelineStepsEditor" class="pipeline-step-list" aria-label="Pasos configurados del pipeline"></div>
-                      <textarea id="preAnalysisCommands" hidden aria-hidden="true"></textarea>
-                      <textarea id="postAnalysisCommands" hidden aria-hidden="true"></textarea>
-                      <div class="pipeline-steps-footer">
-                        <div class="hint pipeline-variables-hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>.</div>
-                        <div class="pipeline-save-controls">
-                          <span id="pipelineSaveStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>
-                          <button id="savePipeline" type="button">Guardar pasos</button>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-                </details>
-
-                <details class="configuration-disclosure" open>
-                  <summary>Plantillas de pipeline</summary>
-                  <div class="configuration-disclosure-content">
-                    <div class="configuration-section-intro">
-                      <strong>Organiza los pasos de cada plantilla</strong>
-                      <p class="hint">Selecciona una plantilla para ver sus pasos. Puedes ordenarlos, añadir otros pasos disponibles o eliminarlos sin modificar la lista de pasos del proyecto.</p>
-                    </div>
-
-                    <div class="pipeline-template-manager">
-                      <div class="field pipeline-template-selector-field">
-                        <label for="pipelineTemplate">Plantilla</label>
-${configurationDropdown('pipelineTemplate', 'Plantilla de pipeline', [{ value: '', label: 'Selecciona una plantilla' }], '')}
-                        <div id="pipelineTemplateDescription" class="hint">Selecciona una plantilla o crea una nueva.</div>
-                      </div>
-                      <div class="field pipeline-template-toolbar-field">
-                        <label aria-hidden="true">&nbsp;</label>
-                        <div class="pipeline-template-toolbar">
-                          <button id="newPipelineTemplate" class="secondary" type="button">Nueva plantilla</button>
-                          <button id="importPipelineTemplate" class="secondary" type="button">Importar YAML</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div id="pipelineTemplateEditor" class="pipeline-template-editor" hidden>
-                      <div class="form-grid advanced-grid pipeline-template-metadata">
-                        <div class="field">
-                          <label for="pipelineTemplateName">Nombre de la plantilla</label>
-                          <input id="pipelineTemplateName" type="text" placeholder="Nombre de la plantilla" spellcheck="false">
-                        </div>
-                        <div class="field">
-                          <label for="pipelineTemplateDescriptionInput">Descripción</label>
-                          <input id="pipelineTemplateDescriptionInput" type="text" placeholder="Describe cuándo usar esta plantilla" spellcheck="false">
-                        </div>
-                      </div>
-
-                      <section class="pipeline-subsection pipeline-template-steps-section" aria-labelledby="pipelineTemplateStepsTitle">
-                        <div class="pipeline-editor-heading">
-                          <div>
-                            <h3 id="pipelineTemplateStepsTitle">Pasos de la plantilla</h3>
-                            <div class="hint">Los comandos proceden de los pasos configurados arriba. Arrastra para cambiar el orden.</div>
-                          </div>
-                          <button id="addPipelineTemplateStep" class="secondary" type="button">+ Añadir paso</button>
-                        </div>
-                        <div id="pipelineTemplateStepsEditor" class="pipeline-step-list pipeline-template-step-list" aria-label="Pasos de la plantilla"></div>
-                      </section>
-
-                      <div class="pipeline-template-actions">
-                        <span id="pipelineTemplateStatus" class="pipeline-save-status pipeline-template-status" role="status" aria-live="polite" hidden></span>
-                        <div class="spacer"></div>
-                        <button id="exportPipelineTemplate" class="secondary" type="button">Exportar YAML</button>
-                        <button id="deletePipelineTemplate" class="secondary" type="button">Eliminar</button>
-                        <button id="savePipelineTemplate" type="button">Guardar plantilla</button>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-
-                <details class="configuration-disclosure" open>
-                  <summary>Integraciones predefinidas detectadas</summary>
-                  <div class="configuration-disclosure-content">
-                    <div class="configuration-section-intro">
-                      <strong>Integraciones predefinidas detectadas</strong>
-                      <p class="hint">Añade al pipeline herramientas compatibles detectadas en el proyecto.</p>
-                    </div>
-                    <div id="detectedIntegrations" class="detected-integrations" aria-label="Integraciones predefinidas detectadas"></div>
-                  </div>
-                </details>
-              </section>
-
-              <section id="configurationLiveRemediationPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationLiveRemediationTab" hidden>
-                <details class="configuration-disclosure" open>
-                  <summary>Integración con el editor</summary>
-                  <div class="configuration-disclosure-content">
-                    <div class="configuration-section-intro">
-                      <strong>Remediación en vivo</strong>
-                      <p class="hint">Mantén el estado local de los defectos sincronizado mientras editas el código, sin marcar como corregido en SonarQube nada que el servidor todavía no haya confirmado.</p>
-                    </div>
-                    <div class="form-grid advanced-grid">
-                      <div class="field full-width-field checkbox-field">
-                        <label>
-                          <input id="liveRemediationEnabled" type="checkbox" checked>
-                          Activar seguimiento de remediación en vivo
-                        </label>
-                        <div class="hint">Los defectos tocados pasan a modificado localmente y pendiente de validación. Si SonarQube for IDE deja de detectar el mismo defecto, sigue siendo modificado localmente y pasa a pendiente de confirmación de SonarQube; solo el análisis del servidor puede confirmar que está resuelto.</div>
-                      </div>
-                      <div id="sonarIdeStatus" class="live-remediation-analyzer-status live-remediation-analyzer-status--missing" role="status" aria-live="polite">
-                        <span id="sonarIdeStatusIcon" class="live-remediation-analyzer-icon" aria-hidden="true">—</span>
-                        <div class="live-remediation-analyzer-copy">
-                          <strong id="sonarIdeStatusTitle">SonarQube for IDE no detectado</strong>
-                          <div id="sonarIdeStatusHint" class="hint">No es obligatorio. Los defectos modificados permanecerán pendientes de validación hasta el siguiente análisis del repositorio.</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              </section>
+${MODULE_CONFIGURATION_PANELS_MARKUP}
 
               <section id="configurationNotificationsPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationNotificationsTab" hidden>
               <details class="configuration-disclosure" open>

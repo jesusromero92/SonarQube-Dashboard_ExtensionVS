@@ -7,13 +7,14 @@ import {
   mergePipelineTemplates,
   parsePipelineTemplateYaml,
   serializePipelineTemplateYaml
-} from '../src/pipeline/templates';
+} from '../src/modules/pipeline/templates';
 import { DIAGNOSTICS_PAGE_MARKUP } from '../src/dashboard/webview/pages/diagnosticsPage';
-import { HISTORY_PAGE_MARKUP } from '../src/pipeline/webview/pages/historyPage';
+import { HISTORY_PAGE_MARKUP } from '../src/modules/pipeline/webview/pages/historyPage';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
 import { DIAGNOSTICS_SCRIPT } from '../src/dashboard/webview/scripts/diagnostics';
-import { HISTORY_SCRIPT } from '../src/pipeline/webview/history';
-import { PIPELINE_EDITOR_SCRIPT } from '../src/pipeline/webview/editor';
+import { HISTORY_SCRIPT } from '../src/modules/pipeline/webview/history';
+import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
+import { PIPELINE_INTEGRATION_SCRIPT } from '../src/modules/pipeline/webview/integration';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
 import { NAVIGATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/navigation';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
@@ -139,7 +140,7 @@ test('las plantillas YAML conservan el orden, incluido un paso posterior a Sonar
 
 test('el diagnóstico muestra solo comandos detectados automáticamente con tarjetas enriquecidas', () => {
   const diagnosticsSource = readFileSync(
-    path.resolve(process.cwd(), 'src/dashboard/diagnostics.ts'),
+    path.resolve(process.cwd(), 'src/modules/pipeline/controller.ts'),
     'utf8'
   );
 
@@ -167,9 +168,9 @@ test('el dashboard incorpora historial, diagnóstico y plantillas reutilizables'
   assert.match(DIAGNOSTICS_SCRIPT, /lastFailedRequest/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /applyTemplateToConfiguration/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /applyTemplateToAnalysis/);
-  assert.match(NAVIGATION_CORE_SCRIPT, /loadPipelineHistory/);
-  assert.match(NAVIGATION_CORE_SCRIPT, /hasRenderedExecution/);
-  assert.match(NAVIGATION_CORE_SCRIPT, /historyLoading\.hidden = hasRenderedExecution/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /loadPipelineHistory/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /hasRenderedExecution/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /historyLoading\.hidden = hasRenderedExecution/);
   assert.match(NAVIGATION_CORE_SCRIPT, /loadDiagnostics/);
 });
 
@@ -227,7 +228,7 @@ test('la lista de ejecuciones usa una vista nativa de VS Code', () => {
     'utf8'
   );
   const treeSource = readFileSync(
-    path.resolve(process.cwd(), 'src/pipeline/executionTreeView.ts'),
+    path.resolve(process.cwd(), 'src/modules/pipeline/executionTreeView.ts'),
     'utf8'
   );
   const packageManifest = JSON.parse(readFileSync(
@@ -265,7 +266,7 @@ test('la página de pipeline muestra solo la ejecución seleccionada y actualiza
 
 test('la vista nativa conserva la identidad y no se refresca por cada línea del log', () => {
   const treeSource = readFileSync(
-    path.resolve(process.cwd(), 'src/pipeline/executionTreeView.ts'),
+    path.resolve(process.cwd(), 'src/modules/pipeline/executionTreeView.ts'),
     'utf8'
   );
 
@@ -283,8 +284,8 @@ test('la vista nativa conserva la identidad y no se refresca por cada línea del
 });
 
 test('la ejecución activa abre la misma página de detalle que las ejecuciones terminadas', () => {
-  const extensionSource = readFileSync(
-    path.resolve(process.cwd(), 'src/extension.ts'),
+  const pipelineModuleSource = readFileSync(
+    path.resolve(process.cwd(), 'src/modules/pipeline/module.ts'),
     'utf8'
   );
   const dashboardSource = readFileSync(
@@ -292,15 +293,15 @@ test('la ejecución activa abre la misma página de detalle que las ejecuciones 
     'utf8'
   );
   const treeSource = readFileSync(
-    path.resolve(process.cwd(), 'src/pipeline/executionTreeView.ts'),
+    path.resolve(process.cwd(), 'src/modules/pipeline/executionTreeView.ts'),
     'utf8'
   );
 
   assert.match(
-    extensionSource,
-    /PIPELINE_COMMANDS\.openExecution,[\s\S]*await dashboardPanel\.showPipelineExecution\(executionId\)/
+    pipelineModuleSource,
+    /PIPELINE_COMMANDS\.openExecution,[\s\S]*this\.controller\.showExecution\(executionId\)/
   );
-  assert.doesNotMatch(extensionSource, /showRunningPipelineExecution/);
+  assert.doesNotMatch(pipelineModuleSource, /showRunningPipelineExecution/);
   assert.doesNotMatch(dashboardSource, /pendingAnalysisDialog|showRunningPipelineExecution/);
   assert.match(treeSource, /title: spanish \? 'Abrir ejecución' : 'Open execution'/);
   assert.doesNotMatch(treeSource, /Ver registro en directo|View live log/);

@@ -71,13 +71,6 @@ export const DISCLOSURE_STYLES = `
       margin-top: 6px;
       padding-left: 24px;
     }
-    .analysis-scope-note {
-      margin-top: 10px;
-    }
-    .analysis-scope-save-row .pipeline-save-status {
-      margin-right: 0;
-    }
-
     @media (max-width: 620px) {
       .configuration-tabs {
         padding: 0;

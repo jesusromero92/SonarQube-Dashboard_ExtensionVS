@@ -1,6 +1,7 @@
 export const MESSAGE_EVENTS_SCRIPT = String.raw`
     window.addEventListener('message', event => {
       const message = event.data;
+      if (dispatchDashboardModuleMessage(message)) return;
 
       switch (message.type) {
         case 'languageChanged':
@@ -17,78 +18,6 @@ export const MESSAGE_EVENTS_SCRIPT = String.raw`
 
         case 'configurationSaved':
           renderConfigurationSaved(message.config || {});
-          break;
-
-        case 'analysisScopeSaved':
-          currentConfig = {
-            ...currentConfig,
-            analysisInclusions: message.analysisInclusions || '',
-            analysisExclusions: message.analysisExclusions || ''
-          };
-          elements.analysisInclusions.value = currentConfig.analysisInclusions;
-          elements.analysisExclusions.value = currentConfig.analysisExclusions;
-          setAnalysisScopeSaveStatus(
-            'success',
-            'Inclusiones y exclusiones guardadas.'
-          );
-          break;
-
-        case 'analysisScopeSaveError':
-          setAnalysisScopeSaveStatus(
-            'error',
-            message.message || 'No se pudieron guardar las inclusiones y exclusiones.'
-          );
-          break;
-
-        case 'pipelineSaved':
-          currentConfig = {
-            ...currentConfig,
-            ...(message.config || {})
-          };
-          elements.buildCommand.value = currentConfig.buildCommand || '';
-          elements.testCommand.value = currentConfig.testCommand || '';
-          elements.preAnalysisCommands.value = currentConfig.preAnalysisCommands || '';
-          elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
-          renderPipelineConfigurationFromFields();
-          renderDetectedProjectActions(currentConfig);
-          setPipelineSaveStatus('success', 'Pipeline guardado.');
-          break;
-
-        case 'pipelineSaveError':
-          setPipelineSaveStatus(
-            'error',
-            message.message || 'No se pudo guardar el pipeline.'
-          );
-          break;
-
-        case 'pipelineTemplatesUpdated':
-          renderPipelineTemplates(
-            message.templates || [],
-            message.templateId
-          );
-          setPipelineTemplateStatus('success', message.message || 'Plantillas actualizadas.');
-          break;
-
-        case 'pipelineTemplateError':
-          setPipelineTemplateStatus('error', message.message || 'No se pudo actualizar la plantilla.');
-          break;
-
-        case 'pipelineTemplateActionCancelled':
-          setPipelineTemplateStatus('idle', '');
-          break;
-
-        case 'pipelineHistory':
-          currentPipelineHistory = message.entries || [];
-          renderPipelineHistory(
-            currentPipelineHistory,
-            message.selectedEntryId || ''
-          );
-          break;
-
-        case 'pipelineHistoryError':
-          elements.historyLoading.hidden = true;
-          elements.historyEmpty.hidden = false;
-          elements.historyEmpty.textContent = message.message || 'No se pudo cargar el historial.';
           break;
 
         case 'diagnostics':
@@ -376,17 +305,6 @@ export const MESSAGE_EVENTS_SCRIPT = String.raw`
         case 'showHotspotDetail':
           if (message.hotspot) {
             showHotspotDialog(message.hotspot);
-          }
-          break;
-
-        case 'analysisState':
-          renderAnalysisState(message.state || {});
-          renderLivePipelineHistory(message.state || {});
-          break;
-
-        case 'showAnalysisDialog':
-          if (!elements.analysisDialog.open) {
-            elements.analysisDialog.showModal();
           }
           break;
 

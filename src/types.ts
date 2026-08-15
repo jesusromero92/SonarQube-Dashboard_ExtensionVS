@@ -392,7 +392,6 @@ export interface SonarSettingsResponse {
 }
 
 export type SonarInstanceMode = 'MQR' | 'STANDARD' | 'UNKNOWN';
-export type ScannerMode = 'auto' | 'maven' | 'gradle' | 'dotnet' | 'npm' | 'docker' | 'custom';
 export type AnalysisPermissionStatus = 'allowed' | 'denied' | 'unknown';
 
 export interface FolderSonarConfig {
@@ -402,14 +401,6 @@ export interface FolderSonarConfig {
   branch?: string;
   baseDir?: string;
   token: string;
-  scannerMode: ScannerMode;
-  analysisInclusions?: string;
-  analysisExclusions?: string;
-  buildCommand?: string;
-  testCommand?: string;
-  customScannerCommand?: string;
-  preAnalysisCommands?: string;
-  postAnalysisCommands?: string;
 }
 
 export interface FolderSonarFormConfig {
@@ -419,14 +410,6 @@ export interface FolderSonarFormConfig {
   branch: string;
   baseDir: string;
   hasToken: boolean;
-  scannerMode: ScannerMode;
-  analysisInclusions: string;
-  analysisExclusions: string;
-  buildCommand: string;
-  testCommand: string;
-  customScannerCommand: string;
-  preAnalysisCommands: string;
-  postAnalysisCommands: string;
 }
 
 export interface RemoteCoverageFile {

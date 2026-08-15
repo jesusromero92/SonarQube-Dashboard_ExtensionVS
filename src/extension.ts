@@ -45,28 +45,13 @@ import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { IssueNavigationManager } from './issueNavigation';
 import { IssueDiagnosticManager } from './issueDiagnostics';
-import {
-  LiveRemediationManager,
-  LocallyModifiedIssuesTreeProvider,
-  LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
-  OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,
-  SHOW_LIVE_REMEDIATION_DIFF_COMMAND,
-  REVERT_LIVE_REMEDIATION_CHANGE_COMMAND,
-  CLEAR_LIVE_REMEDIATION_SESSION_COMMAND,
-  CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND,
-  CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND
-} from './liveRemediation';
+
 import { IssueTreeProvider } from './issueTreeView';
 import {
-  getDashboardModuleState,
-  MODULE_CONFIGURATION_KEYS,
-  updateDashboardModuleContexts
+  createDashboardModuleRuntime,
+  type DashboardModulesRuntime
 } from './modules';
-import {
-  PIPELINE_COMMANDS,
-  PIPELINE_EXECUTION_TREE_VIEW_ID,
-  PipelineExecutionTreeProvider
-} from './pipeline';
+
 import {
   NotificationManager,
   NotificationScope
@@ -99,31 +84,12 @@ let issueDecorations: IssueDecorationManager;
 let coverageDecorations: CoverageDecorationManager;
 let flowController: IssueFlowController;
 let issueNavigation: IssueNavigationManager;
-let liveRemediation: LiveRemediationManager | undefined;
 let issueTree: IssueTreeProvider;
-let locallyModifiedIssuesTree: LocallyModifiedIssuesTreeProvider | undefined;
-let pipelineExecutionTree: PipelineExecutionTreeProvider | undefined;
 let notifications: NotificationManager;
-let liveRemediationModuleDisposables: vscode.Disposable[] = [];
-let pipelineModuleDisposables: vscode.Disposable[] = [];
+let modules: DashboardModulesRuntime;
 
 const CHANGELOG_VERSION_STATE_KEY = 'sonarqubeDashboard.lastShownChangelogVersion';
 
-function liveRemediationIssueKey(argument: unknown): string | undefined {
-  if (typeof argument === 'string' && argument.trim()) return argument;
-  if (!argument || typeof argument !== 'object') return undefined;
-
-  const candidate = argument as {
-    issue?: { key?: unknown };
-    key?: unknown;
-  };
-  if (typeof candidate.issue?.key === 'string' && candidate.issue.key.trim()) {
-    return candidate.issue.key;
-  }
-  return typeof candidate.key === 'string' && candidate.key.trim()
-    ? candidate.key
-    : undefined;
-}
 
 async function showChangelogIfNeeded(context: vscode.ExtensionContext): Promise<void> {
   const currentVersion = String(context.extension.packageJSON.version ?? '').trim();
@@ -368,7 +334,7 @@ function runAsync(task: Promise<unknown> | undefined, operation: string): void {
 }
 
 function clearWorkspaceData(summary: RefreshSummary): RefreshSummary {
-  liveRemediation?.clear();
+  modules?.clearWorkspaceState();
   issueDiagnostics.clear();
   issueDecorations.clear();
   coverageDecorations.clear();
@@ -630,11 +596,9 @@ function prepareRefreshSummary(summary: RefreshSummary): void {
   summary.newHotspots.sort(compareHotspots);
 }
 
-function applyLiveRemediationState(): void {
-  issueDecorations.setLocalRemediation(
-    liveRemediation?.getStates() ?? new Map(),
-    liveRemediation?.getRanges() ?? new Map()
-  );
+function applyModuleIssueOverlayState(): void {
+  const overlay = modules?.getIssueOverlay() ?? { states: new Map(), ranges: new Map() };
+  issueDecorations.setLocalRemediation(overlay.states, overlay.ranges);
   issueTree.refresh();
 }
 
@@ -646,14 +610,14 @@ function applyRefreshSummary(
   issueDecorations.setIssues(summary.issues, summary.hotspots);
   issueDiagnostics.replaceServerSnapshot(operation.pendingDiagnostics);
   operation.pendingDiagnostics.dispose();
-  const confirmedLocallyModifiedCount = liveRemediation?.applyServerSnapshot(
+  const confirmedLocallyModifiedCount = modules?.applyServerSnapshot(
     summary.issues,
     issueDiagnostics.getServerSnapshot(),
     source === 'analysis'
   ) ?? 0;
   coverageDecorations.setCoverage(summary.coverage);
   issueNavigation.setIssues(summary.issues, summary.newIssues);
-  applyLiveRemediationState();
+  applyModuleIssueOverlayState();
   dashboardPanel?.setRefreshSummary(
     summary,
     summary.configuredFolders > 0
@@ -871,101 +835,8 @@ function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode
   return vscode.Uri.parse(url.toString());
 }
 
-function disposeModuleDisposables(disposables: vscode.Disposable[]): void {
-  while (disposables.length > 0) {
-    disposables.pop()?.dispose();
-  }
-}
-
-function activateLiveRemediationModule(context: vscode.ExtensionContext): void {
-  if (liveRemediation) return;
-
-  const manager = new LiveRemediationManager(context, issueDiagnostics);
-  const tree = new LocallyModifiedIssuesTreeProvider(manager);
-  liveRemediation = manager;
-  locallyModifiedIssuesTree = tree;
-  liveRemediationModuleDisposables = [
-    manager,
-    tree,
-    manager.onDidChange(() => applyLiveRemediationState()),
-    vscode.window.registerTreeDataProvider(
-      LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
-      tree
-    )
-  ];
-
-  const summary = dashboardPanel?.getRefreshSummary();
-  if (summary) {
-    manager.applyServerSnapshot(
-      summary.issues,
-      issueDiagnostics.getServerSnapshot(),
-      false
-    );
-  }
-  applyLiveRemediationState();
-}
-
-function deactivateLiveRemediationModule(clearState: boolean): void {
-  if (!liveRemediation) {
-    issueDiagnostics.restoreServerSnapshot();
-    applyLiveRemediationState();
-    return;
-  }
-
-  if (clearState) {
-    liveRemediation.clear();
-  }
-  disposeModuleDisposables(liveRemediationModuleDisposables);
-  liveRemediationModuleDisposables = [];
-  liveRemediation = undefined;
-  locallyModifiedIssuesTree = undefined;
-  issueDiagnostics.restoreServerSnapshot();
-  applyLiveRemediationState();
-}
-
-function activatePipelineModule(): void {
-  if (pipelineExecutionTree || !dashboardPanel) return;
-
-  const tree = new PipelineExecutionTreeProvider(dashboardPanel);
-  pipelineExecutionTree = tree;
-  pipelineModuleDisposables = [
-    vscode.window.registerTreeDataProvider(
-      PIPELINE_EXECUTION_TREE_VIEW_ID,
-      tree
-    ),
-    tree
-  ];
-}
-
-function deactivatePipelineModule(): void {
-  disposeModuleDisposables(pipelineModuleDisposables);
-  pipelineModuleDisposables = [];
-  pipelineExecutionTree = undefined;
-}
-
-async function syncOptionalModules(
-  context: vscode.ExtensionContext,
-  clearDisabledState = true
-): Promise<void> {
-  const state = getDashboardModuleState();
-
-  if (state.liveRemediation) {
-    activateLiveRemediationModule(context);
-  } else {
-    deactivateLiveRemediationModule(clearDisabledState);
-  }
-
-  await dashboardPanel?.refreshModuleState();
-  if (state.pipeline) {
-    activatePipelineModule();
-    pipelineExecutionTree?.refresh();
-  } else {
-    deactivatePipelineModule();
-  }
-}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  await updateDashboardModuleContexts();
   issueDiagnostics = new IssueDiagnosticManager();
   issueDecorations = new IssueDecorationManager(context.extensionUri);
   coverageDecorations = new CoverageDecorationManager(context, context.extensionUri);
@@ -984,11 +855,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     issueCodeLensProvider
   );
 
+  modules = createDashboardModuleRuntime(
+    context,
+    issueDiagnostics,
+    () => applyModuleIssueOverlayState()
+  );
+
   dashboardPanel = new DashboardPanel(
     context,
     source => refreshAll(context, source),
     () => {
-      liveRemediation?.clear();
+      modules.clearWorkspaceState();
       issueDiagnostics.clear();
       issueDecorations.clear();
       coverageDecorations.clear();
@@ -997,11 +874,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     coverageDecorations,
     flowController,
+    modules,
     scope => {
       issueNavigation.setScope(scope);
       issueTree.refresh();
     }
   );
+
+  modules.attachDashboard(dashboardPanel);
 
   const launcherProvider = new DashboardLauncherViewProvider(
     context,
@@ -1029,39 +909,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     ),
     vscode.commands.registerCommand(
-      OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,
-      (argument: unknown) => {
-        const issueKey = liveRemediationIssueKey(argument);
-        return issueKey ? liveRemediation?.revealLocallyModifiedIssue(issueKey) : undefined;
-      }
-    ),
-    vscode.commands.registerCommand(
-      SHOW_LIVE_REMEDIATION_DIFF_COMMAND,
-      (argument: unknown) => {
-        const issueKey = liveRemediationIssueKey(argument);
-        return issueKey ? liveRemediation?.showIssueDiff(issueKey) : undefined;
-      }
-    ),
-    vscode.commands.registerCommand(
-      REVERT_LIVE_REMEDIATION_CHANGE_COMMAND,
-      (argument: unknown) => {
-        const issueKey = liveRemediationIssueKey(argument);
-        return issueKey ? liveRemediation?.revertLocallyModifiedIssue(issueKey) : undefined;
-      }
-    ),
-    vscode.commands.registerCommand(
-      CLEAR_LIVE_REMEDIATION_SESSION_COMMAND,
-      () => liveRemediation?.clearRemediationSession()
-    ),
-    vscode.commands.registerCommand(
-      CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND,
-      () => liveRemediation?.clearLastSolvedResults()
-    ),
-    vscode.commands.registerCommand(
-      CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND,
-      () => liveRemediation?.clearLastStillDetectedResults()
-    ),
-    vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.getStarted,
       () => vscode.commands.executeCommand(
         'workbench.action.openWalkthrough',
@@ -1087,28 +934,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.clear,
       () => {
-        liveRemediation?.clear();
+        modules.clearWorkspaceState();
         issueDiagnostics.clear();
         issueDecorations.clear();
         coverageDecorations.clear();
         issueNavigation.clear();
         flowController.clear();
         dashboardPanel?.setRefreshSummary(createEmptyRefreshSummary());
-      }
-    ),
-    vscode.commands.registerCommand(
-      DASHBOARD_COMMANDS.analyze,
-      () => dashboardPanel?.analyze()
-    ),
-    vscode.commands.registerCommand(
-      DASHBOARD_COMMANDS.cancelAnalysis,
-      () => dashboardPanel?.cancelAnalysis()
-    ),
-    vscode.commands.registerCommand(
-      PIPELINE_COMMANDS.openExecution,
-      async (executionId: string) => {
-        if (!dashboardPanel) return;
-        await dashboardPanel.showPipelineExecution(executionId);
       }
     ),
     vscode.commands.registerCommand(
@@ -1352,23 +1184,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       (event: vscode.ConfigurationChangeEvent) => {
         if (
           event.affectsConfiguration(DASHBOARD_CONFIGURATION_SECTION) ||
-          event.affectsConfiguration(SONAR_CONFIGURATION_SECTION)
+          event.affectsConfiguration(SONAR_CONFIGURATION_SECTION) ||
+          modules.affectsConfiguration(event)
         ) {
           configureRefreshTimer(context);
-          if (
-            event.affectsConfiguration(
-              `${DASHBOARD_CONFIGURATION_SECTION}.${MODULE_CONFIGURATION_KEYS.pipeline}`
-            ) ||
-            event.affectsConfiguration(
-              `${DASHBOARD_CONFIGURATION_SECTION}.${MODULE_CONFIGURATION_KEYS.liveRemediation}`
-            )
-          ) {
+          if (modules.affectsLifecycleConfiguration(event)) {
             runAsync(
-              updateDashboardModuleContexts(),
-              'module context refresh'
-            );
-            runAsync(
-              syncOptionalModules(context),
+              modules.syncEnabledModules(),
               'optional module lifecycle refresh'
             );
           }
@@ -1378,7 +1200,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               'language refresh'
             );
             issueDecorations.refreshLanguage();
-            liveRemediation?.refreshLanguage();
+            modules.refreshLanguage();
             coverageDecorations.refreshLanguage();
             flowController.refreshLanguage();
             issueNavigation.refreshLanguage();
@@ -1391,8 +1213,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     {
       dispose: () => {
         activeRefresh?.abort();
-        deactivateLiveRemediationModule(false);
-        deactivatePipelineModule();
+        modules.dispose();
         dashboardPanel?.dispose();
         if (refreshTimer) {
           clearInterval(refreshTimer);
@@ -1404,7 +1225,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
   );
 
-  await syncOptionalModules(context, false);
+  await modules.syncEnabledModules();
 
   configureRefreshTimer(context);
   runAsync(showChangelogIfNeeded(context), 'changelog display');

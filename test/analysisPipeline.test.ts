@@ -5,9 +5,9 @@ import {
   expandAnalysisPipelineCommand,
   parseAnalysisPipeline,
   serializeAnalysisPipeline
-} from '../src/pipeline/parser';
-import { PIPELINE_EDITOR_SCRIPT } from '../src/pipeline/webview/editor';
-import { PIPELINE_STYLES } from '../src/pipeline/webview/styles';
+} from '../src/modules/pipeline/parser';
+import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
+import { PIPELINE_STYLES } from '../src/modules/pipeline/webview/styles';
 
 test('parseAnalysisPipeline crea etapas nombradas, condiciones y omite comentarios', () => {
   const stages = parseAnalysisPipeline(

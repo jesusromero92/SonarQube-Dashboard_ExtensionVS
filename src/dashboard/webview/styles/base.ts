@@ -221,24 +221,6 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
     .workspace-row { margin-bottom: 14px; }
     .advanced-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
     .full-width-field { grid-column: 1 / -1; }
-    .pipeline-save-row {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 12px;
-    }
-    .pipeline-save-status {
-      margin-right: auto;
-      color: var(--vscode-descriptionForeground);
-      font-size: 12px;
-    }
-    .pipeline-save-status--success {
-      color: var(--vscode-testing-iconPassed);
-    }
-    .pipeline-save-status--error {
-      color: var(--vscode-errorForeground);
-    }
     .checkbox-field label {
       display: inline-flex;
       align-items: center;

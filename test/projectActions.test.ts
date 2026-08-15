@@ -3,12 +3,13 @@ import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import { detectProjectActions } from '../src/pipeline/projectActions';
-import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/pipeline/webview/modals/analysisConfirmationDialog';
-import { ANALYSIS_SCRIPT } from '../src/pipeline/webview/analysis';
-import { PIPELINE_EDITOR_SCRIPT } from '../src/pipeline/webview/editor';
+import { detectProjectActions } from '../src/modules/pipeline/projectActions';
+import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/modules/pipeline/webview/modals/analysisConfirmationDialog';
+import { ANALYSIS_SCRIPT } from '../src/modules/pipeline/webview/analysis';
+import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
+import { PIPELINE_INTEGRATION_SCRIPT } from '../src/modules/pipeline/webview/integration';
 import { CONFIGURATION_EVENTS_SCRIPT } from '../src/dashboard/webview/scripts/events/configuration';
-import { ANALYSIS_DIALOG_MARKUP } from '../src/pipeline/webview/modals/analysisDialog';
+import { ANALYSIS_DIALOG_MARKUP } from '../src/modules/pipeline/webview/modals/analysisDialog';
 import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
 import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
 
@@ -39,8 +40,8 @@ test('la configuración permite ordenar pasos y elegir la condición de fallo al
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="testCommand"/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="pipelineStepsEditor"/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="addPipelineStep"/);
-  assert.match(CONFIGURATION_CORE_SCRIPT, /detectedBuildCommand/);
-  assert.match(CONFIGURATION_CORE_SCRIPT, /detectedTestCommand/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /detectedBuildCommand/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /detectedTestCommand/);
 
   assert.match(ANALYSIS_CONFIRMATION_DIALOG_MARKUP, /id="analysisRunSteps"/);
   assert.doesNotMatch(ANALYSIS_CONFIRMATION_DIALOG_MARKUP, /id="analysisStepTemplate"/);
@@ -121,8 +122,8 @@ test('muestra cada integración detectada una sola vez y la mueve al pipeline', 
     CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineTemplateStepsEditor"') <
       CONFIGURATION_PAGE_MARKUP.indexOf('id="detectedIntegrations"')
   );
-  assert.match(CONFIGURATION_CORE_SCRIPT, /availableDetectedIntegrations\(integrations\)/);
-  assert.match(CONFIGURATION_CORE_SCRIPT, /addDetectedIntegrationToPipeline/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /availableDetectedIntegrations\(integrations\)/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /addDetectedIntegrationToPipeline/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function normalizedPipelineCommand/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function configuredPipelineCommandKeys/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function availableDetectedIntegrations/);
@@ -142,7 +143,7 @@ test('las acciones y mensajes de plantillas permanecen dentro de su acordeón', 
   assert.doesNotMatch(CONFIGURATION_PAGE_MARKUP, /id="applyPipelineTemplate"/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="deletePipelineTemplate"/);
   assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /window\.confirm/);
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /type: 'deletePipelineTemplate'/);
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /Restableciendo plantilla…/);
-  assert.match(CONFIGURATION_EVENTS_SCRIPT, /Eliminando plantilla…/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /type: 'deletePipelineTemplate'/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Restableciendo plantilla…/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Eliminando plantilla…/);
 });

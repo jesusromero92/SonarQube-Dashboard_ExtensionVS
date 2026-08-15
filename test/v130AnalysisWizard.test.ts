@@ -10,10 +10,9 @@ const read = (relativePath: string): string => readFileSync(
 
 test('v1.3.0 usa un asistente de dos pasos antes de iniciar el análisis', () => {
   const manifest = JSON.parse(read('package.json')) as { version?: string };
-  const modal = read('src/pipeline/webview/modals/analysisConfirmationDialog.ts');
-  const analysis = read('src/pipeline/webview/analysis.ts');
-  const events = read('src/dashboard/webview/scripts/events/dialogs.ts');
-  const elements = read('src/dashboard/webview/scripts/core/elements.ts');
+  const modal = read('src/modules/pipeline/webview/modals/analysisConfirmationDialog.ts');
+  const analysis = read('src/modules/pipeline/webview/analysis.ts');
+  const events = read('src/modules/pipeline/webview/integration.ts');
 
   assert.equal(manifest.version, '2.0.0');
   assert.match(modal, /Seleccionar plantilla/);
@@ -31,13 +30,13 @@ test('v1.3.0 usa un asistente de dos pasos antes de iniciar el análisis', () =>
   assert.match(analysis, /currentConfig\.baseDir/);
   assert.match(events, /analysisConfirmationNext\.addEventListener/);
   assert.match(events, /analysisConfirmationBack\.addEventListener/);
-  assert.match(elements, /analysisConfirmationTemplateStepIndicator/);
-  assert.match(elements, /analysisConfirmationReviewStepIndicator/);
+  assert.match(modal, /analysisConfirmationTemplateStepIndicator/);
+  assert.match(modal, /analysisConfirmationReviewStepIndicator/);
 });
 
 test('v1.3.0 oculta el badge de delta cuando no existe variación', () => {
-  const baseline = read('src/pipeline/webview/baseline.ts');
-  const styles = read('src/pipeline/webview/styles.ts');
+  const baseline = read('src/modules/pipeline/webview/baseline.ts');
+  const styles = read('src/modules/pipeline/webview/styles.ts');
 
   assert.match(baseline, /function baselineDeltaLabel/);
   assert.match(baseline, /Math\.abs\(numeric\) < 0\.0001 \? ''/);

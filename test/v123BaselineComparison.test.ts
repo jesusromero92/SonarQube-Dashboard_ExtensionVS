@@ -6,7 +6,7 @@ import {
   compareAnalysisBaselines,
   createAnalysisBaselineSnapshot,
   numericBaselineDelta
-} from '../src/pipeline/baseline';
+} from '../src/modules/pipeline/baseline';
 import type { SonarAnalysisBaselineData } from '../src/types';
 
 const read = (relativePath: string): string => readFileSync(
@@ -66,23 +66,24 @@ test('v1.3.0 mantiene la comparación exclusivamente en el historial del pipelin
   const manifest = JSON.parse(read('package.json')) as { version?: string };
   assert.equal(manifest.version, '2.0.0');
 
-  const control = read('src/dashboard/webview/components/analysisControl.ts');
-  const dialog = read('src/pipeline/webview/modals/analysisDialog.ts');
-  const history = read('src/pipeline/webview/pages/historyPage.ts');
-  const analysisScript = read('src/pipeline/webview/analysis.ts');
-  const historyScript = read('src/pipeline/webview/history.ts');
-  const historyStore = read('src/pipeline/history.ts');
-  const analysisService = read('src/pipeline/executionService.ts');
+  const control = read('src/modules/pipeline/webview/components/analysisControl.ts');
+  const dialog = read('src/modules/pipeline/webview/modals/analysisDialog.ts');
+  const history = read('src/modules/pipeline/webview/pages/historyPage.ts');
+  const analysisScript = read('src/modules/pipeline/webview/analysis.ts');
+  const historyScript = read('src/modules/pipeline/webview/history.ts');
+  const historyStore = read('src/modules/pipeline/history.ts');
+  const analysisService = read('src/modules/pipeline/executionService.ts');
   const sonarClient = read('src/sonarClient.ts');
+  const pipelineController = read('src/modules/pipeline/controller.ts');
   const dashboardPanel = read('src/dashboardPanel.ts');
-  const analysisStyles = read('src/pipeline/webview/styles.ts');
+  const analysisStyles = read('src/modules/pipeline/webview/styles.ts');
 
   assert.doesNotMatch(control, /analysisComparisonPanel/);
   assert.doesNotMatch(dialog, /analysisDialogComparison/);
   assert.match(history, /historyComparison/);
   assert.doesNotMatch(analysisScript, /renderCurrentAnalysisBaselineComparisons/);
   assert.match(historyScript, /renderBaselineComparison/);
-  const baselineScript = read('src/pipeline/webview/baseline.ts');
+  const baselineScript = read('src/modules/pipeline/webview/baseline.ts');
   assert.match(baselineScript, /snapshot\.newIssues/);
   assert.match(baselineScript, /snapshot\.newCoverage/);
   assert.match(baselineScript, /delta\.hidden = deltaText === ''/);
@@ -94,7 +95,7 @@ test('v1.3.0 mantiene la comparación exclusivamente en el historial del pipelin
   assert.match(sonarClient, /fetchAnalysisBaselineData/);
   assert.match(sonarClient, /fetchProjectCoverageTotals/);
   assert.match(sonarClient, /analysisAvailability \?\? summaryMetrics\.hasMeasures/);
-  assert.match(dashboardPanel, /fetchAnalysisBaselineData/);
+  assert.match(pipelineController, /fetchAnalysisBaselineData/);
   assert.match(analysisStyles, /--vscode-badge-foreground/);
   assert.doesNotMatch(dashboardPanel, /fetchAllIssues/);
 });

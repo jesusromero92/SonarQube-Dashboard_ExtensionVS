@@ -3,114 +3,65 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-function source(relativePath: string): string {
-  return readFileSync(path.resolve(process.cwd(), relativePath), 'utf8');
-}
+const source = (relativePath: string): string =>
+  readFileSync(path.resolve(process.cwd(), relativePath), 'utf8');
 
-test('pipeline queda centralizado en src/pipeline sin fachadas legacy', () => {
-  const required = [
-    'src/pipeline/index.ts',
-    'src/pipeline/constants.ts',
-    'src/pipeline/models.ts',
-    'src/pipeline/parser.ts',
-    'src/pipeline/requests.ts',
-    'src/pipeline/templates.ts',
-    'src/pipeline/projectActions.ts',
-    'src/pipeline/baseline.ts',
-    'src/pipeline/history.ts',
-    'src/pipeline/executionService.ts',
-    'src/pipeline/executionTreeView.ts',
-    'src/pipeline/webview/editor.ts',
-    'src/pipeline/webview/analysis.ts',
-    'src/pipeline/webview/history.ts',
-    'src/pipeline/webview/baseline.ts',
-    'src/pipeline/webview/styles.ts',
-    'src/pipeline/webview/components/baselineComparison.ts',
-    'src/pipeline/webview/pages/historyPage.ts',
-    'src/pipeline/webview/modals/analysisDialog.ts',
-    'src/pipeline/webview/modals/analysisConfirmationDialog.ts'
-  ];
+const exists = (relativePath: string): boolean =>
+  existsSync(path.resolve(process.cwd(), relativePath));
 
-  for (const file of required) {
-    assert.equal(existsSync(path.resolve(process.cwd(), file)), true, file);
-  }
+test('Pipeline queda autocontenido en src/modules/pipeline', () => {
+  for (const file of [
+    'src/modules/pipeline/index.ts',
+    'src/modules/pipeline/constants.ts',
+    'src/modules/pipeline/configuration.ts',
+    'src/modules/pipeline/controller.ts',
+    'src/modules/pipeline/module.ts',
+    'src/modules/pipeline/models.ts',
+    'src/modules/pipeline/parser.ts',
+    'src/modules/pipeline/requests.ts',
+    'src/modules/pipeline/templates.ts',
+    'src/modules/pipeline/projectActions.ts',
+    'src/modules/pipeline/baseline.ts',
+    'src/modules/pipeline/history.ts',
+    'src/modules/pipeline/executionService.ts',
+    'src/modules/pipeline/executionTreeView.ts',
+    'src/modules/pipeline/scanner/analysisScope.ts',
+    'src/modules/pipeline/scanner/detector.ts',
+    'src/modules/pipeline/scanner/processRunner.ts',
+    'src/modules/pipeline/webview/integration.ts',
+    'src/modules/pipeline/webview/configuration.ts'
+  ]) assert.equal(exists(file), true, file);
 
-  const removed = [
-    'src/pipelineExecutionTreeView.ts',
-    'src/scanner/analysisService.ts',
-    'src/scanner/baseline.ts',
-    'src/scanner/history.ts',
-    'src/scanner/pipeline.ts',
-    'src/scanner/pipelineTemplates.ts',
-    'src/scanner/projectActions.ts',
-    'src/dashboard/webview/scripts/pipelineEditor.ts',
-    'src/dashboard/webview/scripts/analysis.ts',
-    'src/dashboard/webview/scripts/history.ts',
-    'src/dashboard/webview/scripts/baseline.ts',
-    'src/dashboard/webview/components/baselineComparison.ts',
-    'src/dashboard/webview/pages/historyPage.ts',
-    'src/dashboard/webview/modals/analysisDialog.ts',
-    'src/dashboard/webview/modals/analysisConfirmationDialog.ts'
-  ];
-
-  for (const file of removed) {
-    assert.equal(existsSync(path.resolve(process.cwd(), file)), false, file);
-  }
+  assert.equal(exists('src/pipeline'), false);
+  assert.equal(exists('src/scanner'), false);
 });
 
-test('consumidores principales usan el módulo pipeline', () => {
-  const dashboard = source('src/dashboardPanel.ts');
+test('Pipeline posee sus comandos y el core no los registra', () => {
+  const module = source('src/modules/pipeline/module.ts');
+  const constants = source('src/modules/pipeline/constants.ts');
   const extension = source('src/extension.ts');
-  const contracts = source('src/dashboard/contracts.ts');
-  const diagnostics = source('src/dashboard/diagnostics.ts');
 
-  assert.match(dashboard, /from '\.\/pipeline'/);
-  assert.match(extension, /from '\.\/pipeline'/);
-  assert.match(contracts, /from '\.\.\/pipeline'/);
-  assert.match(diagnostics, /from '\.\.\/pipeline'/);
-
-  for (const text of [dashboard, extension, contracts, diagnostics]) {
-    assert.doesNotMatch(
-      text,
-      /scanner\/(analysisService|baseline|history|pipeline|pipelineTemplates|projectActions)/
-    );
-  }
+  assert.match(constants, /sonarQubeDashboard\.analyze/);
+  assert.match(constants, /sonarQubeDashboard\.cancelAnalysis/);
+  assert.match(module, /registerCommand\([\s\S]*PIPELINE_COMMANDS\.analyze/);
+  assert.match(module, /registerCommand\([\s\S]*PIPELINE_COMMANDS\.cancelAnalysis/);
+  assert.doesNotMatch(extension, /DASHBOARD_COMMANDS\.analyze|PIPELINE_COMMANDS/);
 });
 
-test('scanner conserva solo responsabilidades propias del scanner', () => {
-  const scannerTypes = source('src/scanner/types.ts');
-  assert.doesNotMatch(scannerTypes, /PipelineRunHistory/);
-  assert.doesNotMatch(scannerTypes, /AnalysisExecutionStep/);
-  assert.doesNotMatch(scannerTypes, /AnalysisBaselineSnapshot/);
-  assert.match(scannerTypes, /DetectedScanner/);
-  assert.match(scannerTypes, /ProcessSpec/);
+test('scanner y configuración de análisis son propiedad de Pipeline', () => {
+  const scannerTypes = source('src/modules/pipeline/scanner/types.ts');
+  const config = source('src/modules/pipeline/configuration.ts');
+  const coreConfig = source('src/configuration.ts');
+  assert.match(scannerTypes, /ScannerMode/);
+  assert.match(config, /PIPELINE_CONFIGURATION_KEYS/);
+  assert.doesNotMatch(config, /legacyTestCommandKey|migrateLegacy|sonarQubeDashboard\.sonar\.testCommand/);
+  assert.doesNotMatch(coreConfig, /scannerMode|analysisExclusions|customScannerCommand/);
 });
 
-
-test('la modularización no reemplaza las constantes globales por constantes de un módulo', () => {
-  const rootConstants = source('src/constants.ts');
-  const pipelineConstants = source('src/pipeline/constants.ts');
-  const liveConstants = source('src/liveRemediation/constants.ts');
-
-  for (const exportedName of [
-    'DASHBOARD_COMMANDS',
-    'DASHBOARD_CONFIGURATION_KEYS',
-    'DASHBOARD_CONFIGURATION_SECTION',
-    'DASHBOARD_PANEL_VIEW_TYPE',
-    'DASHBOARD_COLORS',
-    'DASHBOARD_WEBVIEW_CONSTANTS',
-    'SONAR_CONFIGURATION_KEYS',
-    'SONAR_CONFIGURATION_SECTION',
-    'SONAR_PAGE_SIZE',
-    'SONAR_SUMMARY_METRICS',
-    'ISSUE_TREE_GROUPS',
-    'ISSUE_TREE_VIEW_ID'
-  ]) {
-    assert.match(rootConstants, new RegExp(`export const ${exportedName}`), exportedName);
-  }
-
-  assert.doesNotMatch(rootConstants, /PIPELINE_EXECUTION_TREE_VIEW_ID/);
-  assert.doesNotMatch(rootConstants, /LIVE_REMEDIATION_STORAGE_KEY/);
-  assert.match(pipelineConstants, /PIPELINE_EXECUTION_TREE_VIEW_ID/);
-  assert.match(liveConstants, /LIVE_REMEDIATION_STORAGE_KEY/);
+test('Pipeline consume UI compartida sin importar Dashboard UI', () => {
+  const history = source('src/modules/pipeline/webview/pages/historyPage.ts');
+  const confirmation = source('src/modules/pipeline/webview/modals/analysisConfirmationDialog.ts');
+  assert.match(history, /shared\/webview\/ui\/accordion/);
+  assert.match(confirmation, /shared\/webview\/ui\/selectDropdown/);
+  assert.doesNotMatch(history + confirmation, /dashboard\/webview\/components\/ui/);
 });

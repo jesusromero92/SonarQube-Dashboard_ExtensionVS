@@ -17,11 +17,6 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
       dashboardPanel.onDidChangeSummary(() => void this.postState()),
       dashboardPanel.onDidChangeLoading(() => void this.postState()),
       dashboardPanel.onDidChangePage(() => void this.postState()),
-      dashboardPanel.onDidChangeAnalysis(state => {
-        if (!state.running) {
-          setTimeout(() => void this.postState(), 250);
-        }
-      }),
       dashboardPanel.onDidChangeLanguage(() => {
         this.postLanguage();
         void this.postState();
@@ -47,9 +42,7 @@ export class DashboardLauncherViewProvider implements vscode.WebviewViewProvider
       if (message?.type === 'ready') {
         void this.postState();
       } else if (message?.type === 'navigate') {
-        const page = message.page === 'configuration' ||
-          message.page === 'history' ||
-          message.page === 'diagnostics'
+        const page = typeof message.page === 'string' && message.page.trim()
           ? message.page
           : 'data';
         void this.dashboardPanel.showPage(page);

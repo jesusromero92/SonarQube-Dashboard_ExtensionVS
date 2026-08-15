@@ -13,13 +13,6 @@ export const SONAR_CONFIGURATION_KEYS = {
   projectName: 'projectName',
   branch: 'branch',
   baseDir: 'baseDir',
-  scannerMode: 'scannerMode',
-  analysisInclusions: 'analysisInclusions',
-  analysisExclusions: 'analysisExclusions',
-  buildCommand: 'buildCommand',
-  customScannerCommand: 'customScannerCommand',
-  preAnalysisCommands: 'preAnalysisCommands',
-  postAnalysisCommands: 'postAnalysisCommands'
 } as const;
 
 export const DASHBOARD_CONFIGURATION_KEYS = {
@@ -37,8 +30,6 @@ export const DASHBOARD_COMMANDS = {
   open: 'sonarQubeDashboard.open',
   refresh: 'sonarQubeDashboard.refresh',
   clear: 'sonarQubeDashboard.clear',
-  analyze: 'sonarQubeDashboard.analyze',
-  cancelAnalysis: 'sonarQubeDashboard.cancelAnalysis',
   showIssueDetail: 'sonarQubeDashboard.showIssueDetail',
   showRuleDetail: 'sonarQubeDashboard.showRuleDetail',
   acceptIssue: 'sonarQubeDashboard.acceptIssue',
@@ -61,15 +52,7 @@ export const DASHBOARD_COMMANDS = {
 } as const;
 
 
-export const SCANNER_MODES = [
-  { value: 'auto', label: 'Automático (recomendado)' },
-  { value: 'maven', label: 'Maven · Java / Kotlin' },
-  { value: 'gradle', label: 'Gradle · Java / Kotlin / Android' },
-  { value: 'dotnet', label: '.NET · C# / VB.NET / F#' },
-  { value: 'npm', label: 'Genérico NPM · JavaScript / TypeScript / React / Python y otros' },
-  { value: 'docker', label: 'Docker · SonarScanner CLI' },
-  { value: 'custom', label: 'Comando personalizado' }
-] as const;
+
 
 export const DASHBOARD_COLORS = {
   types: {

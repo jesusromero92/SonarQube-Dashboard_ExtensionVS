@@ -6,25 +6,22 @@ import {
   analysisScopeProperties,
   hasExplicitAnalysisScope,
   normalizeAnalysisPatterns
-} from '../src/scanner/analysisScope';
-import { CONFIGURATION_PAGE_MARKUP } from '../src/dashboard/webview/pages/configurationPage';
-import { CONFIGURATION_CORE_SCRIPT } from '../src/dashboard/webview/scripts/core/configuration';
-import { ELEMENT_REGISTRY_SCRIPT } from '../src/dashboard/webview/scripts/core/elements';
+} from '../src/modules/pipeline/scanner/analysisScope';
+import { PIPELINE_CONFIGURATION_PANEL_MARKUP } from '../src/modules/pipeline/webview/configuration';
+import { PIPELINE_INTEGRATION_SCRIPT } from '../src/modules/pipeline/webview/integration';
 import { DISCLOSURE_STYLES } from '../src/dashboard/webview/design/components/disclosure';
 import { SOURCE_MESSAGES } from '../src/i18n/source';
 import { EN_MESSAGES } from '../src/i18n/en';
 import { ES_MESSAGES } from '../src/i18n/es';
 
-test('la versión 1.2.0 expone inclusiones y exclusiones en la configuración SonarQube', () => {
-  assert.match(CONFIGURATION_PAGE_MARKUP, /Inclusiones y exclusiones del análisis/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /id="analysisInclusions"/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /id="analysisExclusions"/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /sonar\.inclusions/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /sonar\.exclusions/);
-  assert.match(ELEMENT_REGISTRY_SCRIPT, /analysisInclusions/);
-  assert.match(ELEMENT_REGISTRY_SCRIPT, /analysisExclusions/);
-  assert.match(CONFIGURATION_CORE_SCRIPT, /analysisInclusions: elements\.analysisInclusions\.value\.trim\(\)/);
-  assert.match(CONFIGURATION_CORE_SCRIPT, /analysisExclusions: elements\.analysisExclusions\.value\.trim\(\)/);
+test('las inclusiones y exclusiones pertenecen a la configuración del módulo Pipeline', () => {
+  assert.match(PIPELINE_CONFIGURATION_PANEL_MARKUP, /Inclusiones y exclusiones/);
+  assert.match(PIPELINE_CONFIGURATION_PANEL_MARKUP, /id="analysisInclusions"/);
+  assert.match(PIPELINE_CONFIGURATION_PANEL_MARKUP, /id="analysisExclusions"/);
+  assert.match(PIPELINE_CONFIGURATION_PANEL_MARKUP, /sonar\.inclusions/);
+  assert.match(PIPELINE_CONFIGURATION_PANEL_MARKUP, /sonar\.exclusions/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /analysisInclusions: elements\.analysisInclusions\.value\.trim\(\)/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /analysisExclusions: elements\.analysisExclusions\.value\.trim\(\)/);
 });
 
 test('los patrones aceptan líneas y comas, se limpian y no se duplican', () => {
@@ -58,7 +55,7 @@ test('las propiedades de alcance usan la sintaxis de cada scanner', () => {
 
 test('los scanners integrados consumen el alcance y conservan los defaults solo sin configuración explícita', () => {
   const analysisService = readFileSync(
-    path.resolve(process.cwd(), 'src/pipeline/executionService.ts'),
+    path.resolve(process.cwd(), 'src/modules/pipeline/executionService.ts'),
     'utf8'
   );
 
@@ -94,8 +91,8 @@ test('manifest 1.3.0, traducciones y documentación mantienen la configuración 
   };
   const properties = packageManifest.contributes?.configuration?.properties ?? {};
   assert.equal(packageManifest.version, '2.0.0');
-  assert.ok(properties['sonarQubeDashboard.sonar.analysisInclusions']);
-  assert.ok(properties['sonarQubeDashboard.sonar.analysisExclusions']);
+  assert.ok(properties['sonarQubeDashboard.pipeline.analysisInclusions']);
+  assert.ok(properties['sonarQubeDashboard.pipeline.analysisExclusions']);
 
   for (const key of [
     'analysisScopeTitle',

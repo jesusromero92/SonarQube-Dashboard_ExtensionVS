@@ -4,15 +4,11 @@ import {
   SONAR_CONFIGURATION_SECTION,
   SONAR_TOKEN_KEY_PREFIX
 } from './constants';
-import { FolderSonarConfig, FolderSonarFormConfig, ScannerMode } from './types';
+import type { FolderSonarConfig, FolderSonarFormConfig } from './types';
 import { trimTrailingSlashes } from './textUtils';
 
 export function tokenKey(folder: vscode.WorkspaceFolder): string {
   return `${SONAR_TOKEN_KEY_PREFIX}${folder.uri.toString()}`;
-}
-
-function testCommandKey(folder: vscode.WorkspaceFolder): string {
-  return `sonarQubeDashboard.sonar.testCommand:${folder.uri.toString()}`;
 }
 
 export async function getFolderFormConfig(
@@ -30,27 +26,7 @@ export async function getFolderFormConfig(
     projectName: configuration.get<string>(SONAR_CONFIGURATION_KEYS.projectName, '').trim(),
     branch: configuration.get<string>(SONAR_CONFIGURATION_KEYS.branch, '').trim(),
     baseDir: configuration.get<string>(SONAR_CONFIGURATION_KEYS.baseDir, '').trim(),
-    hasToken: Boolean(await context.secrets.get(tokenKey(folder))),
-    scannerMode: configuration.get<ScannerMode>(SONAR_CONFIGURATION_KEYS.scannerMode, 'auto'),
-    analysisInclusions: configuration.get<string>(
-      SONAR_CONFIGURATION_KEYS.analysisInclusions,
-      ''
-    ).trim(),
-    analysisExclusions: configuration.get<string>(
-      SONAR_CONFIGURATION_KEYS.analysisExclusions,
-      ''
-    ).trim(),
-    buildCommand: configuration.get<string>(SONAR_CONFIGURATION_KEYS.buildCommand, '').trim(),
-    testCommand: context.workspaceState.get<string>(testCommandKey(folder), '').trim(),
-    customScannerCommand: configuration.get<string>(SONAR_CONFIGURATION_KEYS.customScannerCommand, '').trim(),
-    preAnalysisCommands: configuration.get<string>(
-      SONAR_CONFIGURATION_KEYS.preAnalysisCommands,
-      ''
-    ).trim(),
-    postAnalysisCommands: configuration.get<string>(
-      SONAR_CONFIGURATION_KEYS.postAnalysisCommands,
-      ''
-    ).trim()
+    hasToken: Boolean(await context.secrets.get(tokenKey(folder)))
   };
 }
 
@@ -71,15 +47,7 @@ export async function getFolderConfig(
     projectName: form.projectName || form.projectKey,
     branch: form.branch,
     baseDir: form.baseDir,
-    token,
-    scannerMode: form.scannerMode,
-    analysisInclusions: form.analysisInclusions,
-    analysisExclusions: form.analysisExclusions,
-    buildCommand: form.buildCommand,
-    testCommand: form.testCommand,
-    customScannerCommand: form.customScannerCommand,
-    preAnalysisCommands: form.preAnalysisCommands,
-    postAnalysisCommands: form.postAnalysisCommands
+    token
   };
 }
 
@@ -93,14 +61,6 @@ export async function saveFolderConfig(
     branch: string;
     baseDir: string;
     token?: string;
-    scannerMode?: ScannerMode;
-    analysisInclusions?: string;
-    analysisExclusions?: string;
-    buildCommand?: string;
-    testCommand?: string;
-    customScannerCommand?: string;
-    preAnalysisCommands?: string;
-    postAnalysisCommands?: string;
   }
 ): Promise<void> {
   const configuration = vscode.workspace.getConfiguration(
@@ -108,70 +68,33 @@ export async function saveFolderConfig(
     folder.uri
   );
 
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.serverUrl,
-    trimTrailingSlashes(values.serverUrl.trim()),
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.projectKey,
-    values.projectKey.trim(),
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.projectName,
-    values.projectName.trim(),
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.branch,
-    values.branch.trim(),
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.baseDir,
-    values.baseDir.trim(),
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.scannerMode,
-    values.scannerMode ?? 'auto',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.analysisInclusions,
-    values.analysisInclusions?.trim() ?? '',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.analysisExclusions,
-    values.analysisExclusions?.trim() ?? '',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.buildCommand,
-    values.buildCommand?.trim() ?? '',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await context.workspaceState.update(
-    testCommandKey(folder),
-    values.testCommand?.trim() ?? ''
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.customScannerCommand,
-    values.customScannerCommand?.trim() ?? '',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.preAnalysisCommands,
-    values.preAnalysisCommands?.trim() ?? '',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
-  await configuration.update(
-    SONAR_CONFIGURATION_KEYS.postAnalysisCommands,
-    values.postAnalysisCommands?.trim() ?? '',
-    vscode.ConfigurationTarget.WorkspaceFolder
-  );
+  await Promise.all([
+    configuration.update(
+      SONAR_CONFIGURATION_KEYS.serverUrl,
+      trimTrailingSlashes(values.serverUrl.trim()),
+      vscode.ConfigurationTarget.WorkspaceFolder
+    ),
+    configuration.update(
+      SONAR_CONFIGURATION_KEYS.projectKey,
+      values.projectKey.trim(),
+      vscode.ConfigurationTarget.WorkspaceFolder
+    ),
+    configuration.update(
+      SONAR_CONFIGURATION_KEYS.projectName,
+      values.projectName.trim(),
+      vscode.ConfigurationTarget.WorkspaceFolder
+    ),
+    configuration.update(
+      SONAR_CONFIGURATION_KEYS.branch,
+      values.branch.trim(),
+      vscode.ConfigurationTarget.WorkspaceFolder
+    ),
+    configuration.update(
+      SONAR_CONFIGURATION_KEYS.baseDir,
+      values.baseDir.trim(),
+      vscode.ConfigurationTarget.WorkspaceFolder
+    )
+  ]);
 
   if (values.token?.trim()) {
     await context.secrets.store(tokenKey(folder), values.token.trim());

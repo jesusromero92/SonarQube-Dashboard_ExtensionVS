@@ -322,8 +322,7 @@ test('reintenta con 25x y recuerda el perfil cuando 26x rechaza sus parámetros'
     serverUrl: 'http://sonar-fallback.test',
     projectKey: 'project-a',
     projectName: 'Project A',
-    token: 'test-token',
-    scannerMode: 'auto'
+    token: 'test-token'
   };
 
   try {

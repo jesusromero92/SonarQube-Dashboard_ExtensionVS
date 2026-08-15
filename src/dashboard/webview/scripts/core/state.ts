@@ -1,7 +1,5 @@
 export const DASHBOARD_STATE_SCRIPT = `
     let currentPage = 'data';
-    let currentPipelineHistory = [];
-    let currentHistoryEntryId = '';
     let currentDiagnostics = null;
     let currentConfig = { serverUrl: '', projectKey: '', projectName: '', hasToken: false };
     let currentSummary = { published: 0, issues: [], severity: [], evolution: [] };
@@ -47,19 +45,9 @@ export const DASHBOARD_STATE_SCRIPT = `
     let connectionValidated = false;
     let connectionAttemptPending = false;
     let configurationBusy = false;
-    let pipelineSaving = false;
     let hasWorkspace = false;
     let dashboardLoading = true;
     let workspaceTrusted = true;
-    let currentAnalysisState = {
-      running: false,
-      phase: 'idle',
-      message: 'Listo para analizar el repositorio.',
-      scanner: '',
-      canCancel: false,
-      log: [],
-      steps: []
-    };
     const hiddenChartSeries = {
       types: new Set(),
       severity: new Set()

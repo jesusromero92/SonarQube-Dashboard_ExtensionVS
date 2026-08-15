@@ -571,7 +571,6 @@ export const EN_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   'editorIntegration': 'Editor integration',
   'liveRemediation': 'Live remediation',
   'liveRemediationIntro': 'Keep the local state of synchronized issues up to date while you edit code without marking anything as fixed in SonarQube before the server confirms it.',
-  'liveRemediationEnabled': 'Enable live remediation tracking',
   'liveRemediationHint': 'Touched issues become locally modified and pending validation. If SonarQube for IDE stops reporting the same issue, it remains locally modified and moves to awaiting SonarQube confirmation; only server analysis can confirm that it is resolved.',
   'sonarIdeDetectedActive': 'SonarQube for IDE detected and active',
   'sonarIdeDetectedActiveHint': 'Its local diagnostics can independently confirm that a modified issue no longer reproduces before the next server analysis.',

@@ -1,5 +1,5 @@
 import { getNewCodeEvolutionUnavailableMarkup } from './ui/scopeUnavailableNotice';
-import { getSelectDropdownMarkup } from './ui/selectDropdown';
+import { getSelectDropdownMarkup } from '../../../shared/webview/ui/selectDropdown';
 
 const COVERAGE_GRANULARITY_OPTIONS = [
   { value: 'day', label: 'Día' },

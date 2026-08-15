@@ -169,36 +169,6 @@ export const DIALOG_EVENTS_SCRIPT = `
     });
 
     bindDialogDismiss(
-      elements.analysisConfirmationDialog,
-      [
-        elements.analysisConfirmationClose,
-        elements.analysisConfirmationCancel
-      ]
-    );
-    elements.analysisConfirmationBack.addEventListener(
-      'click',
-      () => showAnalysisConfirmationStep(1)
-    );
-    elements.analysisConfirmationNext.addEventListener(
-      'click',
-      reviewRepositoryAnalysis
-    );
-    elements.analysisConfirmationConfirm.addEventListener(
-      'click',
-      confirmRepositoryAnalysis
-    );
-    elements.analysisAddStep.addEventListener(
-      'click',
-      event => addSelectedAnalysisStep(event)
-    );
-    elements.analysisPipelineTemplate.addEventListener('change', () => {
-      applyTemplateToAnalysis(
-        pipelineTemplateById(elements.analysisPipelineTemplate.value)
-      );
-      refreshAnalysisConfirmationSummary();
-    });
-
-    bindDialogDismiss(
       elements.createComponentDialog,
       [
         elements.createComponentClose,
@@ -206,15 +176,5 @@ export const DIALOG_EVENTS_SCRIPT = `
       ]
     );
 
-    bindDialogDismiss(
-      elements.analysisDialog,
-      [
-        elements.analysisDialogClose,
-        elements.analysisDialogFooterClose
-      ]
-    );
-    elements.analysisDialogCancel.addEventListener(
-      'click',
-      cancelRepositoryAnalysis
-    );
+
 `;

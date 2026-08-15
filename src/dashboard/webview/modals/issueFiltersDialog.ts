@@ -1,5 +1,5 @@
 import { getDetailDialogMarkup } from '../components/ui/detailDialog';
-import { getSelectDropdownMarkup } from '../components/ui/selectDropdown';
+import { getSelectDropdownMarkup } from '../../../shared/webview/ui/selectDropdown';
 
 const emptySeverityOptions = [{ value: '', label: 'Todas' }] as const;
 const emptyMasculineOptions = [{ value: '', label: 'Todos' }] as const;

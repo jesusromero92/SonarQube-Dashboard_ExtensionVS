@@ -12,8 +12,7 @@ const config: FolderSonarConfig = {
   serverUrl: 'https://sonarqube.example.test',
   projectKey: 'sample',
   projectName: 'Sample',
-  token: 'token',
-  scannerMode: 'auto'
+  token: 'token'
 };
 
 test('fetchRuleDetail normaliza toda la información disponible de la regla', async () => {

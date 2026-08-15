@@ -1,4 +1,4 @@
-import { getAccordionMarkup } from '../../components/ui/accordion';
+import { getAccordionMarkup } from '../../../../shared/webview/ui/accordion';
 import { getCommentComposerMarkup } from '../../components/ui/commentComposer';
 
 const commentComposer = getCommentComposerMarkup({

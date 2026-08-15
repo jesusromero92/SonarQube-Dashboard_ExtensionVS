@@ -1,9 +1,5 @@
 export const DASHBOARD_EVENTS_SCRIPT = `
 
-    elements.refreshHistory.addEventListener('click', () => {
-      elements.historyLoading.hidden = false;
-      vscode.postMessage({ type: 'loadPipelineHistory', folderUri: currentFolderUri });
-    });
     elements.refreshDiagnostics.addEventListener('click', () => {
       elements.diagnosticsLoading.hidden = false;
       elements.diagnosticsContent.hidden = true;
@@ -18,17 +14,6 @@ export const DASHBOARD_EVENTS_SCRIPT = `
     elements.reviewUnavailableConfiguration.addEventListener('click', () => {
       navigate('configuration');
     });
-    elements.analyzeRepository.addEventListener(
-      'click',
-      requestAnalysis
-    );
-    elements.showAnalysisLog.addEventListener('click', () => {
-      elements.analysisDialog.showModal();
-    });
-    elements.cancelAnalysis.addEventListener(
-      'click',
-      cancelRepositoryAnalysis
-    );
     elements.clear.addEventListener('click', () => {
       vscode.postMessage({ type: 'clear' });
     });

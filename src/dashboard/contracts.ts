@@ -1,17 +1,21 @@
-import { DashboardLanguage } from '../i18n';
-import type { AnalysisExecutionStep } from '../pipeline';
-import {
+import type { DashboardLanguage } from '../i18n';
+import type {
   IssueMutationKind,
   RefreshSummary,
-  ScannerMode,
   SonarCreatableComponentKind,
   SonarCreationCapabilities
 } from '../types';
 
 export type RefreshCallback = (source?: 'sync' | 'analysis') => Promise<RefreshSummary>;
 export type ClearCallback = () => void;
-export type DashboardPage = 'data' | 'configuration' | 'history' | 'diagnostics';
+export type DashboardPage = 'data' | 'configuration' | 'diagnostics' | (string & {});
 
+/**
+ * Core dashboard message contract.
+ *
+ * Optional modules own their specific message payloads and are routed through
+ * DashboardModulesRuntime without importing module types into the core.
+ */
 export interface DashboardWebviewMessage {
   type?: string;
   folderUri?: string;
@@ -21,23 +25,6 @@ export interface DashboardWebviewMessage {
   projectName?: string;
   branch?: string;
   baseDir?: string;
-  scannerMode?: ScannerMode;
-  analysisInclusions?: string;
-  analysisExclusions?: string;
-  buildCommand?: string;
-  testCommand?: string;
-  customScannerCommand?: string;
-  preAnalysisCommands?: string;
-  postAnalysisCommands?: string;
-  runBuild?: boolean;
-  runTests?: boolean;
-  runPreAnalysisStages?: boolean;
-  runPostAnalysisStages?: boolean;
-  analysisSteps?: AnalysisExecutionStep[];
-  templateName?: string;
-  templateDescription?: string;
-  templateId?: string;
-  executionId?: string;
   language?: DashboardLanguage;
   fileUri?: string;
   line?: number;
@@ -55,8 +42,7 @@ export interface DashboardWebviewMessage {
   locationIndex?: number;
   groupIndex?: number;
   notificationsEnabled?: boolean;
-  liveRemediationEnabled?: boolean;
-  moduleId?: 'pipeline' | 'liveRemediation';
+  moduleId?: string;
   moduleEnabled?: boolean;
   significantIncreasePercent?: number;
   significantIncreaseMinimum?: number;
@@ -66,4 +52,5 @@ export interface DashboardWebviewMessage {
   componentDescription?: string;
   componentVisibility?: 'private' | 'public';
   creationCapabilities?: SonarCreationCapabilities;
+  [key: string]: unknown;
 }

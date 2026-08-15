@@ -1,7 +1,6 @@
 export const CONFIGURATION_CORE_SCRIPT = `
     const CREATE_PROJECT_OPTION = '__create_project__';
     const CREATE_APPLICATION_OPTION = '__create_application__';
-    let analysisScopeSaving = false;
 
     function values() {
       return {
@@ -15,117 +14,13 @@ export const CONFIGURATION_CORE_SCRIPT = `
           elements.projectKey.value,
         branch: elements.branch.value.trim(),
         baseDir: elements.baseDir.value.trim(),
-        scannerMode: elements.scannerMode.value,
-        analysisInclusions: elements.analysisInclusions.value.trim(),
-        analysisExclusions: elements.analysisExclusions.value.trim(),
-        buildCommand: elements.buildCommand.value.trim(),
-        testCommand: elements.testCommand.value.trim(),
-        customScannerCommand: elements.customScannerCommand.value.trim(),
-        preAnalysisCommands: elements.preAnalysisCommands.value.trim(),
-        postAnalysisCommands: elements.postAnalysisCommands.value.trim(),
+        ...collectDashboardModuleValues(),
         notificationsEnabled: elements.notificationsEnabled.checked,
-        liveRemediationEnabled: elements.liveRemediationEnabled.checked,
         significantIncreasePercent: Number(elements.significantIncreasePercent.value) || 20,
         significantIncreaseMinimum: Number(elements.significantIncreaseMinimum.value) || 5
       };
     }
 
-
-    function renderSonarIdeIntegrationStatus(status) {
-      const installed = Boolean(status?.installed);
-      const active = Boolean(status?.active);
-      elements.sonarIdeStatus.classList.toggle('live-remediation-analyzer-status--active', active);
-      elements.sonarIdeStatus.classList.toggle('live-remediation-analyzer-status--inactive', installed && !active);
-      elements.sonarIdeStatus.classList.toggle('live-remediation-analyzer-status--missing', !installed);
-
-      if (active) {
-        elements.sonarIdeStatusIcon.textContent = '✓';
-        elements.sonarIdeStatusTitle.textContent = 'SonarQube for IDE detectado y activo';
-        elements.sonarIdeStatusHint.textContent = 'Sus diagnósticos locales pueden confirmar de forma independiente que un defecto modificado ya no se reproduce antes del siguiente análisis del servidor.';
-        return;
-      }
-
-      if (installed) {
-        elements.sonarIdeStatusIcon.textContent = '○';
-        elements.sonarIdeStatusTitle.textContent = 'SonarQube for IDE instalado, todavía no activo';
-        elements.sonarIdeStatusHint.textContent = 'Abre o guarda un archivo compatible para activar su análisis local. Hasta entonces, los cambios permanecerán pendientes de validación.';
-        return;
-      }
-
-      elements.sonarIdeStatusIcon.textContent = '—';
-      elements.sonarIdeStatusTitle.textContent = 'SonarQube for IDE no detectado';
-      elements.sonarIdeStatusHint.textContent = 'No es obligatorio. Los defectos modificados permanecerán pendientes de validación hasta el siguiente análisis del repositorio.';
-    }
-
-    function effectiveProjectCommand(manualCommand, detectedCommand) {
-      return String(manualCommand || detectedCommand || '').trim();
-    }
-
-    function renderDetectedProjectActions(config) {
-      const detectedBuild = String(config.detectedBuildCommand || '').trim();
-      const detectedTests = String(config.detectedTestCommand || '').trim();
-
-      elements.buildCommand.placeholder = detectedBuild || 'npm run build';
-      elements.testCommand.placeholder = detectedTests || 'npm test';
-      const detectedPrefix = translateLocalizationValue('Detectado automáticamente: ');
-      const detectedSuffix = translateLocalizationValue(' Déjalo vacío para usarlo.');
-      elements.detectedBuildCommandHint.textContent = detectedBuild
-        ? detectedPrefix + detectedBuild + detectedSuffix
-        : 'No se detectó un comando de compilación. Puedes introducirlo manualmente.';
-      elements.detectedTestCommandHint.textContent = detectedTests
-        ? detectedPrefix + detectedTests + detectedSuffix
-        : 'No se detectó un comando de tests. Puedes introducirlo manualmente.';
-      renderDetectedIntegrations(config.detectedIntegrations);
-    }
-
-    function renderDetectedIntegrations(integrations) {
-      elements.detectedIntegrations.textContent = '';
-      const detected = availableDetectedIntegrations(integrations);
-      elements.detectedIntegrations.classList.toggle('is-empty', detected.length === 0);
-
-      if (detected.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'detected-integration-empty';
-        empty.textContent = translateLocalizationValue(
-          'No se han detectado integraciones predefinidas para este proyecto.'
-        );
-        elements.detectedIntegrations.appendChild(empty);
-        return;
-      }
-
-      for (const integration of detected) {
-        const card = document.createElement('article');
-        card.className = 'detected-integration-card';
-
-        const content = document.createElement('div');
-        content.className = 'detected-integration-content';
-
-        const title = document.createElement('strong');
-        title.textContent = integration.name || integration.id;
-
-        const description = document.createElement('span');
-        description.textContent = translateLocalizationValue(
-          integration.description || ''
-        );
-
-        const metadata = document.createElement('code');
-        metadata.textContent = integration.command || '';
-        metadata.title = integration.evidence || '';
-
-        content.append(title, description, metadata);
-
-        const add = document.createElement('button');
-        add.className = 'secondary';
-        add.type = 'button';
-        add.textContent = translateLocalizationValue('Añadir al pipeline');
-        add.addEventListener('click', () => {
-          addDetectedIntegrationToPipeline(integration);
-        });
-
-        card.append(content, add);
-        elements.detectedIntegrations.appendChild(card);
-      }
-    }
 
     function canSynchronizeConfiguration() {
       return Boolean(
@@ -136,92 +31,10 @@ export const CONFIGURATION_CORE_SCRIPT = `
       );
     }
 
-    function canSaveAnalysisScope() {
-      return Boolean(
-        hasWorkspace &&
-        !connectionDraftDirty &&
-        currentConfig.projectKey &&
-        elements.projectKey.value === currentConfig.projectKey
-      );
-    }
-
     function updateSaveAvailability() {
       elements.save.disabled =
         configurationBusy || !canSynchronizeConfiguration();
-      elements.saveAnalysisScope.disabled =
-        analysisScopeSaving || !canSaveAnalysisScope();
-      elements.savePipeline.disabled = pipelineSaving || !hasWorkspace;
-    }
-
-    function clearAnalysisScopeSaveStatus() {
-      elements.analysisScopeSaveStatus.hidden = true;
-      elements.analysisScopeSaveStatus.textContent = '';
-      elements.analysisScopeSaveStatus.className = 'pipeline-save-status';
-    }
-
-    function setAnalysisScopeSaveStatus(kind, message = '') {
-      analysisScopeSaving = kind === 'loading';
-      updateSaveAvailability();
-      if (!message) {
-        clearAnalysisScopeSaveStatus();
-        return;
-      }
-
-      elements.analysisScopeSaveStatus.hidden = false;
-      elements.analysisScopeSaveStatus.textContent =
-        translateLocalizationValue(message);
-      elements.analysisScopeSaveStatus.className =
-        'pipeline-save-status pipeline-save-status--' + kind;
-    }
-
-    function resetAnalysisScopeFields() {
-      elements.analysisInclusions.value = '';
-      elements.analysisExclusions.value = '';
-      currentConfig.analysisInclusions = '';
-      currentConfig.analysisExclusions = '';
-      analysisScopeSaving = false;
-      clearAnalysisScopeSaveStatus();
-      updateSaveAvailability();
-    }
-
-    function clearPipelineSaveStatus() {
-      elements.pipelineSaveStatus.hidden = true;
-      elements.pipelineSaveStatus.textContent = '';
-      elements.pipelineSaveStatus.className = 'pipeline-save-status';
-    }
-
-    function setPipelineSaveStatus(kind, message = '') {
-      pipelineSaving = kind === 'loading';
-      elements.savePipeline.disabled = pipelineSaving || !hasWorkspace;
-      if (!message) {
-        clearPipelineSaveStatus();
-        return;
-      }
-
-      elements.pipelineSaveStatus.hidden = false;
-      elements.pipelineSaveStatus.textContent = translateLocalizationValue(message);
-      elements.pipelineSaveStatus.className =
-        'pipeline-save-status pipeline-save-status--' + kind;
-    }
-
-    function clearPipelineTemplateStatus() {
-      elements.pipelineTemplateStatus.hidden = true;
-      elements.pipelineTemplateStatus.textContent = '';
-      elements.pipelineTemplateStatus.className =
-        'pipeline-save-status pipeline-template-status';
-    }
-
-    function setPipelineTemplateStatus(kind, message = '') {
-      if (!message) {
-        clearPipelineTemplateStatus();
-        return;
-      }
-
-      elements.pipelineTemplateStatus.hidden = false;
-      elements.pipelineTemplateStatus.textContent =
-        translateLocalizationValue(message);
-      elements.pipelineTemplateStatus.className =
-        'pipeline-save-status pipeline-template-status pipeline-save-status--' + kind;
+      runDashboardModuleHooks('updateSaveAvailability');
     }
 
     function setBusy(busy) {
@@ -269,9 +82,7 @@ export const CONFIGURATION_CORE_SCRIPT = `
       refreshSelectDropdown(elements.language, rebuild);
       refreshSelectDropdown(elements.folder, rebuild);
       refreshSelectDropdown(elements.projectKey, rebuild);
-      refreshSelectDropdown(elements.scannerMode, rebuild);
-      refreshSelectDropdown(elements.pipelineTemplate, rebuild);
-      refreshSelectDropdown(elements.analysisPipelineTemplate, rebuild);
+      runDashboardModuleHooks('refreshConfigurationDropdowns', rebuild);
     }
 
     function renderSonarCompatibility(compatibility, loading) {
@@ -517,10 +328,6 @@ export const CONFIGURATION_CORE_SCRIPT = `
         : '';
 
       elements.language.value = message.language || dashboardLanguage;
-      pipelineSaving = false;
-      clearPipelineSaveStatus();
-      analysisScopeSaving = false;
-      clearAnalysisScopeSaveStatus();
       hasWorkspace = folders.length > 0;
       elements.emptyWorkspace.hidden = hasWorkspace;
       elements.configurationContent.hidden = !hasWorkspace;
@@ -533,20 +340,6 @@ export const CONFIGURATION_CORE_SCRIPT = `
           branch: '',
           baseDir: '',
           hasToken: false,
-          scannerMode: 'auto',
-          analysisInclusions: '',
-          analysisExclusions: '',
-          buildCommand: '',
-          testCommand: '',
-          detectedBuildCommand: '',
-          detectedTestCommand: '',
-          detectedIntegrations: [],
-          pipelineTemplates: [],
-          customScannerCommand: '',
-          preAnalysisCommands: '',
-          postAnalysisCommands: '',
-          pipelineModuleEnabled: true,
-          liveRemediationModuleEnabled: true
         };
         connectionDraftDirty = false;
         connectionDraftFolderUri = '';
@@ -601,42 +394,19 @@ export const CONFIGURATION_CORE_SCRIPT = `
         ? 'Token guardado · escribe otro para sustituirlo'
         : 'Introduce el token';
       elements.tokenHint.textContent = currentConfig.hasToken
-        ? currentConfig.analysisPermission === 'denied'
-          ? 'El token puede consultar datos, pero no tiene permiso para ejecutar análisis en este proyecto.'
-          : 'Hay un token guardado de forma segura para esta carpeta.'
+        ? 'Hay un token guardado de forma segura para esta carpeta.'
         : 'El token se guardará en SecretStorage, no en settings.json.';
       elements.branch.value = currentConfig.branch || '';
       elements.baseDir.value = currentConfig.baseDir || '';
-      elements.scannerMode.value = currentConfig.scannerMode || 'auto';
-      elements.analysisInclusions.value = connectionDraftDirty
-        ? ''
-        : currentConfig.analysisInclusions || '';
-      elements.analysisExclusions.value = connectionDraftDirty
-        ? ''
-        : currentConfig.analysisExclusions || '';
-      elements.buildCommand.value = currentConfig.buildCommand || '';
-      elements.testCommand.value = currentConfig.testCommand || '';
-      renderDetectedProjectActions(currentConfig);
-      elements.customScannerCommand.value = currentConfig.customScannerCommand || '';
-      elements.preAnalysisCommands.value = currentConfig.preAnalysisCommands || '';
-      elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
-      renderPipelineConfigurationFromFields();
-      renderPipelineTemplates(currentConfig.pipelineTemplates || []);
-      elements.pipelineModuleEnabled.checked =
-        currentConfig.pipelineModuleEnabled !== false;
-      elements.liveRemediationModuleEnabled.checked =
-        currentConfig.liveRemediationModuleEnabled !== false;
-      updateModuleConfigurationVisibility();
+      syncModuleConfigurationState(currentConfig);
+      runDashboardModuleHooks('renderState', currentConfig, message, { connectionDraftDirty, hasWorkspace });
       elements.notificationsEnabled.checked = currentConfig.notificationsEnabled !== false;
-      elements.liveRemediationEnabled.checked = currentConfig.liveRemediationEnabled !== false;
-      renderSonarIdeIntegrationStatus(currentConfig.sonarIdeIntegration);
       elements.significantIncreasePercent.value = String(
         currentConfig.significantIncreasePercent || 20
       );
       elements.significantIncreaseMinimum.value = String(
         currentConfig.significantIncreaseMinimum || 5
       );
-      elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
       renderSonarCompatibility(
         currentConfig.sonarCompatibility,
         Boolean(
@@ -664,7 +434,6 @@ export const CONFIGURATION_CORE_SCRIPT = `
       restoreProjectOptions();
       refreshConfigurationDropdowns(true);
 
-      renderAnalysisState(currentAnalysisState);
       renderEmptyState();
     }
 
@@ -673,8 +442,6 @@ export const CONFIGURATION_CORE_SCRIPT = `
       connectionDraftFolderUri = '';
       connectionValidated = Boolean(config.serverUrl && config.hasToken);
       currentConfig = config;
-      analysisScopeSaving = false;
-      clearAnalysisScopeSaveStatus();
       selectedProjectKey = config.projectKey || selectedProjectKey;
       elements.projectKey.value = selectedProjectKey;
       elements.configState.textContent = selectedProjectKey
@@ -684,34 +451,11 @@ export const CONFIGURATION_CORE_SCRIPT = `
       elements.token.placeholder = 'Token guardado · escribe otro para sustituirlo';
       elements.tokenHint.textContent =
         'Hay un token guardado de forma segura para esta carpeta.';
-      if (config.analysisPermission === 'denied') {
-        elements.tokenHint.textContent =
-          'El token puede consultar datos, pero no tiene permiso para ejecutar análisis en este proyecto.';
-      }
-      elements.scannerMode.value = config.scannerMode || 'auto';
-      elements.analysisInclusions.value = config.analysisInclusions || '';
-      elements.analysisExclusions.value = config.analysisExclusions || '';
-      elements.buildCommand.value = config.buildCommand || '';
-      elements.testCommand.value = config.testCommand || '';
-      renderDetectedProjectActions(config);
-      elements.customScannerCommand.value = config.customScannerCommand || '';
-      elements.preAnalysisCommands.value = config.preAnalysisCommands || '';
-      elements.postAnalysisCommands.value = config.postAnalysisCommands || '';
-      renderPipelineConfigurationFromFields();
-      renderPipelineTemplates(config.pipelineTemplates || currentConfig.pipelineTemplates || []);
-      if (typeof config.pipelineModuleEnabled === 'boolean') {
-        elements.pipelineModuleEnabled.checked = config.pipelineModuleEnabled;
-      }
-      if (typeof config.liveRemediationModuleEnabled === 'boolean') {
-        elements.liveRemediationModuleEnabled.checked =
-          config.liveRemediationModuleEnabled;
-      }
-      updateModuleConfigurationVisibility();
-      elements.customScannerField.hidden = elements.scannerMode.value !== 'custom';
+      syncModuleConfigurationState(config);
+      runDashboardModuleHooks('renderConfigurationSaved', config);
       refreshConfigurationDropdowns(true);
       renderSonarCompatibility(config.sonarCompatibility, false);
       updateSaveAvailability();
-      renderAnalysisState(currentAnalysisState);
       renderEmptyState();
     }
 `;
