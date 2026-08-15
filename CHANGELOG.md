@@ -4,9 +4,23 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 *Todos los cambios relevantes de SonarQube Dashboard & Pipeline se documentarán en este archivo.*
 
-## [2.0.0] - 2026-08-14
+## [2.0.0]
+
+- Live Remediation: la sesión completa (estado pendiente, último análisis, solucionados, issues que siguen detectándose e historial) se persiste por workspace y se restaura tras recargar o reiniciar VS Code. Incluye migración automática del estado pendiente v3 al nuevo esquema v4. - 2026-08-14
 
 ### Added
+
+- Live Remediation now provides a deterministic **Server ↔ Local diff** for every pending issue whose server baseline is available, plus inline actions to view the diff, jump to code, and attempt a guarded per-issue revert. Automatic revert is refused when the original block can no longer be located safely.
+
+  *Live Remediation incorpora ahora un **diff Servidor ↔ Local** determinista para cada issue pendiente cuya baseline de servidor esté disponible, además de acciones inline para ver el diff, ir al código e intentar un revert protegido por issue. El revert automático se rechaza cuando el bloque original ya no puede localizarse con seguridad.*
+
+- Added **Remediation Session** tracking to the native locally-modified view. The session reports its start time, issues at start, modified/pending counts, exposes **Analyze repository**, and records the latest authoritative validation result.
+
+  *Se ha añadido el seguimiento de **Remediation Session** a la vista nativa de issues modificados localmente. La sesión muestra hora de inicio, issues al comenzar, contadores modificados/pendientes, expone **Analizar repositorio** y registra el último resultado de validación autoritativa.*
+
+- Added an in-session **Remediation history** capped at 20 validation results. Entries are created only from real SonarQube server snapshots and distinguish **Confirmed by SonarQube** from **Still detected by SonarQube**.
+
+  *Se ha añadido un **Historial de remediación** de sesión limitado a 20 resultados de validación. Las entradas solo se crean a partir de snapshots reales de SonarQube Server y distinguen **Confirmado por SonarQube** de **Sigue detectándose en SonarQube**.*
 
 - Added a new **Configuration → Modules** area that independently enables or disables the **Pipeline** and **Live Remediation** modules. Module-specific configuration tabs are only shown while their module is active.
 

@@ -10,6 +10,15 @@ import type {
   IssueDiagnosticSnapshot
 } from '../issueDiagnostics';
 import {
+  baselineReplacementText,
+  captureIssueBaseline,
+  currentIssueSnippet,
+  issueMatchesBaseline,
+  safeRevertRange,
+  serverIssueSnippet,
+  textMatchesBaseline
+} from './baseline';
+import {
   ACTIVE_PROBLEMS_REVEAL_DELAY_MS,
   DASHBOARD_DIAGNOSTIC_SOURCE,
   EXTERNAL_EVALUATION_DELAY_MS,
@@ -20,8 +29,21 @@ import {
   compareDiagnosticPosition,
   diagnosticMessage
 } from './diagnostics';
-import { IssueLocalRemediationState, LocallyModifiedIssueSummary, TrackedIssue } from './models';
-import { persistedRange, RemediationStateStore } from './persistence';
+import { LiveRemediationDiffProvider, LIVE_REMEDIATION_DIFF_SCHEME } from './diffProvider';
+import {
+  IssueBaseline,
+  IssueLocalRemediationState,
+  LocallyModifiedIssueSummary,
+  PersistedRemediationSession,
+  RemediationValidationEntry,
+  RemediationSessionSummary,
+  TrackedIssue
+} from './models';
+import {
+  persistedBaselineRange,
+  persistedRange,
+  RemediationStateStore
+} from './persistence';
 import {
   changeTouchesRange,
   clampRangeToDocument,
@@ -36,8 +58,32 @@ import {
 interface RestoredPendingState {
   state: Exclude<IssueLocalRemediationState, 'server'>;
   range: vscode.Range;
+  baselineRange: vscode.Range;
+  baseline?: IssueBaseline;
   observedBySonarIde: boolean;
 }
+
+interface PendingIssueReference {
+  issueKey: string;
+  rule: string;
+  ruleName: string;
+  message: string;
+  relativePath: string;
+  fileUri: string;
+  line: number;
+  severity: string;
+}
+
+interface MutableRemediationSession {
+  startedAt: string;
+  issuesAtStart: number;
+  lastValidationAt?: string;
+  confirmed: number;
+  stillDetected: number;
+  modifiedIssueKeys: Set<string>;
+}
+
+const MAX_REMEDIATION_HISTORY = 20;
 
 /**
  * Tracks the local remediation state of server-side issues without pretending that
@@ -56,16 +102,23 @@ export class LiveRemediationManager implements vscode.Disposable {
   );
   private readonly stateStore: RemediationStateStore;
   private readonly sonarIde = new SonarIdeDiagnosticsObserver();
+  private readonly diffProvider = new LiveRemediationDiffProvider();
+  private readonly remediationHistory: RemediationValidationEntry[] = [];
+  private readonly lastConfirmedResults: RemediationValidationEntry[] = [];
+  private readonly stillDetectedHistory: RemediationValidationEntry[] = [];
+  private remediationSession: MutableRemediationSession | undefined;
+  private historySequence = 0;
   private enabled = true;
 
   readonly onDidChange = this.changedEmitter.event;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly diagnostics: IssueDiagnosticPresentation
   ) {
     this.enabled = this.readEnabled();
     this.stateStore = new RemediationStateStore(context);
+    this.restoreSessionState();
     this.statusBar.name = 'SonarQube live remediation';
     this.statusBar.command = DASHBOARD_COMMANDS.refresh;
 
@@ -74,6 +127,11 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.disposables.push(
       this.statusBar,
       this.changedEmitter,
+      this.diffProvider,
+      vscode.workspace.registerTextDocumentContentProvider(
+        LIVE_REMEDIATION_DIFF_SCHEME,
+        this.diffProvider
+      ),
       trackedFilesWatcher,
       trackedFilesWatcher.onDidChange(uri => {
         void this.onTrackedFileSystemChanged(uri);
@@ -103,7 +161,9 @@ export class LiveRemediationManager implements vscode.Disposable {
             this.cancelActiveProblemsReveal();
             this.sonarIde.forget();
             this.resetLocalStates();
+            this.resetSession();
           } else if (!wasEnabled) {
+            this.ensureSession(this.trackedByKey.size);
             this.observeExternalDiagnosticsForAllFiles();
           }
           this.publishAll();
@@ -120,12 +180,13 @@ export class LiveRemediationManager implements vscode.Disposable {
     serverDiagnostics: IssueDiagnosticSnapshot,
     confirmLocalRemediation = false
   ): number {
+    this.ensureSession(issues.length);
     const diagnosticByKey = collectDiagnosticsByIssueKey(serverDiagnostics);
     const previousTracked = new Map(this.trackedByKey);
-    const serverIssueKeys = new Set(issues.map(issue => issue.key));
-    const pendingLocallyModifiedKeys = this.collectPendingLocallyModifiedKeys(previousTracked);
+    const serverIssuesByKey = new Map(issues.map(issue => [issue.key, issue] as const));
+    const pendingLocallyModified = this.collectPendingLocallyModified(previousTracked);
     const confirmedLocallyModifiedCount = confirmLocalRemediation
-      ? [...pendingLocallyModifiedKeys].filter(key => !serverIssueKeys.has(key)).length
+      ? this.recordValidationResults(pendingLocallyModified, serverIssuesByKey)
       : 0;
 
     this.resetTrackedSnapshot();
@@ -141,22 +202,124 @@ export class LiveRemediationManager implements vscode.Disposable {
       );
     }
 
-    this.syncPersistedStateFromTracked();
+    this.syncPersistedStateFromTracked(!confirmLocalRemediation);
+    void this.captureMissingBaselines();
     if (this.enabled) this.observeExternalDiagnosticsForAllFiles();
     this.publishAll();
     this.fireChanged();
     return confirmedLocallyModifiedCount;
   }
 
-  private collectPendingLocallyModifiedKeys(
+  private collectPendingLocallyModified(
     previousTracked: ReadonlyMap<string, TrackedIssue>
-  ): Set<string> {
-    const keys = new Set<string>();
+  ): Map<string, PendingIssueReference> {
+    const pending = new Map<string, PendingIssueReference>();
     for (const [key, tracked] of previousTracked) {
-      if (tracked.state !== 'server') keys.add(key);
+      if (tracked.state === 'server') continue;
+      pending.set(key, this.pendingReferenceFromTracked(key, tracked));
     }
-    for (const key of this.stateStore.pendingByKey.keys()) keys.add(key);
-    return keys;
+    for (const [key, persisted] of this.stateStore.pendingByKey) {
+      if (pending.has(key)) continue;
+      pending.set(key, {
+        issueKey: key,
+        rule: persisted.rule,
+        ruleName: persisted.ruleName,
+        message: persisted.message,
+        relativePath: persisted.relativePath,
+        fileUri: persisted.fileUri,
+        line: persisted.line,
+        severity: persisted.severity
+      });
+    }
+    return pending;
+  }
+
+  private pendingReferenceFromTracked(
+    key: string,
+    tracked: TrackedIssue
+  ): PendingIssueReference {
+    return {
+      issueKey: key,
+      rule: tracked.issue.rule,
+      ruleName: tracked.issue.ruleName,
+      message: tracked.issue.message,
+      relativePath: tracked.issue.relativePath,
+      fileUri: tracked.issue.fileUri,
+      line: Math.max(1, tracked.baselineRange.start.line + 1),
+      severity: tracked.issue.severity
+    };
+  }
+
+  private recordValidationResults(
+    pending: ReadonlyMap<string, PendingIssueReference>,
+    serverIssuesByKey: ReadonlyMap<string, DashboardIssue>
+  ): number {
+    if (pending.size === 0) return 0;
+    const validatedAt = new Date().toISOString();
+    let confirmed = 0;
+    let stillDetected = 0;
+
+    this.lastConfirmedResults.length = 0;
+    this.stillDetectedHistory.length = 0;
+
+    for (const [key, reference] of pending) {
+      this.historySequence += 1;
+      const currentServerIssue = serverIssuesByKey.get(key);
+      const entry: RemediationValidationEntry = currentServerIssue
+        ? this.validationEntryFromServerIssue(currentServerIssue, validatedAt, key)
+        : {
+          id: `${validatedAt}:${this.historySequence}:${key}`,
+          issueKey: reference.issueKey,
+          rule: reference.rule,
+          ruleName: reference.ruleName,
+          message: reference.message,
+          relativePath: reference.relativePath,
+          fileUri: reference.fileUri,
+          line: reference.line,
+          severity: reference.severity,
+          validatedAt
+        };
+
+      if (currentServerIssue) {
+        stillDetected += 1;
+        this.stillDetectedHistory.push({ ...entry, id: `${entry.id}:still` });
+        continue;
+      }
+
+      confirmed += 1;
+      this.lastConfirmedResults.push(entry);
+      this.remediationHistory.unshift(entry);
+    }
+
+    if (this.remediationHistory.length > MAX_REMEDIATION_HISTORY) {
+      this.remediationHistory.length = MAX_REMEDIATION_HISTORY;
+    }
+    if (this.remediationSession) {
+      this.remediationSession.lastValidationAt = validatedAt;
+      this.remediationSession.confirmed = confirmed;
+      this.remediationSession.stillDetected = stillDetected;
+    }
+    this.persistSessionState();
+    return confirmed;
+  }
+
+  private validationEntryFromServerIssue(
+    issue: DashboardIssue,
+    validatedAt: string,
+    issueKey: string
+  ): RemediationValidationEntry {
+    return {
+      id: `${validatedAt}:${this.historySequence}:${issueKey}`,
+      issueKey,
+      rule: issue.rule,
+      ruleName: issue.ruleName,
+      message: issue.message,
+      relativePath: issue.relativePath,
+      fileUri: issue.fileUri,
+      line: Math.max(1, issue.line || 1),
+      severity: issue.severity,
+      validatedAt
+    };
   }
 
   private resetTrackedSnapshot(): void {
@@ -179,6 +342,8 @@ export class LiveRemediationManager implements vscode.Disposable {
       return {
         state: previous.state,
         range: previous.range,
+        baselineRange: previous.baselineRange,
+        baseline: previous.baseline,
         observedBySonarIde: previous.observedBySonarIde
       };
     }
@@ -188,6 +353,8 @@ export class LiveRemediationManager implements vscode.Disposable {
     return {
       state: persisted.state,
       range: persistedRange(persisted),
+      baselineRange: persistedBaselineRange(persisted),
+      baseline: persisted.baseline,
       observedBySonarIde: persisted.state === 'awaitingConfirmation'
         ? persisted.observedBySonarIde
         : false
@@ -205,6 +372,8 @@ export class LiveRemediationManager implements vscode.Disposable {
     const tracked: TrackedIssue = {
       issue,
       range: pendingState?.range ?? sourceDiagnostic.range,
+      baselineRange: pendingState?.baselineRange ?? sourceDiagnostic.range,
+      baseline: pendingState?.baseline,
       serverSeverity: sourceDiagnostic.severity,
       serverMessage: sourceDiagnostic.message,
       state: pendingState?.state ?? 'server',
@@ -212,6 +381,7 @@ export class LiveRemediationManager implements vscode.Disposable {
     };
 
     this.trackedByKey.set(issue.key, tracked);
+    if (tracked.state !== 'server') this.markSessionModified(issue.key);
     const keys = this.keysByUri.get(issue.fileUri) ?? new Set<string>();
     keys.add(issue.key);
     this.keysByUri.set(issue.fileUri, keys);
@@ -225,6 +395,79 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.diagnostics.restoreServerSnapshot();
     this.sonarIde.forget();
     this.stateStore.clear();
+    this.resetSession();
+    this.fireChanged();
+  }
+
+  async clearRemediationSession(): Promise<void> {
+    if (!this.enabled) return;
+
+    const confirmLabel = this.text('Borrar sesión', 'Clear session');
+    const choice = await vscode.window.showWarningMessage(
+      this.text(
+        'Se borrarán todos los cambios pendientes, resultados del último análisis e historial de esta sesión de remediación. Los archivos locales y los issues de SonarQube Server no se modificarán.',
+        'All pending changes, latest-analysis results, and remediation history for this session will be cleared. Local files and SonarQube Server issues will not be modified.'
+      ),
+      { modal: true },
+      confirmLabel
+    );
+    if (choice !== confirmLabel) return;
+
+    this.cancelEvaluationTimers();
+    this.cancelActiveProblemsReveal();
+    this.sonarIde.forget();
+    for (const tracked of this.trackedByKey.values()) {
+      tracked.state = 'server';
+      tracked.observedBySonarIde = false;
+      tracked.range = tracked.baselineRange;
+    }
+
+    // Keep the current server snapshot/tracking, but replace every piece of
+    // session-local state with a brand-new empty session for this workspace.
+    this.stateStore.syncFromTracked(this.trackedByKey);
+    this.resetSession();
+    this.ensureSession(this.trackedByKey.size);
+    this.publishAll();
+    this.fireChanged();
+  }
+
+  async clearLastSolvedResults(): Promise<void> {
+    if (!this.enabled || this.lastConfirmedResults.length === 0) return;
+
+    const confirmLabel = this.text('Borrar solucionados', 'Clear solved');
+    const choice = await vscode.window.showWarningMessage(
+      this.text(
+        'Se eliminarán únicamente los issues de “Solucionados” del último análisis. El historial de solucionados, los archivos locales y SonarQube Server no se modificarán.',
+        'Only the issues in “Solved” from the latest analysis will be cleared. Solved history, local files, and SonarQube Server will not be modified.'
+      ),
+      { modal: true },
+      confirmLabel
+    );
+    if (choice !== confirmLabel) return;
+
+    this.lastConfirmedResults.length = 0;
+    if (this.remediationSession) this.remediationSession.confirmed = 0;
+    this.persistSessionState();
+    this.fireChanged();
+  }
+
+  async clearLastStillDetectedResults(): Promise<void> {
+    if (!this.enabled || this.stillDetectedHistory.length === 0) return;
+
+    const confirmLabel = this.text('Borrar detectados', 'Clear detected');
+    const choice = await vscode.window.showWarningMessage(
+      this.text(
+        'Se eliminarán únicamente los issues de “Siguen detectándose” del último análisis. Los cambios pendientes, los archivos locales y SonarQube Server no se modificarán.',
+        'Only the issues in “Still detected” from the latest analysis will be cleared. Pending changes, local files, and SonarQube Server will not be modified.'
+      ),
+      { modal: true },
+      confirmLabel
+    );
+    if (choice !== confirmLabel) return;
+
+    this.stillDetectedHistory.length = 0;
+    if (this.remediationSession) this.remediationSession.stillDetected = 0;
+    this.persistSessionState();
     this.fireChanged();
   }
 
@@ -249,9 +492,10 @@ export class LiveRemediationManager implements vscode.Disposable {
 
   getLocallyModifiedIssues(): LocallyModifiedIssueSummary[] {
     if (!this.enabled) return [];
-    return [...this.trackedByKey.values()]
-      .filter(tracked => tracked.state !== 'server')
-      .map(tracked => ({
+    const summaries = new Map<string, LocallyModifiedIssueSummary>();
+    for (const [key, tracked] of this.trackedByKey) {
+      if (tracked.state === 'server') continue;
+      summaries.set(key, {
         key: tracked.issue.key,
         rule: tracked.issue.rule,
         ruleName: tracked.issue.ruleName,
@@ -260,13 +504,84 @@ export class LiveRemediationManager implements vscode.Disposable {
         fileUri: tracked.issue.fileUri,
         line: Math.max(1, tracked.range.start.line + 1),
         severity: tracked.issue.severity,
-        state: tracked.state as Exclude<IssueLocalRemediationState, 'server'>
-      }))
-      .sort((left, right) =>
-        left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
-        || left.line - right.line
-        || left.rule.localeCompare(right.rule, undefined, { sensitivity: 'base' })
-      );
+        state: tracked.state as Exclude<IssueLocalRemediationState, 'server'>,
+        diffAvailable: tracked.baseline !== undefined,
+        revertAvailable: tracked.baseline !== undefined
+      });
+    }
+
+    // During startup the first server snapshot may still be loading. Surface the
+    // persisted pending entries immediately so the tree never appears to lose
+    // local changes just because VS Code was restarted.
+    for (const [key, persisted] of this.stateStore.pendingByKey) {
+      if (summaries.has(key)) continue;
+      summaries.set(key, {
+        key,
+        rule: persisted.rule,
+        ruleName: persisted.ruleName,
+        message: persisted.message,
+        relativePath: persisted.relativePath,
+        fileUri: persisted.fileUri,
+        line: persisted.line,
+        severity: persisted.severity,
+        state: persisted.state,
+        diffAvailable: persisted.baseline !== undefined,
+        revertAvailable: persisted.baseline !== undefined
+      });
+    }
+
+    return [...summaries.values()].sort((left, right) =>
+      left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
+      || left.line - right.line
+      || left.rule.localeCompare(right.rule, undefined, { sensitivity: 'base' })
+    );
+  }
+
+  getSessionSummary(): RemediationSessionSummary | undefined {
+    if (!this.enabled || !this.remediationSession) return undefined;
+    let modified = 0;
+    let pendingValidation = 0;
+    let pendingServer = 0;
+    const countedKeys = new Set<string>();
+    for (const [key, tracked] of this.trackedByKey) {
+      if (tracked.state === 'server') continue;
+      countedKeys.add(key);
+      modified += 1;
+      if (tracked.state === 'modified') pendingValidation += 1;
+      if (tracked.state === 'awaitingConfirmation') pendingServer += 1;
+    }
+    // Immediately after a VS Code restart the server snapshot may not have been
+    // rebuilt yet. Count restored pending entries as a fallback so the session
+    // summary does not briefly reset to zero while the first refresh is running.
+    for (const [key, persisted] of this.stateStore.pendingByKey) {
+      if (countedKeys.has(key)) continue;
+      modified += 1;
+      if (persisted.state === 'modified') pendingValidation += 1;
+      if (persisted.state === 'awaitingConfirmation') pendingServer += 1;
+    }
+    return {
+      startedAt: this.remediationSession.startedAt,
+      issuesAtStart: this.remediationSession.issuesAtStart,
+      modified,
+      modifiedDuringSession: this.remediationSession.modifiedIssueKeys.size,
+      pendingValidation,
+      pendingServer,
+      lastValidationAt: this.remediationSession.lastValidationAt,
+      confirmed: this.remediationSession.confirmed,
+      stillDetected: this.remediationSession.stillDetected
+    };
+  }
+
+  getRemediationHistory(): readonly RemediationValidationEntry[] {
+    return [...this.remediationHistory];
+  }
+
+  getLastConfirmedResults(): readonly RemediationValidationEntry[] {
+    return [...this.lastConfirmedResults];
+  }
+
+  getStillDetectedHistory(): readonly RemediationValidationEntry[] {
+    return [...this.stillDetectedHistory];
   }
 
   async revealLocallyModifiedIssue(issueKey: string): Promise<void> {
@@ -283,13 +598,178 @@ export class LiveRemediationManager implements vscode.Disposable {
     editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
 
+  async showIssueDiff(issueKey: string): Promise<void> {
+    const tracked = this.trackedByKey.get(issueKey);
+    if (!tracked || tracked.state === 'server') return;
+    const baseline = await this.ensureBaseline(tracked);
+    if (!baseline) {
+      await vscode.window.showWarningMessage(this.text(
+        'No se puede mostrar el diff porque no existe una baseline segura del último snapshot del servidor.',
+        'The diff cannot be shown because no safe baseline from the last server snapshot is available.'
+      ));
+      return;
+    }
+
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(tracked.issue.fileUri));
+    const serverContent = serverIssueSnippet(baseline);
+    const localContent = currentIssueSnippet(document, tracked);
+    if (serverContent === localContent) {
+      await vscode.window.showInformationMessage(this.text(
+        'El bloque local coincide con la baseline del servidor.',
+        'The local block matches the server baseline.'
+      ));
+      return;
+    }
+
+    const serverUri = this.diffProvider.createUri(
+      tracked.issue.key,
+      'server',
+      tracked.issue.relativePath,
+      serverContent
+    );
+    const localUri = this.diffProvider.createUri(
+      tracked.issue.key,
+      'local',
+      tracked.issue.relativePath,
+      localContent
+    );
+    const label = tracked.issue.ruleName || tracked.issue.rule || tracked.issue.message;
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      serverUri,
+      localUri,
+      `${label} — ${this.text('Servidor ↔ Local', 'Server ↔ Local')}`,
+      { preview: true }
+    );
+  }
+
+  async revertLocallyModifiedIssue(issueKey: string): Promise<void> {
+    const tracked = this.trackedByKey.get(issueKey);
+    if (!tracked || tracked.state === 'server') return;
+    const baseline = await this.ensureBaseline(tracked);
+    if (!baseline) {
+      await this.showUnsafeRevertMessage();
+      return;
+    }
+
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(tracked.issue.fileUri));
+    const replacementRange = safeRevertRange(document, tracked);
+    if (!replacementRange) {
+      await this.showUnsafeRevertMessage();
+      return;
+    }
+
+    const confirmLabel = this.text('Revertir cambio', 'Revert change');
+    const choice = await vscode.window.showWarningMessage(
+      this.text(
+        'Se restaurará únicamente el bloque asociado al issue usando la baseline del último snapshot de SonarQube. Los cambios fuera de ese bloque no se modificarán.',
+        'Only the block associated with this issue will be restored from the latest SonarQube server baseline. Changes outside that block will not be modified.'
+      ),
+      { modal: true },
+      confirmLabel
+    );
+    if (choice !== confirmLabel) return;
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(
+      document.uri,
+      replacementRange,
+      baselineReplacementText(document, baseline, replacementRange)
+    );
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (!applied) {
+      await vscode.window.showErrorMessage(this.text(
+        'VS Code no pudo aplicar el revert del issue.',
+        'VS Code could not apply the issue revert.'
+      ));
+      return;
+    }
+
+    const refreshedDocument = await vscode.workspace.openTextDocument(document.uri);
+    if (issueMatchesBaseline(refreshedDocument, tracked)) {
+      tracked.state = 'server';
+      tracked.observedBySonarIde = false;
+      tracked.range = clampRangeToDocument(refreshedDocument, tracked.baselineRange);
+      this.syncPersistedStateFromTracked();
+      this.publishUri(document.uri);
+      this.fireChanged();
+    }
+  }
+
   dispose(): void {
     this.diagnostics.restoreServerSnapshot();
     this.cancelEvaluationTimers();
     this.cancelActiveProblemsReveal();
     this.syncPersistedStateFromTracked();
+    this.persistSessionState();
     this.stateStore.dispose();
     for (const disposable of this.disposables) disposable.dispose();
+  }
+
+  private ensureSession(issueCount: number): void {
+    if (this.remediationSession) return;
+    this.remediationSession = {
+      startedAt: new Date().toISOString(),
+      issuesAtStart: issueCount,
+      confirmed: 0,
+      stillDetected: 0,
+      modifiedIssueKeys: new Set<string>()
+    };
+    this.persistSessionState();
+  }
+
+  private markSessionModified(issueKey: string): void {
+    if (!this.remediationSession || this.remediationSession.modifiedIssueKeys.has(issueKey)) return;
+    this.remediationSession.modifiedIssueKeys.add(issueKey);
+    this.persistSessionState();
+  }
+
+  private restoreSessionState(): void {
+    const persisted = this.stateStore.session;
+    if (!persisted) return;
+
+    this.remediationSession = {
+      startedAt: persisted.startedAt,
+      issuesAtStart: persisted.issuesAtStart,
+      lastValidationAt: persisted.lastValidationAt,
+      confirmed: persisted.confirmed,
+      stillDetected: persisted.stillDetected,
+      modifiedIssueKeys: new Set(persisted.modifiedIssueKeys)
+    };
+    this.remediationHistory.push(...persisted.remediationHistory.slice(0, MAX_REMEDIATION_HISTORY));
+    this.lastConfirmedResults.push(...persisted.lastConfirmedResults);
+    this.stillDetectedHistory.push(...persisted.stillDetectedHistory);
+    this.historySequence = persisted.historySequence;
+  }
+
+  private persistSessionState(): void {
+    if (!this.remediationSession) {
+      this.stateStore.syncSession(undefined);
+      return;
+    }
+
+    const persisted: PersistedRemediationSession = {
+      startedAt: this.remediationSession.startedAt,
+      issuesAtStart: this.remediationSession.issuesAtStart,
+      lastValidationAt: this.remediationSession.lastValidationAt,
+      confirmed: this.remediationSession.confirmed,
+      stillDetected: this.remediationSession.stillDetected,
+      modifiedIssueKeys: [...this.remediationSession.modifiedIssueKeys],
+      historySequence: this.historySequence,
+      remediationHistory: [...this.remediationHistory],
+      lastConfirmedResults: [...this.lastConfirmedResults],
+      stillDetectedHistory: [...this.stillDetectedHistory]
+    };
+    this.stateStore.syncSession(persisted);
+  }
+
+  private resetSession(): void {
+    this.remediationSession = undefined;
+    this.remediationHistory.length = 0;
+    this.lastConfirmedResults.length = 0;
+    this.stillDetectedHistory.length = 0;
+    this.historySequence = 0;
+    this.persistSessionState();
   }
 
   private readEnabled(): boolean {
@@ -311,40 +791,72 @@ export class LiveRemediationManager implements vscode.Disposable {
   }
 
   private onDocumentChanged(event: vscode.TextDocumentChangeEvent): void {
-    if (!this.enabled || event.document.uri.scheme !== 'file' || event.contentChanges.length === 0) {
-      return;
-    }
+    if (!this.shouldProcessDocumentChange(event)) return;
 
-    const uriString = event.document.uri.toString();
-    const keys = this.keysByUri.get(uriString);
+    const keys = this.keysByUri.get(event.document.uri.toString());
     if (!keys?.size) return;
 
-    const changes = [...event.contentChanges].sort((left, right) =>
-      comparePositions(right.range.start, left.range.start)
-    );
+    const changes = this.sortedContentChanges(event.contentChanges);
     let stateChanged = false;
-
     for (const key of keys) {
-      const tracked = this.trackedByKey.get(key);
-      if (!tracked) continue;
-
-      let currentRange = tracked.range;
-      let touched = false;
-      for (const change of changes) {
-        touched = touched || changeTouchesRange(change, currentRange);
-        currentRange = transformRangeAfterChange(currentRange, change);
-      }
-
-      tracked.range = clampRangeToDocument(event.document, currentRange);
-      if (touched && tracked.state !== 'modified') {
-        tracked.state = 'modified';
-        stateChanged = true;
-      }
+      stateChanged = this.reconcileTrackedIssueAfterDocumentChange(
+        key,
+        event.document,
+        changes
+      ) || stateChanged;
     }
 
     this.syncPersistedStateFromTracked();
     this.publishUri(event.document.uri);
     if (stateChanged) this.fireChanged();
+  }
+
+  private shouldProcessDocumentChange(event: vscode.TextDocumentChangeEvent): boolean {
+    return this.enabled
+      && event.document.uri.scheme === 'file'
+      && event.contentChanges.length > 0;
+  }
+
+  private sortedContentChanges(
+    changes: readonly vscode.TextDocumentContentChangeEvent[]
+  ): vscode.TextDocumentContentChangeEvent[] {
+    return [...changes].sort((left, right) =>
+      comparePositions(right.range.start, left.range.start)
+    );
+  }
+
+  private reconcileTrackedIssueAfterDocumentChange(
+    key: string,
+    document: vscode.TextDocument,
+    changes: readonly vscode.TextDocumentContentChangeEvent[]
+  ): boolean {
+    const tracked = this.trackedByKey.get(key);
+    if (!tracked) return false;
+
+    const transformed = this.transformTrackedRange(tracked.range, changes);
+    tracked.range = clampRangeToDocument(document, transformed.range);
+
+    if (tracked.baseline && issueMatchesBaseline(document, tracked)) {
+      return this.restoreTrackedServerState(
+        tracked,
+        clampRangeToDocument(document, tracked.baselineRange)
+      );
+    }
+
+    return transformed.touched && this.markTrackedModified(key, tracked);
+  }
+
+  private transformTrackedRange(
+    initialRange: vscode.Range,
+    changes: readonly vscode.TextDocumentContentChangeEvent[]
+  ): { range: vscode.Range; touched: boolean } {
+    let range = initialRange;
+    let touched = false;
+    for (const change of changes) {
+      touched = touched || changeTouchesRange(change, range);
+      range = transformRangeAfterChange(range, change);
+    }
+    return { range, touched };
   }
 
   private async onTrackedFileSystemChanged(
@@ -356,26 +868,69 @@ export class LiveRemediationManager implements vscode.Disposable {
     const uriString = uri.toString();
     const keys = this.keysByUri.get(uriString);
     if (!keys?.size) return;
-
-    // Editor changes already provide precise ranges through onDidChangeTextDocument.
-    // If the open document and the file on disk are identical, this watcher event
-    // is the corresponding save/reload and must not broaden the affected issues.
-    // A closed-file replacement has no text diff, so every tracked issue in that
-    // file is conservatively considered modified locally.
     if (!deleted && await this.openDocumentMatchesDisk(uri, uriString)) return;
 
+    const diskText = await this.readTrackedFileText(uri, deleted);
     let stateChanged = false;
     for (const key of keys) {
-      const tracked = this.trackedByKey.get(key);
-      if (!tracked || tracked.state === 'modified') continue;
-      tracked.state = 'modified';
-      stateChanged = true;
+      stateChanged = this.reconcileTrackedIssueAfterFileChange(key, diskText) || stateChanged;
     }
 
     if (!stateChanged) return;
     this.syncPersistedStateFromTracked();
     this.publishUri(uri);
     this.fireChanged();
+  }
+
+  private async readTrackedFileText(
+    uri: vscode.Uri,
+    deleted: boolean
+  ): Promise<string | undefined> {
+    if (deleted) return undefined;
+    try {
+      let text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+      if (text.startsWith('\uFEFF')) text = text.slice(1);
+      return text;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private reconcileTrackedIssueAfterFileChange(
+    key: string,
+    diskText: string | undefined
+  ): boolean {
+    const tracked = this.trackedByKey.get(key);
+    if (!tracked) return false;
+
+    if (this.diskTextMatchesBaseline(diskText, tracked)) {
+      return this.restoreTrackedServerState(tracked, tracked.baselineRange);
+    }
+    return this.markTrackedModified(key, tracked);
+  }
+
+  private diskTextMatchesBaseline(
+    diskText: string | undefined,
+    tracked: TrackedIssue
+  ): boolean {
+    return diskText !== undefined
+      && tracked.baseline !== undefined
+      && textMatchesBaseline(diskText, tracked);
+  }
+
+  private restoreTrackedServerState(tracked: TrackedIssue, range: vscode.Range): boolean {
+    if (tracked.state === 'server') return false;
+    tracked.state = 'server';
+    tracked.observedBySonarIde = false;
+    tracked.range = range;
+    return true;
+  }
+
+  private markTrackedModified(key: string, tracked: TrackedIssue): boolean {
+    if (tracked.state === 'modified') return false;
+    tracked.state = 'modified';
+    this.markSessionModified(key);
+    return true;
   }
 
   private async openDocumentMatchesDisk(
@@ -431,11 +986,9 @@ export class LiveRemediationManager implements vscode.Disposable {
         issue.observedBySonarIde = true;
         changed = true;
       }
-      // A persisted awaiting-confirmation state can outlive the editor session.
-      // If the official local analyzer reports the same finding again when the
-      // workspace is restored, return it to pending validation immediately.
       if (issue.state === 'awaitingConfirmation') {
         issue.state = 'modified';
+        this.markSessionModified(issue.issue.key);
         changed = true;
       }
     }
@@ -461,6 +1014,7 @@ export class LiveRemediationManager implements vscode.Disposable {
         }
         if (issue.state === 'awaitingConfirmation') {
           issue.state = 'modified';
+          this.markSessionModified(issue.issue.key);
           changed = true;
         }
         continue;
@@ -486,6 +1040,47 @@ export class LiveRemediationManager implements vscode.Disposable {
       if (tracked) result.push(tracked);
     }
     return result;
+  }
+
+  private async captureMissingBaselines(): Promise<void> {
+    const pending = [...this.trackedByKey.values()].filter(
+      tracked => tracked.state === 'server' && !tracked.baseline
+    );
+    if (pending.length === 0) return;
+    let changed = false;
+    await Promise.all(pending.map(async tracked => {
+      const baseline = await captureIssueBaseline(tracked);
+      if (
+        !baseline
+        || this.trackedByKey.get(tracked.issue.key) !== tracked
+        || tracked.state !== 'server'
+      ) return;
+      tracked.baseline = baseline;
+      changed = true;
+    }));
+    if (!changed) return;
+    this.syncPersistedStateFromTracked();
+    this.fireChanged();
+  }
+
+  private async ensureBaseline(tracked: TrackedIssue): Promise<IssueBaseline | undefined> {
+    if (tracked.baseline) return tracked.baseline;
+    // Once an issue is already modified there is no trustworthy way to reconstruct
+    // the previous server-side source block from the current file. Refuse to invent one.
+    if (tracked.state !== 'server') return undefined;
+    const baseline = await captureIssueBaseline(tracked);
+    if (!baseline || this.trackedByKey.get(tracked.issue.key) !== tracked) return undefined;
+    tracked.baseline = baseline;
+    this.syncPersistedStateFromTracked();
+    this.fireChanged();
+    return baseline;
+  }
+
+  private async showUnsafeRevertMessage(): Promise<void> {
+    await vscode.window.showWarningMessage(this.text(
+      'No se puede revertir automáticamente porque el bloque original ya no puede localizarse con seguridad. Usa “Ver cambio” y revierte manualmente.',
+      'The change cannot be reverted automatically because the original block can no longer be located safely. Use “View change” and revert it manually.'
+    ));
   }
 
   private publishAll(): void {
@@ -574,8 +1169,8 @@ export class LiveRemediationManager implements vscode.Disposable {
     this.statusBar.show();
   }
 
-  private syncPersistedStateFromTracked(): void {
-    this.stateStore.syncFromTracked(this.trackedByKey);
+  private syncPersistedStateFromTracked(preserveMissing = false): void {
+    this.stateStore.syncFromTracked(this.trackedByKey, preserveMissing);
   }
 
   private cancelEvaluationTimers(): void {
@@ -587,5 +1182,9 @@ export class LiveRemediationManager implements vscode.Disposable {
     if (!this.activeProblemsRevealTimer) return;
     clearTimeout(this.activeProblemsRevealTimer);
     this.activeProblemsRevealTimer = undefined;
+  }
+
+  private text(spanishText: string, englishText: string): string {
+    return getDashboardLanguage() === 'es' ? spanishText : englishText;
   }
 }

@@ -211,6 +211,16 @@ test('los estados y acciones del pipeline quedan alineados con sus controles', (
   assert.doesNotMatch(CONFIGURATION_EVENTS_SCRIPT, /window\.confirm/);
 });
 
+test('abrir archivos desde el dashboard mantiene visible la sidebar del plugin', () => {
+  const dashboardPanelSource = readFileSync(
+    path.resolve(process.cwd(), 'src/dashboardPanel.ts'),
+    'utf8'
+  );
+
+  assert.doesNotMatch(dashboardPanelSource, /workbench\.action\.closeSidebar/);
+  assert.match(dashboardPanelSource, /showTextDocument\(document, \{/);
+});
+
 test('la lista de ejecuciones usa una vista nativa de VS Code', () => {
   const launcherSource = readFileSync(
     path.resolve(process.cwd(), 'src/dashboard/launcherWebview.ts'),

@@ -1,34 +1,30 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const strict_1 = __importDefault(require("node:assert/strict"));
-const node_test_1 = __importDefault(require("node:test"));
+const assert = require("node:assert/strict");
+const test = require("node:test");
 const sonarApiCompatibility_1 = require("../src/sonarApiCompatibility");
 const profile25 = sonarApiCompatibility_1.SONAR_API_PROFILES.find(profile => profile.id === '25x');
 const profile26 = sonarApiCompatibility_1.SONAR_API_PROFILES.find(profile => profile.id === '26x');
-(0, node_test_1.default)('selecciona los perfiles 25x y 26x para sus versiones exactas', () => {
-    strict_1.default.equal((0, sonarApiCompatibility_1.selectSonarApiProfile)('25.7.0.110598').profile.id, '25x');
-    strict_1.default.equal((0, sonarApiCompatibility_1.selectSonarApiProfile)('26.7').profile.id, '26x');
-    strict_1.default.equal((0, sonarApiCompatibility_1.selectSonarApiProfile)('2026.7').profile.id, '26x');
-    strict_1.default.equal((0, sonarApiCompatibility_1.parseSonarVersion)('2025.4.1').major, 25);
+test('selecciona los perfiles 25x y 26x para sus versiones exactas', () => {
+    assert.equal((0, sonarApiCompatibility_1.selectSonarApiProfile)('25.7.0.110598').profile.id, '25x');
+    assert.equal((0, sonarApiCompatibility_1.selectSonarApiProfile)('26.7').profile.id, '26x');
+    assert.equal((0, sonarApiCompatibility_1.selectSonarApiProfile)('2026.7').profile.id, '26x');
+    assert.equal((0, sonarApiCompatibility_1.parseSonarVersion)('2025.4.1').major, 25);
 });
-(0, node_test_1.default)('usa provisionalmente el perfil más cercano para versiones antiguas y futuras', () => {
+test('usa provisionalmente el perfil más cercano para versiones antiguas y futuras', () => {
     const oldSelection = (0, sonarApiCompatibility_1.selectSonarApiProfile)('24.12');
     const futureSelection = (0, sonarApiCompatibility_1.selectSonarApiProfile)('27.1');
-    strict_1.default.equal(oldSelection.profile.id, '25x');
-    strict_1.default.equal(futureSelection.profile.id, '26x');
-    strict_1.default.equal(oldSelection.provisional, true);
-    strict_1.default.equal(futureSelection.provisional, true);
-    strict_1.default.match(futureSelection.warning, /provisionalmente/);
+    assert.equal(oldSelection.profile.id, '25x');
+    assert.equal(futureSelection.profile.id, '26x');
+    assert.equal(oldSelection.provisional, true);
+    assert.equal(futureSelection.provisional, true);
+    assert.match(futureSelection.warning, /provisionalmente/);
 });
-(0, node_test_1.default)('usa 25x provisionalmente cuando no puede detectar la versión', () => {
+test('usa 25x provisionalmente cuando no puede detectar la versión', () => {
     const selection = (0, sonarApiCompatibility_1.selectSonarApiProfile)('');
-    strict_1.default.equal(selection.profile.id, '25x');
-    strict_1.default.equal(selection.provisional, true);
+    assert.equal(selection.profile.id, '25x');
+    assert.equal(selection.provisional, true);
 });
-(0, node_test_1.default)('traduce la búsqueda de issues al contrato de 25x', () => {
+test('traduce la búsqueda de issues al contrato de 25x', () => {
     const translated = (0, sonarApiCompatibility_1.translateIssueSearchParameters)(profile25, {
         componentKeys: 'project-a',
         resolved: 'false',
@@ -36,13 +32,13 @@ const profile26 = sonarApiCompatibility_1.SONAR_API_PROFILES.find(profile => pro
         ps: '500',
         inNewCodePeriod: 'true'
     });
-    strict_1.default.equal(translated.get('componentKeys'), 'project-a');
-    strict_1.default.equal(translated.get('resolved'), 'false');
-    strict_1.default.equal(translated.get('p'), '2');
-    strict_1.default.equal(translated.get('inNewCodePeriod'), 'true');
-    strict_1.default.equal(translated.has('components'), false);
+    assert.equal(translated.get('componentKeys'), 'project-a');
+    assert.equal(translated.get('resolved'), 'false');
+    assert.equal(translated.get('p'), '2');
+    assert.equal(translated.get('inNewCodePeriod'), 'true');
+    assert.equal(translated.has('components'), false);
 });
-(0, node_test_1.default)('traduce nombres y valores legacy al contrato Clean Code de 26x', () => {
+test('traduce nombres y valores legacy al contrato Clean Code de 26x', () => {
     const translated = (0, sonarApiCompatibility_1.translateIssueSearchParameters)(profile26, {
         componentKeys: 'project-a',
         types: 'CODE_SMELL,BUG,VULNERABILITY',
@@ -50,13 +46,13 @@ const profile26 = sonarApiCompatibility_1.SONAR_API_PROFILES.find(profile => pro
         statuses: 'OPEN,RESOLVED,CLOSED',
         facets: 'types,severities,statuses'
     });
-    strict_1.default.equal(translated.get('components'), 'project-a');
-    strict_1.default.equal(translated.get('impactSoftwareQualities'), 'MAINTAINABILITY,RELIABILITY,SECURITY');
-    strict_1.default.equal(translated.get('impactSeverities'), 'BLOCKER,HIGH,MEDIUM,LOW,INFO');
-    strict_1.default.equal(translated.get('issueStatuses'), 'OPEN,ACCEPTED,FALSE_POSITIVE,FIXED');
-    strict_1.default.equal(translated.get('facets'), 'impactSoftwareQualities,impactSeverities,issueStatuses');
+    assert.equal(translated.get('components'), 'project-a');
+    assert.equal(translated.get('impactSoftwareQualities'), 'MAINTAINABILITY,RELIABILITY,SECURITY');
+    assert.equal(translated.get('impactSeverities'), 'BLOCKER,HIGH,MEDIUM,LOW,INFO');
+    assert.equal(translated.get('issueStatuses'), 'OPEN,ACCEPTED,FALSE_POSITIVE,FIXED');
+    assert.equal(translated.get('facets'), 'impactSoftwareQualities,impactSeverities,issueStatuses');
 });
-(0, node_test_1.default)('convierte resolved y el proyecto de hotspots para 26x', () => {
+test('convierte resolved y el proyecto de hotspots para 26x', () => {
     const issues = (0, sonarApiCompatibility_1.translateIssueSearchParameters)(profile26, { resolved: 'false' });
     const hotspots = (0, sonarApiCompatibility_1.translateHotspotSearchParameters)(profile26, {
         projectKey: 'project-a',
@@ -64,12 +60,12 @@ const profile26 = sonarApiCompatibility_1.SONAR_API_PROFILES.find(profile => pro
         ps: '100',
         inNewCodePeriod: 'true'
     });
-    strict_1.default.equal(issues.get('issueStatuses'), 'OPEN,CONFIRMED,IN_SANDBOX');
-    strict_1.default.equal(issues.has('resolved'), false);
-    strict_1.default.equal(hotspots.get('project'), 'project-a');
-    strict_1.default.equal(hotspots.has('projectKey'), false);
+    assert.equal(issues.get('issueStatuses'), 'OPEN,CONFIRMED,IN_SANDBOX');
+    assert.equal(issues.has('resolved'), false);
+    assert.equal(hotspots.get('project'), 'project-a');
+    assert.equal(hotspots.has('projectKey'), false);
 });
-(0, node_test_1.default)('prioriza parámetros y valores publicados por webservices/list', () => {
+test('prioriza parámetros y valores publicados por webservices/list', () => {
     const capabilities = (0, sonarApiCompatibility_1.discoverSonarApiCapabilities)({
         webServices: [{
                 path: 'api/issues',
@@ -86,7 +82,7 @@ const profile26 = sonarApiCompatibility_1.SONAR_API_PROFILES.find(profile => pro
             }]
     });
     const translated = (0, sonarApiCompatibility_1.translateIssueSearchParameters)(profile26, { componentKeys: 'project-a', resolved: 'false' }, capabilities);
-    strict_1.default.equal(translated.get('components'), 'project-a');
-    strict_1.default.equal(translated.get('issueStatuses'), 'OPEN,CONFIRMED');
+    assert.equal(translated.get('components'), 'project-a');
+    assert.equal(translated.get('issueStatuses'), 'OPEN,CONFIRMED');
 });
 //# sourceMappingURL=sonarApiCompatibility.test.js.map

@@ -2354,7 +2354,6 @@ ${selected.name}`,
         new vscode.Range(position, position),
         vscode.TextEditorRevealType.InCenterIfOutsideViewport
       );
-      await vscode.commands.executeCommand('workbench.action.closeSidebar');
     } catch (error) {
       this.postStatus('error', `No se pudo abrir el archivo: ${this.errorMessage(error)}`);
     }

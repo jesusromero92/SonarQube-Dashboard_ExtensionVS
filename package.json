@@ -43,7 +43,13 @@
     "onCommand:sonarQubeDashboard.previousFlowLocation",
     "onCommand:sonarQubeDashboard.nextFlowLocation",
     "onCommand:sonarQubeDashboard.getStarted",
-    "onCommand:sonarQubeDashboard.configure"
+    "onCommand:sonarQubeDashboard.configure",
+    "onCommand:sonarQubeDashboard.openLocallyModifiedIssue",
+    "onCommand:sonarQubeDashboard.showLiveRemediationDiff",
+    "onCommand:sonarQubeDashboard.revertLiveRemediationChange",
+    "onCommand:sonarQubeDashboard.clearLiveRemediationSession",
+    "onCommand:sonarQubeDashboard.clearLastSolvedRemediationResults",
+    "onCommand:sonarQubeDashboard.clearLastStillDetectedRemediationResults"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -169,6 +175,36 @@
         "command": "sonarQubeDashboard.showCoverage",
         "title": "%command.showCoverage%",
         "icon": "$(graph)"
+      },
+      {
+        "command": "sonarQubeDashboard.openLocallyModifiedIssue",
+        "title": "%command.liveRemediation.openIssue%",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "sonarQubeDashboard.showLiveRemediationDiff",
+        "title": "%command.liveRemediation.showDiff%",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "sonarQubeDashboard.revertLiveRemediationChange",
+        "title": "%command.liveRemediation.revert%",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "sonarQubeDashboard.clearLiveRemediationSession",
+        "title": "%command.liveRemediation.clearSession%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sonarQubeDashboard.clearLastSolvedRemediationResults",
+        "title": "%command.liveRemediation.clearSolvedResults%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "sonarQubeDashboard.clearLastStillDetectedRemediationResults",
+        "title": "%command.liveRemediation.clearStillDetectedResults%",
+        "icon": "$(trash)"
       }
     ],
     "configuration": {
@@ -373,9 +409,39 @@
       ],
       "view/item/context": [
         {
+          "command": "sonarQubeDashboard.clearLiveRemediationSession",
+          "when": "view == sonarQubeDashboard.locallyModifiedIssues && viewItem == liveRemediationSession",
+          "group": "inline@1"
+        },
+        {
           "command": "sonarQubeDashboard.copyFileIssues",
           "when": "view == sonarQubeDashboard.issueTree && viewItem == sonarIssueFileGroup",
           "group": "1_copy@1"
+        },
+        {
+          "command": "sonarQubeDashboard.showLiveRemediationDiff",
+          "when": "view == sonarQubeDashboard.locallyModifiedIssues && viewItem == sonarLocallyModifiedIssue",
+          "group": "inline@1"
+        },
+        {
+          "command": "sonarQubeDashboard.openLocallyModifiedIssue",
+          "when": "view == sonarQubeDashboard.locallyModifiedIssues && viewItem == sonarLocallyModifiedIssue",
+          "group": "inline@2"
+        },
+        {
+          "command": "sonarQubeDashboard.revertLiveRemediationChange",
+          "when": "view == sonarQubeDashboard.locallyModifiedIssues && viewItem == sonarLocallyModifiedIssue",
+          "group": "inline@3"
+        },
+        {
+          "command": "sonarQubeDashboard.clearLastSolvedRemediationResults",
+          "when": "view == sonarQubeDashboard.locallyModifiedIssues && viewItem == liveRemediationSolvedGroup",
+          "group": "inline@1"
+        },
+        {
+          "command": "sonarQubeDashboard.clearLastStillDetectedRemediationResults",
+          "when": "view == sonarQubeDashboard.locallyModifiedIssues && viewItem == liveRemediationStillDetectedGroup",
+          "group": "inline@1"
         }
       ]
     },

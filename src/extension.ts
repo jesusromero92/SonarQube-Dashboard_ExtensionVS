@@ -49,7 +49,12 @@ import {
   LiveRemediationManager,
   LocallyModifiedIssuesTreeProvider,
   LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID,
-  OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND
+  OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,
+  SHOW_LIVE_REMEDIATION_DIFF_COMMAND,
+  REVERT_LIVE_REMEDIATION_CHANGE_COMMAND,
+  CLEAR_LIVE_REMEDIATION_SESSION_COMMAND,
+  CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND,
+  CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND
 } from './liveRemediation';
 import { IssueTreeProvider } from './issueTreeView';
 import {
@@ -103,6 +108,22 @@ let liveRemediationModuleDisposables: vscode.Disposable[] = [];
 let pipelineModuleDisposables: vscode.Disposable[] = [];
 
 const CHANGELOG_VERSION_STATE_KEY = 'sonarqubeDashboard.lastShownChangelogVersion';
+
+function liveRemediationIssueKey(argument: unknown): string | undefined {
+  if (typeof argument === 'string' && argument.trim()) return argument;
+  if (!argument || typeof argument !== 'object') return undefined;
+
+  const candidate = argument as {
+    issue?: { key?: unknown };
+    key?: unknown;
+  };
+  if (typeof candidate.issue?.key === 'string' && candidate.issue.key.trim()) {
+    return candidate.issue.key;
+  }
+  return typeof candidate.key === 'string' && candidate.key.trim()
+    ? candidate.key
+    : undefined;
+}
 
 async function showChangelogIfNeeded(context: vscode.ExtensionContext): Promise<void> {
   const currentVersion = String(context.extension.packageJSON.version ?? '').trim();
@@ -628,7 +649,7 @@ function applyRefreshSummary(
   const confirmedLocallyModifiedCount = liveRemediation?.applyServerSnapshot(
     summary.issues,
     issueDiagnostics.getServerSnapshot(),
-    true
+    source === 'analysis'
   ) ?? 0;
   coverageDecorations.setCoverage(summary.coverage);
   issueNavigation.setIssues(summary.issues, summary.newIssues);
@@ -1009,7 +1030,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND,
-      (issueKey: string) => liveRemediation?.revealLocallyModifiedIssue(issueKey)
+      (argument: unknown) => {
+        const issueKey = liveRemediationIssueKey(argument);
+        return issueKey ? liveRemediation?.revealLocallyModifiedIssue(issueKey) : undefined;
+      }
+    ),
+    vscode.commands.registerCommand(
+      SHOW_LIVE_REMEDIATION_DIFF_COMMAND,
+      (argument: unknown) => {
+        const issueKey = liveRemediationIssueKey(argument);
+        return issueKey ? liveRemediation?.showIssueDiff(issueKey) : undefined;
+      }
+    ),
+    vscode.commands.registerCommand(
+      REVERT_LIVE_REMEDIATION_CHANGE_COMMAND,
+      (argument: unknown) => {
+        const issueKey = liveRemediationIssueKey(argument);
+        return issueKey ? liveRemediation?.revertLocallyModifiedIssue(issueKey) : undefined;
+      }
+    ),
+    vscode.commands.registerCommand(
+      CLEAR_LIVE_REMEDIATION_SESSION_COMMAND,
+      () => liveRemediation?.clearRemediationSession()
+    ),
+    vscode.commands.registerCommand(
+      CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND,
+      () => liveRemediation?.clearLastSolvedResults()
+    ),
+    vscode.commands.registerCommand(
+      CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND,
+      () => liveRemediation?.clearLastStillDetectedResults()
     ),
     vscode.commands.registerCommand(
       DASHBOARD_COMMANDS.getStarted,

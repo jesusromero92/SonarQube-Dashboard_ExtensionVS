@@ -1,9 +1,15 @@
 export const SONARQUBE_FOR_IDE_EXTENSION_ID = 'SonarSource.sonarlint-vscode';
 export const LOCALLY_MODIFIED_ISSUES_TREE_VIEW_ID = 'sonarQubeDashboard.locallyModifiedIssues';
 export const OPEN_LOCALLY_MODIFIED_ISSUE_COMMAND = 'sonarQubeDashboard.openLocallyModifiedIssue';
+export const SHOW_LIVE_REMEDIATION_DIFF_COMMAND = 'sonarQubeDashboard.showLiveRemediationDiff';
+export const REVERT_LIVE_REMEDIATION_CHANGE_COMMAND = 'sonarQubeDashboard.revertLiveRemediationChange';
+export const CLEAR_LIVE_REMEDIATION_SESSION_COMMAND = 'sonarQubeDashboard.clearLiveRemediationSession';
+export const CLEAR_LAST_SOLVED_REMEDIATION_RESULTS_COMMAND = 'sonarQubeDashboard.clearLastSolvedRemediationResults';
+export const CLEAR_LAST_STILL_DETECTED_REMEDIATION_RESULTS_COMMAND = 'sonarQubeDashboard.clearLastStillDetectedRemediationResults';
 export const LIVE_REMEDIATION_CONFIGURATION_KEY = 'liveRemediation.enabled';
 export const DASHBOARD_DIAGNOSTIC_SOURCE = 'SonarQube Dashboard';
 export const EXTERNAL_EVALUATION_DELAY_MS = 1400;
 export const ACTIVE_PROBLEMS_REVEAL_DELAY_MS = 120;
-export const LIVE_REMEDIATION_STORAGE_KEY = 'sonarQubeDashboard.liveRemediation.pending.v2';
+export const LIVE_REMEDIATION_STORAGE_KEY = 'sonarQubeDashboard.liveRemediation.state.v4';
+export const LEGACY_LIVE_REMEDIATION_STORAGE_KEY = 'sonarQubeDashboard.liveRemediation.pending.v3';
 export const PERSISTENCE_DEBOUNCE_MS = 150;

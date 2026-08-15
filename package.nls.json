@@ -70,5 +70,11 @@
   "viewsWelcome.issues": "No SonarQube issues are loaded for this workspace.\n[Open configuration](command:sonarQubeDashboard.configure)\n[Refresh SonarQube data](command:sonarQubeDashboard.refresh)",
   "viewsWelcome.pipeline": "No pipeline executions are available yet.\n[Open pipeline configuration](command:sonarQubeDashboard.configure)\n[Analyze repository](command:sonarQubeDashboard.analyze)",
   "views.locallyModifiedIssues.name": "Issues modified locally",
-  "viewsWelcome.locallyModifiedIssues": "No locally modified issues are pending validation or SonarQube confirmation."
+  "viewsWelcome.locallyModifiedIssues": "No locally modified issues are pending validation or SonarQube confirmation.",
+  "command.liveRemediation.openIssue": "SonarQube Dashboard & Pipeline: Open locally modified issue",
+  "command.liveRemediation.showDiff": "SonarQube Dashboard & Pipeline: View remediation change",
+  "command.liveRemediation.revert": "SonarQube Dashboard & Pipeline: Revert remediation change",
+  "command.liveRemediation.clearSession": "SonarQube Dashboard & Pipeline: Clear remediation session",
+  "command.liveRemediation.clearSolvedResults": "SonarQube Dashboard & Pipeline: Clear solved results from latest analysis",
+  "command.liveRemediation.clearStillDetectedResults": "SonarQube Dashboard & Pipeline: Clear still-detected results from latest analysis"
 }

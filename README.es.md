@@ -212,12 +212,22 @@ Live Remediation funciona cuando el módulo `sonarQubeDashboard.modules.liveReme
 - si SonarQube for IDE vuelve a informar del hallazgo, el estado regresa a **Modificado localmente · pendiente de validación**;
 - si SonarQube for IDE no está instalado, no está activo, no soporta el archivo o nunca informó de ese hallazgo exacto, la extensión mantiene deliberadamente **Modificado localmente · pendiente de validación** y no asume que está corregido;
 - una sincronización correcta posterior con SonarQube es autoritativa para el estado local pendiente: si el servidor sigue devolviendo el issue, se restaura su estado normal de servidor; si ya no lo devuelve, desaparece normalmente;
-- los estados pendientes y su rango seguido se guardan por workspace para poder restaurarlos tras recargar o reiniciar VS Code mientras todavía no se haya realizado una sincronización autoritativa;
+- los estados pendientes, sus rangos/baselines y la **sesión completa de remediación** se guardan por workspace. Al recargar o reiniciar VS Code se restauran la hora de inicio, los issues modificados, el último bloque **Tras último análisis**, los solucionados, los que siguen detectándose y el historial de solucionados;
 - al desactivar el módulo se eliminan su watcher, listeners, timers, barra de estado y vista nativa, y **Problems** vuelve inmediatamente a los diagnósticos normales del servidor mantenidos por el core.
 
 El indicador de la barra de estado aparece únicamente mientras exista estado local pendiente. Al seleccionarlo se solicita una actualización con SonarQube para contrastar el estado local con el servidor.
 
-El contenedor de la barra de actividad incorpora la vista nativa independiente **Issues modificados localmente**, al mismo nivel que **Ejecuciones del pipeline** y **Explorador de issues**. Incluye tanto los cambios detectados dentro del editor como los cambios externos de archivos seguidos. Cada entrada muestra regla, archivo y línea seguida actual cuando está disponible; al seleccionarla se abre directamente el hallazgo en el editor.
+La vista **Issues modificados localmente** incorpora además un flujo de remediación determinista:
+
+- al seleccionar un issue se abre un **diff Servidor ↔ Local** construido con la baseline capturada desde el último snapshot de SonarQube y el bloque local actual;
+- el menú contextual ofrece **Ver cambio**, **Ir al código** y **Revertir este cambio**. El revert solo se ejecuta si el bloque original puede localizarse con seguridad mediante su rango y anclas de contexto; si no puede garantizarse, la extensión rechaza el revert automático y obliga a revisarlo manualmente en el diff;
+- se crea una **Remediation Session** con hora de inicio, estado pendiente actual y una acción **Analizar repositorio** para solicitar un nuevo snapshot real;
+- después de una sincronización autoritativa, el acordeón **Tras último análisis** conserva la hora de validación, los **Solucionados** y los issues que **Siguen detectándose**;
+- la vista conserva además un **Historial de solucionados** de hasta 20 confirmaciones. Todo este estado de sesión se restaura tras reiniciar VS Code dentro del mismo workspace y solo SonarQube Server puede añadir una confirmación.
+
+Las baselines necesarias para mantener el diff y el revert seguro, junto con el estado de la sesión y sus resultados de validación, se guardan localmente en el estado del workspace. No se utilizan para inferir que un issue está resuelto: SonarQube Server sigue siendo la única fuente de verdad.
+
+El contenedor de la barra de actividad incorpora la vista nativa independiente **Issues modificados localmente**, al mismo nivel que **Ejecuciones del pipeline** y **Explorador de issues**. La raíz de la vista muestra la sesión, los cambios pendientes y el historial; seleccionar un issue abre su diff y sus acciones inline permiten ver el cambio, ir al código o intentar un revert seguro.
 
 Dentro de la pestaña **Live Remediation**, el acordeón **Integración con el editor** indica automáticamente si la extensión oficial **SonarQube for IDE** (`SonarSource.sonarlint-vscode`) está detectada y activa. Es opcional y se utiliza únicamente como una señal adicional para distinguir **pendiente de validación** de **pendiente de confirmación de SonarQube**.
 
