@@ -2,9 +2,7 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
     let analysisScopeSaving = false;
     let pipelineSaving = false;
     let integrationStepSaving = false;
-    let integrationTestingId = '';
     let selectedIntegrationCategory = '';
-    const integrationTestResults = new Map();
     let currentPipelineHistory = [];
     let currentHistoryEntryId = '';
     let currentAnalysisState = {
@@ -215,16 +213,10 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
         const test = document.createElement('button');
         test.className = 'secondary detected-integration-test';
         test.type = 'button';
-        test.disabled = integrationTestingId === integration.id || !hasWorkspace;
-        test.textContent = translateLocalizationValue(
-          integrationTestingId === integration.id ? 'Probando…' : 'Probar integración'
-        );
+        test.disabled = !hasWorkspace;
+        test.textContent = translateLocalizationValue('Probar integración');
         test.addEventListener('click', () => {
-          if (integrationTestingId) return;
-          integrationTestingId = integration.id;
-          integrationTestResults.delete(integration.id);
-          setIntegrationStepStatus('loading', 'Probando integración…');
-          renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
+          setIntegrationStepStatus('loading', 'Preparando comando de prueba…');
           vscode.postMessage({
             type: 'testPipelineIntegration',
             folderUri: elements.folder.value,
@@ -325,17 +317,6 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
       origin.textContent = translateLocalizationValue('Origen: ') +
         (origins.length > 0 ? origins.join(' · ') : translateLocalizationValue('No determinado'));
       metadata.appendChild(origin);
-      const probe = integrationTestResults.get(integration.id);
-      if (probe) {
-        const probeResult = document.createElement('span');
-        probeResult.className = probe.success
-          ? 'detected-integration-probe detected-integration-probe--success'
-          : 'detected-integration-probe detected-integration-probe--error';
-        probeResult.textContent = probe.success
-          ? translateLocalizationValue('Prueba correcta: ') + (probe.output || probe.command) + ' · ' + probe.durationMs + ' ms'
-          : translateLocalizationValue('Prueba fallida: ') + (probe.output || probe.command);
-        metadata.appendChild(probeResult);
-      }
       content.appendChild(metadata);
     }
 
@@ -614,19 +595,14 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
           );
           renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
           return true;
-        case 'pipelineIntegrationTestResult':
-          integrationTestingId = '';
-          integrationTestResults.set(message.integrationId, message.result || {});
+        case 'pipelineIntegrationTestPrepared':
           setIntegrationStepStatus(
-            message.result?.success ? 'success' : 'error',
-            message.result?.success ? 'Integración operativa.' : 'La prueba de integración ha fallado.'
+            'success',
+            message.message || 'Comando de prueba preparado en el terminal. Revísalo y pulsa Enter para ejecutarlo.'
           );
-          renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
           return true;
         case 'pipelineIntegrationTestError':
-          integrationTestingId = '';
-          setIntegrationStepStatus('error', message.message || 'No se pudo probar la integración.');
-          renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
+          setIntegrationStepStatus('error', message.message || 'No se pudo preparar la prueba de integración.');
           return true;
         case 'pipelineIntegrationSetupPrepared':
           setIntegrationStepStatus('success', message.message || 'Comando preparado.');

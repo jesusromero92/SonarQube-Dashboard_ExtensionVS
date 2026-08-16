@@ -1,0 +1,29 @@
+[
+  {
+    "filePath": "src/sample.ts",
+    "errorCount": 1,
+    "warningCount": 1,
+    "fixableErrorCount": 0,
+    "fixableWarningCount": 0,
+    "messages": [
+      {
+        "ruleId": "eqeqeq",
+        "severity": 2,
+        "message": "Expected '===' and instead saw '=='.",
+        "line": 4,
+        "column": 3,
+        "endLine": 4,
+        "endColumn": 5
+      },
+      {
+        "ruleId": "no-console",
+        "severity": 1,
+        "message": "Unexpected console statement.",
+        "line": 8,
+        "column": 1,
+        "endLine": 8,
+        "endColumn": 12
+      }
+    ]
+  }
+]

@@ -12,6 +12,7 @@ import { resolvePipelineCommand } from './commandVariables';
 import { PipelineHistoryStore } from './history';
 import { getRegisteredIntegrationProvider } from './integrations';
 import { emptyStructuredResult } from './results';
+import { parseRegisteredIntegrationResult } from './results/integrationParser';
 import { ProcessRunner } from './scanner/processRunner';
 import { trimTrailingSlashes } from '../../textUtils';
 import {
@@ -880,11 +881,10 @@ export class AnalysisService implements vscode.Disposable {
     const integrationId = step.integrationId?.trim();
     if (!integrationId) return;
     const provider = getRegisteredIntegrationProvider(integrationId);
-    const parser = provider?.parseResult;
-    if (!provider || !parser) return;
+    if (!provider?.parseResult) return;
 
     try {
-      const structured = parser({
+      const structured = parseRegisteredIntegrationResult({
         toolId: integrationId,
         toolName: step.name || provider.descriptor.displayName,
         command: displayCommand,
@@ -892,6 +892,7 @@ export class AnalysisService implements vscode.Disposable {
         exitCode: result.exitCode,
         output: result.output.map(chunk => this.redact(chunk)).join('')
       });
+      if (!structured) return;
       this.updateStepStructuredResult(step.id, structured);
       const summary = structured.summary.total;
       const suffix = structured.truncated ? ' (resultado truncado para el historial)' : '';

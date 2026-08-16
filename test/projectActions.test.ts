@@ -313,7 +313,7 @@ test('la detección refleja instalaciones y desinstalaciones al cambiar package.
   }
 });
 
-test('Integraciones permite probar herramientas y preparar instalaciones sin ejecutarlas', () => {
+test('Integraciones prepara pruebas e instalaciones en el terminal sin ejecutarlas automáticamente', () => {
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Probar integración/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /testPipelineIntegration/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Copiar comando/);
@@ -331,12 +331,12 @@ test('el refresco de integraciones queda aislado por carpeta en workspaces multi
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /message\.folderUri !== currentFolderUri/);
 });
 
-test('protege las pruebas de integración contra ejecuciones duplicadas y las cancela al desactivar', () => {
+test('Probar integración reutiliza un terminal abierto o crea uno nuevo y no ejecuta automáticamente', () => {
   const controller = readFileSync(path.join(process.cwd(), 'src/modules/pipeline/controller.ts'), 'utf8');
-  assert.match(controller, /integrationProbesInFlight = new Set<string>/);
-  assert.match(controller, /integrationProbesInFlight\.has\(integrationId\)/);
-  assert.match(controller, /integrationProbeRunner\?\.dispose\(\)/);
-  assert.match(controller, /integrationProbesInFlight\.clear\(\)/);
+  assert.match(controller, /vscode\.window\.activeTerminal[\s\S]*vscode\.window\.terminals\[0\][\s\S]*vscode\.window\.createTerminal/);
+  assert.match(controller, /terminal\.sendText\(command, false\)/);
+  assert.match(controller, /type: 'pipelineIntegrationTestPrepared'/);
+  assert.doesNotMatch(controller, /runner\.run\(provider\.getProbe/);
 });
 
 test('calcula histórico por paso y lo usa en la previsualización del pipeline', () => {

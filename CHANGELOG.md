@@ -88,9 +88,9 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
   *Se ha añadido **detección del stack del proyecto y recomendaciones de integraciones según el stack** dentro del módulo Pipeline. El Extension Host reconoce Node/JavaScript, TypeScript, React, Vitest/Jest, Python/pytest, Java con Maven/Gradle, .NET, Go, Terraform y Docker a partir de evidencias del workspace. Los providers declaran tokens abiertos de compatibilidad y prioridad de recomendación, por lo que la pestaña Integraciones muestra únicamente herramientas relevantes para el stack detectado, explica por qué se recomienda cada una y permite filtrar Disponibles/Recomendadas por categoría funcional. Los archivos relevantes del stack también participan en el refresco en caliente sin mover esta lógica al core.*
 
-- Added safe **Test integration** probes owned by each Pipeline integration provider. Probes run without a shell, enforce timeout/output limits, prevent concurrent duplicate probes for the same integration, and are cancelled/disposed when Pipeline is disabled. Assisted setup can copy the provider-generated command or prepare it in a terminal without executing it automatically.
+- Changed **Test integration** to prepare the provider-owned test command in VS Code's terminal instead of executing a background probe. Pipeline reuses the active/open terminal when available or creates a project-rooted terminal otherwise, writes the command with `sendText(..., false)`, and leaves execution explicitly to the user. Assisted setup now reuses the same terminal-selection behavior.
 
-  *Se han añadido pruebas seguras **Probar integración** propiedad de cada provider de Pipeline. Los probes se ejecutan sin shell, aplican timeout/límite de salida, evitan pruebas duplicadas simultáneas para la misma integración y se cancelan/liberan al desactivar Pipeline. La instalación asistida puede copiar el comando generado por el provider o prepararlo en un terminal sin ejecutarlo automáticamente.*
+  *Se ha cambiado **Probar integración** para preparar el comando de prueba aportado por el provider en el terminal de VS Code en lugar de ejecutar un probe en segundo plano. Pipeline reutiliza la terminal activa/abierta cuando existe o crea una nueva en la raíz del proyecto, escribe el comando mediante `sendText(..., false)` y deja la ejecución explícitamente al usuario. La instalación asistida reutiliza ahora la misma selección de terminal.*
 
 - Extended **Diagnostics** with generic module runtime/health contributions and detailed Pipeline integration metadata without statically importing optional module implementations or loading disabled modules. Provider and module diagnostic failures are isolated so one faulty contribution cannot break the complete report.
 
@@ -100,9 +100,9 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
   *Se han añadido estadísticas históricas de duración por paso y estimaciones previas a la ejecución. La revisión de confirmación muestra comandos resueltos, política de fallo, última/media histórica cuando existe y una duración total estimada derivada de ejecuciones completadas compatibles.*
 
-- Hardened module and integration lifecycle concurrency: disposing the module runtime during a lazy load now disposes the newly created implementation instead of activating it, disposed runtimes stop context/webview updates, provider detection uses failure isolation, and Pipeline cancels active integration probes/watchers during deactivation.
+- Hardened module and integration lifecycle concurrency: disposing the module runtime during a lazy load disposes the newly created implementation instead of activating it, disposed runtimes stop context/webview updates, provider detection uses failure isolation, and Pipeline cleans up integration watchers during deactivation.
 
-  *Se ha endurecido la concurrencia del ciclo de vida de módulos e integraciones: si el runtime se libera durante una carga lazy, la implementación recién creada se libera en lugar de activarse; los runtimes liberados dejan de actualizar contextos/webview, la detección de providers aísla fallos y Pipeline cancela probes/watchers activos durante la desactivación.*
+  *Se ha endurecido la concurrencia del ciclo de vida de módulos e integraciones: si el runtime se libera durante una carga lazy, la implementación recién creada se libera en lugar de activarse; los runtimes liberados dejan de actualizar contextos/webview, la detección de providers aísla fallos y Pipeline libera los watchers de integraciones durante la desactivación.*
 
 ### Fixed
 

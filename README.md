@@ -494,7 +494,7 @@ SonarQube is represented as the native required analysis integration and derives
 
 An integration is **available** when sufficient presence or configuration evidence is detected. Each available integration with an executable command offers **Add to available steps**. Pipeline re-validates detection in the extension host, avoids command duplicates, and saves the tool as a reusable step under **Configuration → Pipeline → Pipeline steps**. It can then be selected in any template like any other custom step.
 
-Available integrations can also run **Test integration**. Each provider defines a safe `--version`-style probe; it runs without a shell, has a timeout and output limit, prevents duplicate probes for the same integration, and is cancelled when Pipeline is disabled. Probes never install packages or modify the workspace. For unavailable integrations with a setup command, the UI offers **Copy command** and **Open in terminal**; the latter only prepares the command and leaves execution explicitly to the user.
+Available integrations also expose **Test integration**. Each provider defines a safe test command, usually equivalent to `--version`, but Pipeline no longer executes it in the background: if a terminal is already open it reuses the active terminal (or the first available one), writes the command automatically, and leaves it unexecuted; if no terminal exists it creates one rooted at the project and prepares the command there. Execution remains explicit—the user presses Enter. For unavailable integrations, **Copy command** and **Open in terminal** follow the same rule and never install anything automatically.
 
 Changes to `package.json`, lockfiles, and provider-contributed config files are watched while Pipeline is active. Detection is rerun with debounce and the Integrations catalog updates without switching the active tab or rebuilding the whole dashboard. All this logic remains owned by `src/modules/pipeline/`: the core only composes the module contribution and does not know about ESLint, React Doctor, Semgrep, or any other concrete integration.
 
@@ -510,7 +510,7 @@ Development proceeds in small phases so Pipeline remains independently removable
 | 2. Smart catalog / health | ✅ Complete | Category, available/declared version, detection origins, configuration, health, actual command, and host-generated setup. |
 | 3. Stack detection | ✅ Complete | Node/JavaScript, TypeScript, React, Vitest/Jest, Python/pytest, Java/Maven/Gradle, .NET, Go, Terraform, and Docker with workspace evidence and live refresh. |
 | 4. Project recommendations | ✅ Complete | Providers declare compatibility/priority; the catalog shows only detected-stack recommendations, explains why, and supports category filtering. |
-| 5. Test integration | ✅ Complete | Provider-owned safe/cancellable probe with timeout, output limit, no shell, and no project modification. |
+| 5. Test integration | ✅ Complete | Provider-owned test command prepared in an existing or newly created terminal, without automatic execution or project modification. |
 | 6. Assisted installation | ✅ Complete | Copy or prepare setup commands in a terminal using the detected package manager; execution remains explicit. |
 | 7. Variables and secrets | ✅ Complete | Dynamic/workspace variables, integration commands, and per-workspace secrets stored exclusively in `SecretStorage`, with masked preview and log redaction. |
 | 8. Pipeline preview | ✅ Complete | Pre-run review of steps/commands, failure policy, template/scope, and historical duration estimate. |
@@ -521,7 +521,7 @@ Development proceeds in small phases so Pipeline remains independently removable
 | 13. Execution diff | ✅ Completed | Project/branch/tool and parser-compatible comparison using stable fingerprints: new, persistent, and resolved findings. |
 | 14. Plugin Health/Diagnostics | ✅ Complete | Generic module health page/contributions without loading disabled implementations. |
 | 15. Integration diagnostics | ✅ Complete | Health/config/version/evidence, watcher status, and individual safe probes from the catalog. |
-| 16. Hardening | ✅ Complete | Provider/module failure isolation, safe lifecycle/dispose, cancellation, debounce/revision, and duplicate-probe prevention. |
+| 16. Hardening | ✅ Complete | Provider/module failure isolation, safe lifecycle/dispose, debounce/revision, controlled watchers, and terminal actions without automatic execution. |
 
 
 ### Structured results and differential history

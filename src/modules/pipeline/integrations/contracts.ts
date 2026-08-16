@@ -67,15 +67,6 @@ export interface ProjectIntegrationProbe {
   readonly timeoutMs?: number;
 }
 
-export interface ProjectIntegrationProbeResult {
-  readonly success: boolean;
-  readonly command: string;
-  readonly output: string;
-  readonly exitCode: number;
-  readonly timedOut: boolean;
-  readonly durationMs: number;
-}
-
 export interface DetectedProjectIntegration {
   id: string;
   name: string;

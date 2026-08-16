@@ -48,8 +48,7 @@ import type {
 import { detectProjectActions, type DetectedProjectIntegration } from './projectActions';
 import {
   createIntegrationDetectionContext,
-  getRegisteredIntegrationProvider,
-  IntegrationProbeRunner
+  getRegisteredIntegrationProvider
 } from './integrations';
 import { watchProjectActionFiles } from './projectActionsWatcher';
 import { appendAnalysisPipelineStage } from './parser';
@@ -113,8 +112,6 @@ export class PipelineDashboardController implements vscode.Disposable {
   private watchedProjectActions: { key: string; folderUri: string; rootPath: string } | undefined;
   private projectActionsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   private projectActionsRefreshRevision = 0;
-  private integrationProbeRunner: IntegrationProbeRunner | undefined;
-  private readonly integrationProbesInFlight = new Set<string>();
   private readonly variableStore: PipelineVariableStore;
 
   readonly onDidChangeAnalysis = this.analysisEmitter.event;
@@ -131,7 +128,6 @@ export class PipelineDashboardController implements vscode.Disposable {
   activate(): void {
     if (this.analysisService) return;
     this.templateStore = new PipelineTemplateStore(this.context);
-    this.integrationProbeRunner = new IntegrationProbeRunner();
     this.analysisService = new AnalysisService(this.context, state => {
       const localized = localizeAnalysisState(state, this.language);
       this.postMessage({ type: 'analysisState', state: localized });
@@ -141,9 +137,6 @@ export class PipelineDashboardController implements vscode.Disposable {
 
   deactivate(): void {
     this.stopWatchingProjectActions();
-    this.integrationProbeRunner?.dispose();
-    this.integrationProbeRunner = undefined;
-    this.integrationProbesInFlight.clear();
     if (!this.analysisService) return;
     this.analysisService.cancel();
     this.analysisService.dispose();
@@ -278,43 +271,47 @@ export class PipelineDashboardController implements vscode.Disposable {
   }
 
   private async testPipelineIntegration(message: PipelineMessage): Promise<void> {
-    const integrationId = (message.integrationId ?? '').trim();
-    if (!integrationId || this.integrationProbesInFlight.has(integrationId)) return;
-    this.integrationProbesInFlight.add(integrationId);
-    try {
-      const target = await this.resolveIntegrationTarget(message);
-      if (!target) return;
-      const { integration, provider, detectionContext } = target;
-      if (!provider.getProbe) {
-        this.postMessage({
-          type: 'pipelineIntegrationTestError',
-          integrationId: integration.id,
-          message: 'Esta integración no ofrece una prueba segura de disponibilidad.'
-        });
-        return;
-      }
-
-      const runner = this.integrationProbeRunner;
-      if (!runner) return;
-      try {
-        const result = await runner.run(provider.getProbe(detectionContext, integration));
-        if (this.integrationProbeRunner !== runner || !isDashboardModuleEnabled('pipeline')) return;
-        this.postMessage({
-          type: 'pipelineIntegrationTestResult',
-          integrationId: integration.id,
-          result
-        });
-      } catch (error) {
-        if (this.integrationProbeRunner !== runner || !isDashboardModuleEnabled('pipeline')) return;
-        this.postMessage({
-          type: 'pipelineIntegrationTestError',
-          integrationId: integration.id,
-          message: `No se pudo probar la integración: ${this.errorMessage(error)}`
-        });
-      }
-    } finally {
-      this.integrationProbesInFlight.delete(integrationId);
+    const target = await this.resolveIntegrationTarget(message);
+    if (!target) return;
+    const { integration, provider, detectionContext } = target;
+    if (!provider.getProbe) {
+      this.postMessage({
+        type: 'pipelineIntegrationTestError',
+        integrationId: integration.id,
+        message: 'Esta integración no ofrece una prueba segura de disponibilidad.'
+      });
+      return;
     }
+
+    try {
+      const probe = provider.getProbe(detectionContext, integration);
+      const command = probe.displayCommand.trim();
+      if (!command) throw new Error('La integración no ha proporcionado un comando de prueba.');
+      const terminal = this.integrationTerminal(probe.cwd);
+      terminal.show();
+      terminal.sendText(command, false);
+      this.postMessage({
+        type: 'pipelineIntegrationTestPrepared',
+        integrationId: integration.id,
+        command,
+        message: 'Comando de prueba preparado en el terminal. Revísalo y pulsa Enter para ejecutarlo.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineIntegrationTestError',
+        integrationId: integration.id,
+        message: `No se pudo preparar la prueba de integración: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private integrationTerminal(rootPath: string): vscode.Terminal {
+    return vscode.window.activeTerminal
+      ?? vscode.window.terminals[0]
+      ?? vscode.window.createTerminal({
+        name: 'SonarQube Dashboard · Pipeline',
+        cwd: rootPath
+      });
   }
 
   private async preparePipelineIntegrationInstall(message: PipelineMessage): Promise<void> {
@@ -346,12 +343,9 @@ export class PipelineDashboardController implements vscode.Disposable {
       return;
     }
     if (message.integrationSetupAction === 'terminal') {
-      const terminal = vscode.window.createTerminal({
-        name: 'SonarQube Dashboard · Pipeline',
-        cwd: rootPath
-      });
-      terminal.sendText(command, false);
+      const terminal = this.integrationTerminal(rootPath);
       terminal.show();
+      terminal.sendText(command, false);
       this.postMessage({
         type: 'pipelineIntegrationSetupPrepared',
         integrationId,

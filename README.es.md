@@ -494,7 +494,7 @@ SonarQube se representa como la integración nativa obligatoria del análisis y 
 
 Una integración se considera **disponible** cuando existe evidencia suficiente de su presencia o configuración. Cada integración disponible con un comando ejecutable ofrece **Añadir a pasos disponibles**. El módulo Pipeline vuelve a validar la detección en el host de la extensión, evita duplicados por comando y guarda la herramienta como un paso reutilizable dentro de **Configuración → Pipeline → Pasos del pipeline**. A partir de ahí puede seleccionarse en cualquier plantilla como el resto de pasos personalizados.
 
-Las integraciones disponibles también pueden ejecutar **Probar integración**. La prueba se define en el provider, se lanza sin shell mediante un comando inocuo equivalente a `--version`, tiene timeout y límite de salida, impide pruebas duplicadas de la misma integración y se cancela al desactivar Pipeline. La prueba nunca instala paquetes ni modifica el workspace. Para integraciones no disponibles con un comando de setup, la interfaz ofrece **Copiar comando** y **Abrir en terminal**; este último sólo prepara el comando y deja la ejecución explícita al usuario.
+Las integraciones disponibles también ofrecen **Probar integración**. El provider define un comando de prueba inocuo, normalmente equivalente a `--version`, pero Pipeline ya no lo ejecuta en segundo plano: si existe una terminal abierta reutiliza la terminal activa (o la primera disponible), muestra el comando automáticamente y lo deja sin ejecutar; si no existe ninguna terminal crea una nueva en la raíz del proyecto y prepara allí el comando. El usuario conserva siempre la ejecución explícita pulsando Enter. Para integraciones no disponibles con un comando de setup, **Copiar comando** y **Abrir en terminal** siguen el mismo principio de no ejecutar instalaciones automáticamente.
 
 Los cambios en `package.json`, lockfiles y archivos aportados por los providers se observan mientras Pipeline está activo. La detección se vuelve a ejecutar con debounce y el catálogo de Integraciones se actualiza sin cambiar la pestaña activa ni reconstruir todo el dashboard. Toda esta lógica continúa perteneciendo a `src/modules/pipeline/`: el core sólo compone la contribución del módulo y no conoce ESLint, React Doctor, Semgrep ni ninguna otra integración concreta.
 
@@ -510,7 +510,7 @@ El desarrollo se realiza por fases pequeñas para conservar la independencia del
 | 2. Catálogo inteligente / salud | ✅ Completada | Categoría, versión disponible/declarada, orígenes de detección, configuración, salud, comando real y setup calculado en Extension Host. |
 | 3. Detección de stack | ✅ Completada | Node/JavaScript, TypeScript, React, Vitest/Jest, Python/pytest, Java/Maven/Gradle, .NET, Go, Terraform y Docker con evidencias del workspace y refresco en caliente. |
 | 4. Recomendaciones por proyecto | ✅ Completada | Cada provider declara compatibilidad/prioridad; el catálogo muestra sólo recomendaciones del stack detectado, explica el motivo y permite filtrar por categoría. |
-| 5. Probar integración | ✅ Completada | Probe inocuo/cancelable por provider, timeout, límite de salida, sin shell y sin modificar el proyecto. |
+| 5. Probar integración | ✅ Completada | Comando de prueba aportado por provider y preparado en una terminal existente o nueva, sin ejecutarlo automáticamente ni modificar el proyecto. |
 | 6. Instalación asistida | ✅ Completada | Copiar comando o prepararlo en terminal según el gestor detectado; la ejecución permanece explícita. |
 | 7. Variables y secretos | ✅ Completada | Variables dinámicas y de workspace, comandos de integración y secretos por workspace respaldados exclusivamente por `SecretStorage`, con preview enmascarada y redacción de logs. |
 | 8. Previsualización del Pipeline | ✅ Completada | Revisión previa de pasos/comandos, política de fallo, plantilla/scope y estimación histórica antes de ejecutar. |
@@ -521,7 +521,7 @@ El desarrollo se realiza por fases pequeñas para conservar la independencia del
 | 13. Diff entre ejecuciones | ✅ Completada | Comparación por proyecto/rama/herramienta y parser compatible mediante fingerprints estables: nuevos, persistentes y resueltos. |
 | 14. Health/Diagnostics del plugin | ✅ Completada | Página genérica de salud de módulos y contribuciones, sin cargar implementaciones desactivadas. |
 | 15. Diagnóstico de integraciones | ✅ Completada | Salud/config/versión/evidencia, watcher y prueba segura individual desde el catálogo. |
-| 16. Hardening | ✅ Completada | Aislamiento de fallos de providers/módulos, lifecycle/dispose seguro, cancelación, debounce/revisión y prevención de probes duplicados. |
+| 16. Hardening | ✅ Completada | Aislamiento de fallos de providers/módulos, lifecycle/dispose seguro, debounce/revisión, watchers controlados y acciones de terminal sin ejecución automática. |
 
 
 ### Resultados estructurados e histórico diferencial

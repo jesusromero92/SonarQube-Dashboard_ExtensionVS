@@ -216,33 +216,7 @@ test('un provider defectuoso no impide detectar el resto de integraciones', asyn
   assert.deepEqual(detected.map(item => item.id), ['healthy-test-provider']);
 });
 
-test('el runner de probes ejecuta sin shell y aplica timeout', async () => {
-  const { IntegrationProbeRunner } = await import('../src/modules/pipeline/integrations');
-  const runner = new IntegrationProbeRunner();
-  try {
-    const version = await runner.run({
-      executable: process.execPath,
-      args: ['--version'],
-      cwd: process.cwd(),
-      displayCommand: 'node --version',
-      timeoutMs: 2000
-    });
-    assert.equal(version.success, true);
-    assert.match(version.output, /^v\d+/);
 
-    const timeout = await runner.run({
-      executable: process.execPath,
-      args: ['-e', 'setTimeout(() => {}, 1000)'],
-      cwd: process.cwd(),
-      displayCommand: 'node timeout-test',
-      timeoutMs: 30
-    });
-    assert.equal(timeout.success, false);
-    assert.equal(timeout.timedOut, true);
-  } finally {
-    runner.dispose();
-  }
-});
 
 test('los providers con resultados estructurados registran su parser dentro de Pipeline', () => {
   const parserProviders = new Set(

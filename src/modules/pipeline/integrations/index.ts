@@ -34,10 +34,9 @@ export type {
   ProjectIntegrationHealth,
   ProjectIntegrationRecommendation,
   ProjectIntegrationProbe,
-  ProjectIntegrationProbeResult,
   ProjectIntegrationSetup,
   ProjectIntegrationVersion,
   ProjectIntegrationVersionSource
 } from './contracts';
 
-export { IntegrationProbeRunner, versionProbe } from './probe';
+export { versionProbe } from './probe';
