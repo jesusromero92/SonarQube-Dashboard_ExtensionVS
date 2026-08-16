@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import { DetectedProjectActions } from './projectActions';
+import type { DetectedProjectActions } from './projectActions';
 import { PIPELINE_TEMPLATE_STORAGE_KEY_PREFIX } from './constants';
 import { AnalysisExecutionStep } from './models';
 

@@ -43,6 +43,8 @@ import type {
   PipelineRunHistoryEntry
 } from './models';
 import { detectProjectActions, type DetectedProjectIntegration } from './projectActions';
+import { watchProjectActionFiles } from './projectActionsWatcher';
+import { appendAnalysisPipelineStage } from './parser';
 import { createDefaultPipelineSteps, normalizeRequestedPipelineSteps } from './requests';
 import {
   createBuiltinPipelineTemplates,
@@ -75,6 +77,7 @@ interface PipelineMessage extends ModuleWebviewMessage {
   templateDescription?: string;
   templateId?: string;
   executionId?: string;
+  integrationId?: string;
 }
 
 export class PipelineDashboardController implements vscode.Disposable {
@@ -85,6 +88,10 @@ export class PipelineDashboardController implements vscode.Disposable {
   private readonly analysisPermissions = new Map<string, AnalysisPermissionStatus>();
   private readonly analysisEmitter = new vscode.EventEmitter<AnalysisState>();
   private readonly languageEmitter = new vscode.EventEmitter<DashboardLanguage>();
+  private projectActionsWatcher: vscode.Disposable | undefined;
+  private watchedProjectActions: { key: string; folderUri: string; rootPath: string } | undefined;
+  private projectActionsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private projectActionsRefreshRevision = 0;
 
   readonly onDidChangeAnalysis = this.analysisEmitter.event;
   readonly onDidChangeLanguage = this.languageEmitter.event;
@@ -106,6 +113,7 @@ export class PipelineDashboardController implements vscode.Disposable {
   }
 
   deactivate(): void {
+    this.stopWatchingProjectActions();
     if (!this.analysisService) return;
     this.analysisService.cancel();
     this.analysisService.dispose();
@@ -193,6 +201,9 @@ export class PipelineDashboardController implements vscode.Disposable {
       case 'savePipelineTemplate':
         await this.savePipelineTemplate(pipelineMessage);
         return true;
+      case 'addIntegrationToPipelineSteps':
+        await this.addIntegrationToPipelineSteps(pipelineMessage);
+        return true;
       case 'deletePipelineTemplate':
         await this.deletePipelineTemplate(pipelineMessage);
         return true;
@@ -227,11 +238,13 @@ export class PipelineDashboardController implements vscode.Disposable {
     connectionDraftDirty: boolean
   ): Promise<Record<string, unknown>> {
     if (!folder || !form) {
+      this.stopWatchingProjectActions();
       return this.emptyConfigurationState();
     }
 
     const config = await getPipelineFolderConfig(this.context, folder);
     const rootPath = this.analysisRoot(folder, form.baseDir) ?? folder.uri.fsPath;
+    this.watchProjectActions(folder, rootPath);
     const actions = await detectProjectActions(rootPath);
     const templates = mergePipelineTemplates(
       createBuiltinPipelineTemplates(
@@ -533,6 +546,67 @@ export class PipelineDashboardController implements vscode.Disposable {
     }
   }
 
+  private async addIntegrationToPipelineSteps(message: PipelineMessage): Promise<void> {
+    const folder = this.bridge?.getWorkspaceFolder(
+      message.folderUri ?? this.bridge.getSelectedFolderUri()
+    );
+    const integrationId = message.integrationId?.trim() ?? '';
+    if (!folder || !integrationId) {
+      this.postMessage({
+        type: 'pipelineIntegrationStepError',
+        message: 'No se pudo identificar la integración que quieres añadir.'
+      });
+      return;
+    }
+
+    try {
+      const sonar = await getFolderConfig(this.context, folder);
+      const rootPath = this.analysisRoot(folder, sonar?.baseDir) ?? folder.uri.fsPath;
+      const actions = await detectProjectActions(rootPath);
+      const integration = actions.integrations.find(item => item.id === integrationId);
+      if (!integration?.command?.trim()) {
+        throw new Error('La integración ya no está disponible en el proyecto.');
+      }
+
+      const current = await getPipelineFolderConfig(this.context, folder);
+      const result = appendAnalysisPipelineStage(
+        message.preAnalysisCommands ?? current.preAnalysisCommands,
+        message.postAnalysisCommands ?? current.postAnalysisCommands,
+        {
+          id: `integration-${integration.id}`,
+          name: integration.name,
+          command: integration.command,
+          failurePolicy: integration.failurePolicy
+        }
+      );
+      if (result.added) {
+        await savePipelineFolderConfig(this.context, folder, {
+          preAnalysisCommands: result.value,
+          postAnalysisCommands: ''
+        });
+      }
+
+      this.postMessage({
+        type: 'pipelineIntegrationStepUpdated',
+        integrationId,
+        config: {
+          preAnalysisCommands: result.value,
+          postAnalysisCommands: '',
+          detectedIntegrations: actions.integrations
+        },
+        message: result.added
+          ? 'Integración añadida a los pasos disponibles.'
+          : 'La integración ya forma parte de los pasos disponibles.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineIntegrationStepError',
+        integrationId,
+        message: `No se pudo añadir la integración a los pasos disponibles: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
   private async deletePipelineTemplate(message: PipelineMessage): Promise<void> {
     const folder = this.bridge?.getWorkspaceFolder(message.folderUri ?? this.bridge.getSelectedFolderUri());
     if (!folder || !message.templateId) return;
@@ -789,6 +863,82 @@ export class PipelineDashboardController implements vscode.Disposable {
 
   private isActive(service: AnalysisService): boolean {
     return isDashboardModuleEnabled('pipeline') && this.analysisService === service;
+  }
+
+
+  private watchProjectActions(folder: vscode.WorkspaceFolder, rootPath: string): void {
+    const folderUri = folder.uri.toString();
+    const key = `${folderUri}\u0000${rootPath}`;
+    if (this.watchedProjectActions?.key === key && this.projectActionsWatcher) return;
+
+    this.stopWatchingProjectActions();
+    this.watchedProjectActions = { key, folderUri, rootPath };
+    this.projectActionsWatcher = watchProjectActionFiles(
+      rootPath,
+      () => this.scheduleProjectActionsRefresh()
+    );
+  }
+
+  private stopWatchingProjectActions(): void {
+    this.projectActionsRefreshRevision += 1;
+    if (this.projectActionsRefreshTimer) {
+      clearTimeout(this.projectActionsRefreshTimer);
+      this.projectActionsRefreshTimer = undefined;
+    }
+    this.projectActionsWatcher?.dispose();
+    this.projectActionsWatcher = undefined;
+    this.watchedProjectActions = undefined;
+  }
+
+  private scheduleProjectActionsRefresh(): void {
+    const revision = ++this.projectActionsRefreshRevision;
+    if (this.projectActionsRefreshTimer) {
+      clearTimeout(this.projectActionsRefreshTimer);
+    }
+    this.projectActionsRefreshTimer = setTimeout(() => {
+      this.projectActionsRefreshTimer = undefined;
+      void this.refreshWatchedProjectActions(revision);
+    }, 350);
+  }
+
+  private async refreshWatchedProjectActions(revision: number): Promise<void> {
+    const watched = this.watchedProjectActions;
+    if (!watched || revision !== this.projectActionsRefreshRevision) return;
+    if (this.bridge?.getSelectedFolderUri() !== watched.folderUri) return;
+
+    const folder = this.bridge?.getWorkspaceFolder(watched.folderUri);
+    if (!folder) return;
+
+    try {
+      const sonar = await getFolderConfig(this.context, folder);
+      const currentRoot = this.analysisRoot(folder, sonar?.baseDir) ?? folder.uri.fsPath;
+      if (currentRoot !== watched.rootPath) {
+        this.watchProjectActions(folder, currentRoot);
+        return;
+      }
+
+      const actions = await detectProjectActions(currentRoot);
+      if (
+        revision !== this.projectActionsRefreshRevision ||
+        this.watchedProjectActions?.key !== watched.key
+      ) {
+        return;
+      }
+
+      this.postMessage({
+        type: 'pipelineProjectActionsUpdated',
+        folderUri: watched.folderUri,
+        config: {
+          detectedBuildCommand: actions.buildCommand ?? '',
+          detectedTestCommand: actions.testCommand ?? '',
+          detectedPackageManager: actions.packageManager ?? '',
+          detectedIntegrations: actions.integrations
+        }
+      });
+    } catch {
+      // Los cambios de npm/pnpm/yarn pueden dejar archivos transitoriamente incompletos.
+      // El siguiente evento del watcher volverá a ejecutar la detección estable.
+    }
   }
 
   private async analysisPermission(folder: vscode.WorkspaceFolder): Promise<AnalysisPermissionStatus> {

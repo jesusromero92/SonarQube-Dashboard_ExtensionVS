@@ -471,7 +471,9 @@ Actualmente reconoce, entre otras:
 - Checkov para infraestructura como código;
 - golangci-lint para Go.
 
-Una integración se considera **disponible** únicamente cuando se detecta su configuración, dependencia, script o evidencia específica (o, en el caso de SonarQube, cuando existe un proyecto configurado). El acordeón **No disponibles** sirve como catálogo de las integraciones que el plugin sabe reconocer y explica cómo hacer que pasen a estar disponibles. La configuración y ejecución del pipeline continúan realizándose desde la pestaña **Pipeline**.
+Una integración se considera **disponible** únicamente cuando se detecta su configuración, dependencia, script o evidencia específica (o, en el caso de SonarQube, cuando existe un proyecto configurado). Cada integración disponible con un comando ejecutable ofrece **Añadir a pasos disponibles**. El módulo Pipeline vuelve a validar la detección en el host de la extensión, evita duplicados por comando y guarda la herramienta como un paso reutilizable dentro de **Configuración → Pipeline → Pasos del pipeline**. A partir de ahí el paso puede seleccionarse en cualquier plantilla como el resto de pasos personalizados. El selector del editor de plantillas sólo ofrece la integración como fuente reutilizable después de añadirla a los pasos disponibles; las plantillas integradas que ya incorporan herramientas detectadas conservan su comportamiento adaptativo. SonarQube no se duplica porque ya es el paso nativo obligatorio del análisis.
+
+El acordeón **No disponibles** sirve como catálogo de las integraciones que el plugin sabe reconocer y explica cómo hacer que pasen a estar disponibles. Toda esta lógica continúa perteneciendo al módulo `src/modules/pipeline/`: el core sólo compone la contribución del módulo y no conoce integraciones ni pasos concretos.
 
 ## Pipeline de análisis configurable
 
@@ -653,7 +655,7 @@ El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados
 
 El flujo de conexión es explícito: **Conectar** valida la URL y el token y carga los componentes visibles sin seleccionar ninguno. Si la validación falla, el desplegable de proyectos permanece vacío y deshabilitado. El proyecto solo queda vinculado cuando el usuario lo selecciona y pulsa **Sincronizar**. Los borradores no guardados del servidor y del token se conservan al cambiar entre Datos y Configuración.
 
-La página de configuración se organiza en **SonarQube**, **Módulos** y **Notificaciones**, junto con las pestañas opcionales **Pipeline**, **Integraciones** y **Live Remediation**. **SonarQube** contiene únicamente conexión, proyecto, rama y mapeo local; **Módulos** controla qué runtimes opcionales están cargados; **Pipeline** es propietario del scanner, alcance, comandos, pasos, plantillas y detección de herramientas; **Integraciones** muestra de forma informativa las herramientas detectadas cuando Pipeline está habilitado; **Live Remediation** muestra su integración/estado propio; y **Notificaciones** agrupa los avisos automáticos.
+La página de configuración se organiza en **SonarQube**, **Módulos** y **Notificaciones**, junto con las pestañas opcionales **Pipeline**, **Integraciones** y **Live Remediation**. **SonarQube** contiene únicamente conexión, proyecto, rama y mapeo local; **Módulos** controla qué runtimes opcionales están cargados; **Pipeline** es propietario del scanner, alcance, comandos, pasos, plantillas y detección de herramientas; **Integraciones** muestra las herramientas detectadas y permite convertirlas en pasos reutilizables de Pipeline cuando el módulo está habilitado; **Live Remediation** muestra su integración/estado propio; y **Notificaciones** agrupa los avisos automáticos.
 
 La página permite gestionar:
 

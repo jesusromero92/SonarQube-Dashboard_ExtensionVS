@@ -8,6 +8,10 @@ import {
   parsePipelineTemplateYaml,
   serializePipelineTemplateYaml
 } from '../src/modules/pipeline/templates';
+import {
+  appendAnalysisPipelineStage,
+  parseAnalysisPipeline
+} from '../src/modules/pipeline/parser';
 import { DIAGNOSTICS_PAGE_MARKUP } from '../src/dashboard/webview/pages/diagnosticsPage';
 import { HISTORY_PAGE_MARKUP } from '../src/modules/pipeline/webview/pages/historyPage';
 import { getConfigurationPageMarkup } from '../src/dashboard/webview/pages/configurationPage';
@@ -72,6 +76,27 @@ test('la versión 0.21.0 ofrece las cuatro plantillas integradas', () => {
     templates.find(template => template.id === 'builtin-release')?.steps
       .every(step => step.failurePolicy === 'stop')
   );
+});
+
+test('una integración detectada se convierte en paso disponible sin duplicar comandos', () => {
+  const integrationStep = {
+    id: 'integration-dependency-audit',
+    name: 'npm audit',
+    command: 'npm audit --audit-level=high',
+    failurePolicy: 'continue' as const
+  };
+
+  const added = appendAnalysisPipelineStage('', '', integrationStep);
+  assert.equal(added.added, true);
+  const stages = parseAnalysisPipeline(added.value, 'Acción previa');
+  assert.equal(stages.length, 1);
+  assert.equal(stages[0]?.name, 'npm audit');
+  assert.equal(stages[0]?.command, 'npm audit --audit-level=high');
+  assert.equal(stages[0]?.failurePolicy, 'continue');
+
+  const duplicate = appendAnalysisPipelineStage(added.value, '', integrationStep);
+  assert.equal(duplicate.added, false);
+  assert.equal(parseAnalysisPipeline(duplicate.value, 'Acción previa').length, 1);
 });
 
 test('una plantilla integrada modificada reemplaza a la predeterminada sin duplicarse', () => {
@@ -176,6 +201,9 @@ test('el dashboard incorpora historial, diagnóstico y plantillas reutilizables'
   assert.match(DIAGNOSTICS_SCRIPT, /lastFailedRequest/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /applyTemplateToConfiguration/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /applyTemplateToAnalysis/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /addIntegrationToPipelineSteps/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Añadir a pasos disponibles/);
+  assert.doesNotMatch(PIPELINE_EDITOR_SCRIPT, /templateId: 'integration-' \+ integration\.id/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /loadPipelineHistory/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /hasRenderedExecution/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /historyLoading\.hidden = hasRenderedExecution/);
@@ -198,7 +226,11 @@ test('los textos nuevos están disponibles en español e inglés', () => {
     'confirmResetTemplate',
     'pipelineExecutionDetail',
     'executionSteps',
-    'console'
+    'console',
+    'addToAvailableSteps',
+    'alreadyInAvailableSteps',
+    'integrationAddedToAvailableSteps',
+    'sonarqubeAlreadyRequired'
   ] as const) {
     assert.ok(ALL_SOURCE_MESSAGES[key]);
     assert.ok(ALL_EN_MESSAGES[key]);

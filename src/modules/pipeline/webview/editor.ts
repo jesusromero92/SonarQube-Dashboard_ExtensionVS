@@ -67,15 +67,6 @@ export const PIPELINE_EDITOR_SCRIPT = String.raw`    let pipelineStepCounter = 0
       );
     }
 
-    function availableDetectedIntegrations(integrations) {
-      const configuredCommands = configuredPipelineCommandKeys();
-      return (Array.isArray(integrations) ? integrations : []).filter(
-        integration => !configuredCommands.has(
-          normalizedPipelineCommand(integration?.command)
-        )
-      );
-    }
-
     function pipelineSelect(className, ariaLabel, options, value, disabled = false) {
       const control = createSelectDropdownControl({
         ariaLabel,
@@ -285,6 +276,7 @@ export const PIPELINE_EDITOR_SCRIPT = String.raw`    let pipelineStepCounter = 0
           sourceId: 'custom-' + index
         });
       }
+
       return sources;
     }
 
@@ -585,18 +577,7 @@ export const PIPELINE_EDITOR_SCRIPT = String.raw`    let pipelineStepCounter = 0
         ...configured.map((step, index) => ({
           ...step,
           templateId: 'custom-' + index
-        })),
-        ...availableDetectedIntegrations(currentConfig.detectedIntegrations)
-          .map(integration => ({
-            id: 'integration-' + integration.id,
-            templateId: 'integration-' + integration.id,
-            name: integration.name,
-            kind: 'custom',
-            command: integration.command,
-            failurePolicy: integration.failurePolicy === 'stop' ? 'stop' : 'continue',
-            enabled: true,
-            unavailable: false
-          }))
+        }))
       ];
     }
 

@@ -159,8 +159,9 @@ ${configurationDropdown('pipelineTemplate', 'Plantilla de pipeline', [{ value: '
               <section id="configurationIntegrationsPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationIntegrationsTab" hidden>
                 <div class="configuration-section-intro integrations-section-intro">
                   <strong>Integraciones compatibles</strong>
-                  <p class="hint">Las herramientas detectadas aparecen como disponibles. Las no detectadas se muestran aparte con una indicación orientativa para habilitar su integración. Esta vista no instala, configura ni ejecuta herramientas automáticamente.</p>
+                  <p class="hint">Las herramientas detectadas aparecen como disponibles y pueden añadirse a los pasos reutilizables de Pipeline. Las no detectadas se muestran aparte con una indicación orientativa para habilitar su integración. Esta vista no instala, configura ni ejecuta herramientas automáticamente.</p>
                   <p id="detectedPackageManagerHint" class="hint">No se detectó un gestor de paquetes Node en este proyecto.</p>
+                  <span id="integrationStepStatus" class="pipeline-save-status integration-step-status" role="status" aria-live="polite" hidden></span>
                 </div>
                 <div class="accordion-group integration-availability-groups">
                   <details id="availableIntegrationsDisclosure" class="accordion" open>

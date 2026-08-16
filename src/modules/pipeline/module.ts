@@ -75,6 +75,7 @@ export class PipelineModule implements DashboardModule {
       'saveAnalysisScope',
       'savePipeline',
       'savePipelineTemplate',
+      'addIntegrationToPipelineSteps',
       'deletePipelineTemplate',
       'exportPipelineTemplate',
       'importPipelineTemplate',

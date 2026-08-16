@@ -15,6 +15,11 @@ export interface AnalysisPipelineVariables {
   branch: string;
 }
 
+export interface AppendAnalysisPipelineStageResult {
+  value: string;
+  added: boolean;
+}
+
 export function parseAnalysisPipeline(
   value: string | undefined,
   fallbackName: string
@@ -63,6 +68,25 @@ export function serializeAnalysisPipeline(stages: AnalysisPipelineStage[]): stri
     .join('\n');
 }
 
+export function appendAnalysisPipelineStage(
+  beforeValue: string | undefined,
+  afterValue: string | undefined,
+  stage: AnalysisPipelineStage
+): AppendAnalysisPipelineStageResult {
+  const current = [
+    ...parseAnalysisPipeline(beforeValue, 'Acción previa'),
+    ...parseAnalysisPipeline(afterValue, 'Acción posterior')
+  ];
+  const commandKey = normalizedCommand(stage.command);
+  const alreadyIncluded = current.some(
+    item => normalizedCommand(item.command) === commandKey
+  );
+  return {
+    value: serializeAnalysisPipeline(alreadyIncluded ? current : [...current, stage]),
+    added: !alreadyIncluded
+  };
+}
+
 export function expandAnalysisPipelineCommand(
   command: string,
   variables: AnalysisPipelineVariables
@@ -86,4 +110,8 @@ function slug(value: string): string {
   while (start < end && normalized[start] === '-') start += 1;
   while (end > start && normalized[end - 1] === '-') end -= 1;
   return normalized.slice(start, end) || 'step';
+}
+
+function normalizedCommand(command: string | undefined): string {
+  return String(command ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 }

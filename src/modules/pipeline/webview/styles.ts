@@ -450,10 +450,16 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       margin: 0 0 10px;
     }
     .detected-integration-card {
+      display: grid;
+      gap: 10px;
       padding: 10px 12px;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 3px;
       background: var(--vscode-editor-background);
+    }
+    .detected-integration-card--available {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 1fr);
+      align-items: stretch;
     }
     .detected-integration-content {
       display: grid;
@@ -481,6 +487,28 @@ export const PIPELINE_STYLES = `    .analysis-panel {
     .detected-integration-command-label {
       margin-top: 3px;
     }
+    .detected-integration-step-controls,
+    .detected-integration-step-hint {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: center;
+      padding-left: 12px;
+      border-left: 1px solid var(--vscode-panel-border);
+      text-align: center;
+    }
+    .detected-integration-step-controls > button {
+      max-width: 100%;
+    }
+    .detected-integration-step-hint {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+    }
+    .integration-step-status {
+      display: block;
+      margin-top: 8px;
+    }
+    .integration-step-status[hidden] { display: none; }
     .detected-integration-empty {
       padding: 10px 12px;
       border: 1px dashed var(--vscode-panel-border);
@@ -695,7 +723,17 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       }
     }
     @media (max-width: 760px) {
-      .detected-integration-card { align-items: stretch; flex-direction: column; }
+      .detected-integration-card--available { grid-template-columns: minmax(0, 1fr); }
+      .detected-integration-step-controls,
+      .detected-integration-step-hint {
+        justify-content: flex-start;
+        padding-top: 8px;
+        padding-left: 0;
+        border-top: 1px solid var(--vscode-panel-border);
+        border-left: 0;
+        text-align: left;
+      }
+      .detected-integration-step-controls > button { width: 100%; }
       .detected-integration-card > button { width: 100%; }
       .confirmation-details dt { width: 78px; flex-basis: 78px; }
       .analysis-confirmation-review-details > div { align-items: flex-start; flex-direction: column; gap: 3px; }

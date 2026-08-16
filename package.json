@@ -525,6 +525,8 @@
   "devDependencies": {
     "@types/node": "^20.17.0",
     "@types/vscode": "^1.96.0",
+    "react-doctor": "^0.9.12",
+    "stylelint": "^17.14.1",
     "typescript": "^5.7.2"
   },
   "capabilities": {

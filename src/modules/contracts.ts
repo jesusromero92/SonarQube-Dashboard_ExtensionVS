@@ -36,6 +36,7 @@ export interface DashboardModuleDefinition {
 export type ModuleWebviewMessage = Record<string, unknown> & {
   type?: string;
   folderUri?: string;
+  configurationTab?: string;
 };
 
 export interface DashboardModuleBridge {

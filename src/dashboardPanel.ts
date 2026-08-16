@@ -320,6 +320,7 @@ export class DashboardPanel implements DashboardModuleBridge {
   }
 
   private async handleMessage(message: DashboardWebviewMessage): Promise<void> {
+    this.rememberConfigurationTab(message);
     if (await this.handleConfigurationMessage(message)) return;
     if (await this.handleSonarDataMessage(message)) return;
     if (await this.modules.handleWebviewMessage(message as ModuleWebviewMessage)) return;
@@ -367,11 +368,14 @@ export class DashboardPanel implements DashboardModuleBridge {
     }
   }
 
-  private async handleSetModule(message: DashboardWebviewMessage): Promise<void> {
-    if (!message.moduleId) return;
+  private rememberConfigurationTab(message: DashboardWebviewMessage): void {
     if (typeof message.configurationTab === 'string' && message.configurationTab) {
       this.currentConfigurationTab = message.configurationTab;
     }
+  }
+
+  private async handleSetModule(message: DashboardWebviewMessage): Promise<void> {
+    if (!message.moduleId) return;
     const changed = await this.modules.setEnabled(
       message.moduleId,
       message.moduleEnabled !== false

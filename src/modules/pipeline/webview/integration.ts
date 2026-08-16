@@ -1,6 +1,7 @@
 export const PIPELINE_INTEGRATION_SCRIPT = `
     let analysisScopeSaving = false;
     let pipelineSaving = false;
+    let integrationStepSaving = false;
     let currentPipelineHistory = [];
     let currentHistoryEntryId = '';
     let currentAnalysisState = {
@@ -201,9 +202,63 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
       );
     }
 
+    function integrationAlreadyAvailable(integration) {
+      const commandKey = normalizedPipelineCommand(integration?.command);
+      return Boolean(commandKey && configuredPipelineCommandKeys().has(commandKey));
+    }
+
+    function setIntegrationStepStatus(kind, message = '') {
+      if (!elements.integrationStepStatus) return;
+      if (!message) {
+        elements.integrationStepStatus.hidden = true;
+        elements.integrationStepStatus.textContent = '';
+        elements.integrationStepStatus.className =
+          'pipeline-save-status integration-step-status';
+        return;
+      }
+      elements.integrationStepStatus.hidden = false;
+      elements.integrationStepStatus.textContent = translateLocalizationValue(message);
+      elements.integrationStepStatus.className =
+        'pipeline-save-status integration-step-status pipeline-save-status--' + kind;
+    }
+
+    function createIntegrationStepControls(integration) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'detected-integration-step-controls';
+
+      const add = document.createElement('button');
+      add.className = 'secondary detected-integration-add-step';
+      add.type = 'button';
+
+      const included = integrationAlreadyAvailable(integration);
+      add.disabled = included || integrationStepSaving || !hasWorkspace;
+      add.textContent = translateLocalizationValue(
+        included ? 'Ya disponible como paso' : 'Añadir a pasos disponibles'
+      );
+      add.addEventListener('click', () => {
+        if (integrationAlreadyAvailable(integration) || integrationStepSaving) return;
+        syncConfigurationPipelineFields();
+        integrationStepSaving = true;
+        setIntegrationStepStatus('loading', 'Añadiendo integración a los pasos disponibles…');
+        renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
+        vscode.postMessage({
+          type: 'addIntegrationToPipelineSteps',
+          folderUri: elements.folder.value,
+          integrationId: integration.id,
+          configurationTab: 'configurationIntegrationsPanel',
+          preAnalysisCommands: elements.preAnalysisCommands.value.trim(),
+          postAnalysisCommands: elements.postAnalysisCommands.value.trim()
+        });
+      });
+      wrapper.appendChild(add);
+      return wrapper;
+    }
+
     function integrationCard(integration, available) {
       const card = document.createElement('article');
-      card.className = 'detected-integration-card' + (available ? '' : ' detected-integration-card--unavailable');
+      card.className = 'detected-integration-card ' + (
+        available ? 'detected-integration-card--available' : 'detected-integration-card--unavailable'
+      );
 
       const content = document.createElement('div');
       content.className = 'detected-integration-content';
@@ -246,6 +301,16 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
       }
 
       card.appendChild(content);
+      if (available && integration.command) {
+        card.appendChild(createIntegrationStepControls(integration));
+      } else if (available && integration.id === 'sonarqube') {
+        const nativeStep = document.createElement('span');
+        nativeStep.className = 'detected-integration-step-hint';
+        nativeStep.textContent = translateLocalizationValue(
+          'SonarQube ya forma parte de todas las plantillas como paso obligatorio.'
+        );
+        card.appendChild(nativeStep);
+      }
       return card;
     }
 
@@ -402,9 +467,35 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
         case 'pipelineSaveError':
           setPipelineSaveStatus('error', message.message || 'No se pudo guardar el pipeline.');
           return true;
+        case 'pipelineProjectActionsUpdated':
+          if (message.folderUri && message.folderUri !== currentFolderUri) return true;
+          currentConfig = { ...currentConfig, ...(message.config || {}) };
+          renderDetectedProjectActions(currentConfig);
+          return true;
         case 'pipelineTemplatesUpdated':
           renderPipelineTemplates(message.templates || [], message.templateId);
+          renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
           setPipelineTemplateStatus('success', message.message || 'Plantillas actualizadas.');
+          return true;
+        case 'pipelineIntegrationStepUpdated':
+          integrationStepSaving = false;
+          currentConfig = { ...currentConfig, ...(message.config || {}) };
+          elements.preAnalysisCommands.value = currentConfig.preAnalysisCommands || '';
+          elements.postAnalysisCommands.value = currentConfig.postAnalysisCommands || '';
+          renderPipelineConfigurationFromFields();
+          renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
+          setIntegrationStepStatus(
+            'success',
+            message.message || 'Integración añadida a los pasos disponibles.'
+          );
+          return true;
+        case 'pipelineIntegrationStepError':
+          integrationStepSaving = false;
+          setIntegrationStepStatus(
+            'error',
+            message.message || 'No se pudo añadir la integración a los pasos disponibles.'
+          );
+          renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
           return true;
         case 'pipelineTemplateError':
           setPipelineTemplateStatus('error', message.message || 'No se pudo actualizar la plantilla.');
@@ -507,7 +598,7 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
         refreshSelectDropdown(elements.analysisPipelineTemplate, rebuild);
       },
       renderState: config => {
-        pipelineSaving = false; clearPipelineSaveStatus(); analysisScopeSaving = false; clearAnalysisScopeSaveStatus();
+        pipelineSaving = false; integrationStepSaving = false; clearPipelineSaveStatus(); analysisScopeSaving = false; clearAnalysisScopeSaveStatus(); setIntegrationStepStatus('idle', '');
         elements.scannerMode.value = config.scannerMode || 'auto';
         elements.analysisInclusions.value = connectionDraftDirty ? '' : config.analysisInclusions || '';
         elements.analysisExclusions.value = connectionDraftDirty ? '' : config.analysisExclusions || '';
@@ -521,7 +612,7 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
         renderAnalysisState(currentAnalysisState);
       },
       renderConfigurationSaved: config => {
-        analysisScopeSaving = false; clearAnalysisScopeSaveStatus();
+        analysisScopeSaving = false; integrationStepSaving = false; clearAnalysisScopeSaveStatus(); setIntegrationStepStatus('idle', '');
         elements.scannerMode.value = config.scannerMode || 'auto'; elements.analysisInclusions.value = config.analysisInclusions || ''; elements.analysisExclusions.value = config.analysisExclusions || '';
         elements.buildCommand.value = config.buildCommand || ''; elements.testCommand.value = config.testCommand || ''; renderDetectedProjectActions(config);
         elements.customScannerCommand.value = config.customScannerCommand || ''; elements.preAnalysisCommands.value = config.preAnalysisCommands || ''; elements.postAnalysisCommands.value = config.postAnalysisCommands || '';

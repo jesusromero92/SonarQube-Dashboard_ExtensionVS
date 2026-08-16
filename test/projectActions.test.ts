@@ -223,12 +223,15 @@ test('muestra integraciones disponibles y no disponibles en acordeones independi
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /elements\.unavailableIntegrations/);
   assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /addDetectedIntegrationToPipeline/);
   assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /Añadir al pipeline/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /addIntegrationToPipelineSteps/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Añadir a pasos disponibles/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /configuredPipelineCommandKeys/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function normalizedPipelineCommand/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function configuredPipelineCommandKeys/);
-  assert.match(PIPELINE_EDITOR_SCRIPT, /function availableDetectedIntegrations/);
-  assert.match(
+  assert.doesNotMatch(PIPELINE_EDITOR_SCRIPT, /function availableDetectedIntegrations/);
+  assert.doesNotMatch(
     PIPELINE_EDITOR_SCRIPT,
-    /availableDetectedIntegrations\(currentConfig\.detectedIntegrations\)[\s\S]*integration-.*integration\.id/
+    /currentConfig\.detectedIntegrations[\s\S]*templateId: 'integration-/
   );
 });
 
@@ -294,4 +297,33 @@ test('las acciones y mensajes de plantillas permanecen dentro de su acordeón', 
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /type: 'deletePipelineTemplate'/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Restableciendo plantilla…/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Eliminando plantilla…/);
+});
+
+test('la detección refleja instalaciones y desinstalaciones al cambiar package.json', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-live-integrations-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({ devDependencies: {} })
+    );
+
+    let actions = await detectProjectActions(root);
+    assert.equal(actions.integrations.some(item => item.id === 'react-doctor'), false);
+
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({ devDependencies: { 'react-doctor': '^1.0.0' } })
+    );
+    actions = await detectProjectActions(root);
+    assert.equal(actions.integrations.some(item => item.id === 'react-doctor'), true);
+
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({ devDependencies: {} })
+    );
+    actions = await detectProjectActions(root);
+    assert.equal(actions.integrations.some(item => item.id === 'react-doctor'), false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

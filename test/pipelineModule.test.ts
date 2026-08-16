@@ -21,6 +21,7 @@ test('Pipeline queda autocontenido en src/modules/pipeline', () => {
     'src/modules/pipeline/requests.ts',
     'src/modules/pipeline/templates.ts',
     'src/modules/pipeline/projectActions.ts',
+    'src/modules/pipeline/projectActionsWatcher.ts',
     'src/modules/pipeline/baseline.ts',
     'src/modules/pipeline/history.ts',
     'src/modules/pipeline/executionService.ts',
@@ -64,4 +65,54 @@ test('Pipeline consume UI compartida sin importar Dashboard UI', () => {
   assert.match(history, /shared\/webview\/ui\/accordion/);
   assert.match(confirmation, /shared\/webview\/ui\/selectDropdown/);
   assert.doesNotMatch(history + confirmation, /dashboard\/webview\/components\/ui/);
+});
+
+
+test('la creación de pasos desde Integraciones sigue encapsulada en Pipeline', () => {
+  const module = source('src/modules/pipeline/module.ts');
+  const controller = source('src/modules/pipeline/controller.ts');
+  const integration = source('src/modules/pipeline/webview/integration.ts');
+  const coreRuntime = source('src/modules/runtime.ts');
+  const dashboardPanel = source('src/dashboardPanel.ts');
+
+  assert.match(module, /addIntegrationToPipelineSteps/);
+  assert.match(controller, /addIntegrationToPipelineSteps/);
+  assert.match(controller, /appendAnalysisPipelineStage/);
+  assert.match(integration, /addIntegrationToPipelineSteps/);
+  assert.match(integration, /configurationTab: 'configurationIntegrationsPanel'/);
+  assert.doesNotMatch(coreRuntime, /addIntegrationToPipelineSteps|dependency-audit|semgrep/);
+  assert.doesNotMatch(dashboardPanel, /addIntegrationToPipelineSteps|dependency-audit|semgrep/);
+});
+
+
+test('las integraciones disponibles separan contenido y acción en una card 80/20', () => {
+  const integration = source('src/modules/pipeline/webview/integration.ts');
+  const styles = source('src/modules/pipeline/webview/styles.ts');
+
+  assert.match(integration, /detected-integration-card--available/);
+  assert.match(styles, /grid-template-columns: minmax\(0, 4fr\) minmax\(0, 1fr\)/);
+  assert.match(styles, /\.detected-integration-step-controls,[\s\S]*border-left: 1px solid/);
+});
+
+
+test('Pipeline refresca integraciones al cambiar archivos del proyecto sin acoplar el core', () => {
+  const controller = source('src/modules/pipeline/controller.ts');
+  const watcher = source('src/modules/pipeline/projectActionsWatcher.ts');
+  const integration = source('src/modules/pipeline/webview/integration.ts');
+  const dashboardPanel = source('src/dashboardPanel.ts');
+
+  assert.match(watcher, /createFileSystemWatcher/);
+  assert.match(watcher, /package\.json/);
+  assert.match(watcher, /package-lock\.json/);
+  assert.match(watcher, /doctor\.config\.ts/);
+  assert.match(watcher, /onDidCreate/);
+  assert.match(watcher, /onDidChange/);
+  assert.match(watcher, /onDidDelete/);
+  assert.match(controller, /scheduleProjectActionsRefresh/);
+  assert.match(controller, /projectActionsRefreshRevision/);
+  assert.match(controller, /type: 'pipelineProjectActionsUpdated'/);
+  assert.match(controller, /this\.stopWatchingProjectActions\(\)/);
+  assert.match(integration, /case 'pipelineProjectActionsUpdated'/);
+  assert.match(integration, /renderDetectedProjectActions\(currentConfig\)/);
+  assert.doesNotMatch(dashboardPanel, /pipelineProjectActionsUpdated|watchProjectActionFiles/);
 });

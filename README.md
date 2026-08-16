@@ -471,7 +471,9 @@ It currently recognizes, among others:
 - Checkov for infrastructure as code;
 - golangci-lint for Go.
 
-An integration is **available** only when its configuration, dependency, script, or specific evidence is detected (or, for SonarQube, when a project is configured). The **Unavailable** accordion acts as a catalog of integrations the plugin knows how to recognize and explains how to make them available. Pipeline configuration and execution remain under the **Pipeline** tab.
+An integration is **available** only when its configuration, dependency, script, or specific evidence is detected (or, for SonarQube, when a project is configured). Each available integration with an executable command offers **Add to available steps**. The Pipeline module re-validates detection in the extension host, avoids command duplicates, and saves the tool as a reusable step under **Configuration → Pipeline → Pipeline steps**. From there, the step can be selected in any template like any other custom step. The template editor only exposes the integration as a reusable source after it has been added to the available steps; built-in templates that already adapt to detected tools keep that adaptive behavior. SonarQube is not duplicated because it is the native required analysis step.
+
+The **Unavailable** accordion acts as a catalog of integrations the plugin knows how to recognize and explains how to make them available. All this logic remains owned by `src/modules/pipeline/`: the core only composes the module contribution and does not know about concrete integrations or pipeline steps.
 
 ## Configurable analysis pipeline
 
@@ -653,7 +655,7 @@ The **Clear Problems** command removes only diagnostics published by this extens
 
 The connection workflow is explicit: **Connect** validates the URL and token and loads the visible components without selecting one. The project dropdown remains empty and disabled when validation fails. A project is linked only after the user selects it and presses **Synchronize**. Unsaved server and token drafts are preserved when moving between Data and Configuration.
 
-The configuration page is organized around **SonarQube**, **Modules**, and **Notifications**, together with the optional **Pipeline**, **Integrations**, and **Live Remediation** tabs. **SonarQube** now owns only connection, project, branch, and local mapping; **Modules** controls which optional runtimes are loaded; **Pipeline** owns scanner, scope, commands, steps, templates, and tool detection; **Integrations** provides an informational list of detected tools while Pipeline is enabled; **Live Remediation** shows its own integration/state; and **Notifications** groups automatic alerts.
+The configuration page is organized around **SonarQube**, **Modules**, and **Notifications**, together with the optional **Pipeline**, **Integrations**, and **Live Remediation** tabs. **SonarQube** now owns only connection, project, branch, and local mapping; **Modules** controls which optional runtimes are loaded; **Pipeline** owns scanner, scope, commands, steps, templates, and tool detection; **Integrations** shows detected tools and lets users convert them into reusable Pipeline steps while the module is enabled; **Live Remediation** shows its own integration/state; and **Notifications** groups automatic alerts.
 
 The configuration page manages:
 

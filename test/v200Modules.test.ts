@@ -227,6 +227,7 @@ test('los toggles esperan confirmación y no aplican estado optimista en el webv
   const coreConfiguration = read('src/dashboard/webview/scripts/core/configuration.ts');
   const panel = read('src/dashboardPanel.ts');
   const runtime = read('src/modules/runtime.ts');
+  const contracts = read('src/modules/contracts.ts');
 
   assert.match(configurationEvents, /const confirmedEnabled = currentConfig\?\.\[moduleId \+ 'ModuleEnabled'\] === true/);
   assert.match(configurationEvents, /const requestedEnabled = toggle\.checked/);
@@ -236,6 +237,8 @@ test('los toggles esperan confirmación y no aplican estado optimista en el webv
   assert.doesNotMatch(configurationEvents, /currentConfig\[moduleId \+ 'ModuleEnabled'\] = toggle\.checked/);
   assert.match(coreConfiguration, /restoreConfigurationTab\(message\.configurationTab\)/);
   assert.match(panel, /currentConfigurationTab = 'configurationSonarPanel'/);
+  assert.match(contracts, /configurationTab\?: string/);
+  assert.match(panel, /this\.rememberConfigurationTab\(message\)/);
   assert.match(panel, /this\.currentConfigurationTab = message\.configurationTab/);
   assert.match(panel, /configurationTab: this\.currentConfigurationTab/);
 
