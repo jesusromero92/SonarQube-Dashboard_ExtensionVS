@@ -332,6 +332,8 @@ test('el compositor excluye físicamente HTML, CSS y JavaScript desactivados', (
   assert.match(pipelineOnly.dataControls ?? '', /id="analysisPanel"/);
   assert.match(pipelineOnly.dataControls ?? '', /id="analyzeRepository"/);
   assert.match(pipelineOnly.configurationTab ?? '', /configurationPipelineTab/);
+  assert.match(pipelineOnly.configurationTab ?? '', /configurationIntegrationsTab/);
+  assert.match(pipelineOnly.configurationPanel ?? '', /configurationIntegrationsPanel/);
   assert.match(pipelineOnly.scripts ?? '', /registerDashboardModuleHooks/);
   assert.doesNotMatch(pipelineOnly.scripts ?? '', /liveRemediation/);
   assert.ok(pipelineOnly.localization?.source.pipelineSteps);
@@ -357,7 +359,7 @@ test('las traducciones específicas pertenecen a sus módulos y las capacidades 
     coreSource,
     /pipelineSteps|pipelineProgress|pipelineRunHistory|analysisPipeline|liveRemediationIntro|liveRemediationHint|locallyModifiedIssues/
   );
-  assert.match(pipelineSource, /pipelineSteps|pipelineProgress|predefinedIntegrationsHint/);
+  assert.match(pipelineSource, /pipelineSteps|pipelineProgress|detectedToolsHint/);
   assert.match(liveSource, /liveRemediationIntro|sonarIdeDetectedActive/);
   assert.match(contracts, /DashboardModuleCapability = string/);
 });

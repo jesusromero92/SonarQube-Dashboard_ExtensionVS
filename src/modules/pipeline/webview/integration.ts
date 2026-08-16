@@ -31,56 +31,262 @@ export const PIPELINE_INTEGRATION_SCRIPT = `
       elements.detectedTestCommandHint.textContent = detectedTests
         ? detectedPrefix + detectedTests + detectedSuffix
         : 'No se detectó un comando de tests. Puedes introducirlo manualmente.';
-      renderDetectedIntegrations(config.detectedIntegrations);
+      renderDetectedPackageManager(config);
+      renderDetectedIntegrations(config.detectedIntegrations, config);
     }
 
-    function renderDetectedIntegrations(integrations) {
-      elements.detectedIntegrations.textContent = '';
-      const detected = availableDetectedIntegrations(integrations);
-      elements.detectedIntegrations.classList.toggle('is-empty', detected.length === 0);
+    function detectedNodePackageManager(config = currentConfig) {
+      const manager = String(config?.detectedPackageManager || '').trim().toLowerCase();
+      return ['npm', 'pnpm', 'yarn', 'bun'].includes(manager) ? manager : '';
+    }
 
-      if (detected.length === 0) {
+    function nodeDevInstallCommand(packageName, config = currentConfig) {
+      const manager = detectedNodePackageManager(config);
+      if (manager === 'npm') return 'npm install -D ' + packageName;
+      if (manager === 'pnpm') return 'pnpm add -D ' + packageName;
+      if (manager === 'yarn') return 'yarn add -D ' + packageName;
+      if (manager === 'bun') return 'bun add -d ' + packageName;
+      return '';
+    }
+
+    function nodeInstallCommand(config = currentConfig) {
+      const manager = detectedNodePackageManager(config);
+      if (manager === 'npm') return 'npm install';
+      if (manager === 'pnpm') return 'pnpm install';
+      if (manager === 'yarn') return 'yarn install';
+      if (manager === 'bun') return 'bun install';
+      return '';
+    }
+
+    function renderDetectedPackageManager(config = currentConfig) {
+      if (!elements.detectedPackageManagerHint) return;
+      const manager = detectedNodePackageManager(config);
+      elements.detectedPackageManagerHint.textContent = manager
+        ? translateLocalizationValue('Gestor de paquetes detectado: ') + manager +
+          translateLocalizationValue('. Los comandos Node se adaptan automáticamente.')
+        : translateLocalizationValue('No se detectó un gestor de paquetes Node en este proyecto.');
+    }
+
+    function supportedIntegrationCatalog(config = currentConfig) {
+      const packageManager = detectedNodePackageManager(config);
+      return [
+        {
+          id: 'sonarqube',
+          name: 'SonarQube',
+          description: 'Analiza el proyecto con SonarQube y publica sus resultados en el servidor configurado.',
+          setupHint: 'Configura la conexión y el proyecto desde la pestaña SonarQube.'
+        },
+        {
+          id: 'dependency-audit',
+          name: packageManager ? packageManager + ' audit' : 'Auditoría de dependencias Node',
+          description: 'Audita las dependencias conocidas del proyecto.',
+          setupCommand: nodeInstallCommand(config),
+          setupHint: 'Instala las dependencias con el gestor detectado para generar o actualizar su lockfile.'
+        },
+        {
+          id: 'eslint',
+          name: 'ESLint',
+          description: 'Ejecuta el análisis estático de JavaScript y TypeScript.',
+          setupCommand: nodeDevInstallCommand('eslint', config),
+          setupHint: 'Añade ESLint como dependencia de desarrollo y configura un script o eslint.config.*.'
+        },
+        {
+          id: 'react-doctor',
+          name: 'React Doctor',
+          description: 'Revisa proyectos React para detectar problemas de rendimiento, seguridad, corrección y arquitectura.',
+          setupCommand: nodeDevInstallCommand('react-doctor', config),
+          setupHint: 'Ejecuta React Doctor desde la raíz del proyecto o añádelo a un script de package.json.'
+        },
+        {
+          id: 'biome',
+          name: 'Biome',
+          description: 'Comprueba formato, lint y calidad de código JavaScript y TypeScript con Biome.',
+          setupCommand: nodeDevInstallCommand('@biomejs/biome', config),
+          setupHint: 'Añade Biome al proyecto y crea biome.json o biome.jsonc.'
+        },
+        {
+          id: 'stylelint',
+          name: 'Stylelint',
+          description: 'Analiza CSS y preprocesadores compatibles mediante reglas Stylelint.',
+          setupCommand: nodeDevInstallCommand('stylelint', config),
+          setupHint: 'Añade Stylelint al proyecto y crea una configuración Stylelint.'
+        },
+        {
+          id: 'prettier',
+          name: 'Prettier',
+          description: 'Comprueba que el formato del proyecto cumple la configuración de Prettier.',
+          setupCommand: nodeDevInstallCommand('prettier', config),
+          setupHint: 'Añade Prettier como dependencia de desarrollo y una configuración o script si lo necesitas.'
+        },
+        {
+          id: 'semgrep',
+          name: 'Semgrep',
+          description: 'Busca patrones de seguridad y calidad mediante reglas Semgrep.',
+          setupCommand: 'pipx install semgrep',
+          setupHint: 'Instala el CLI de Semgrep y añade una configuración o script de análisis al proyecto.'
+        },
+        {
+          id: 'snyk',
+          name: 'Snyk',
+          description: 'Comprueba vulnerabilidades de dependencias con Snyk.',
+          setupCommand: nodeDevInstallCommand('snyk', config),
+          setupHint: 'Añade Snyk al proyecto y autentica el CLI antes de ejecutar análisis.'
+        },
+        {
+          id: 'trivy',
+          name: 'Trivy',
+          description: 'Escanea vulnerabilidades, secretos y configuraciones inseguras.',
+          setupHint: 'Instala el CLI de Trivy con el método recomendado para tu sistema y añade una configuración, script o archivo de contenedor detectable.'
+        },
+        {
+          id: 'owasp-dependency-check',
+          name: 'OWASP Dependency-Check',
+          description: 'Analiza dependencias conocidas mediante OWASP Dependency-Check.',
+          setupHint: 'Añade OWASP Dependency-Check como plugin de Maven o Gradle en la configuración del proyecto.'
+        },
+        {
+          id: 'ruff',
+          name: 'Ruff',
+          description: 'Ejecuta lint y comprobaciones rápidas de calidad para proyectos Python.',
+          setupCommand: 'pip install ruff',
+          setupHint: 'Instala Ruff y configúralo en pyproject.toml, ruff.toml o .ruff.toml.'
+        },
+        {
+          id: 'bandit',
+          name: 'Bandit',
+          description: 'Busca problemas de seguridad habituales en código Python.',
+          setupCommand: 'pip install bandit',
+          setupHint: 'Instala Bandit y añádelo a requirements o a su configuración del proyecto.'
+        },
+        {
+          id: 'checkov',
+          name: 'Checkov',
+          description: 'Analiza infraestructura como código y configuraciones cloud en busca de riesgos.',
+          setupCommand: 'pip install checkov',
+          setupHint: 'Instala Checkov y añade una configuración .checkov.yml/.yaml o una dependencia de proyecto.'
+        },
+        {
+          id: 'golangci-lint',
+          name: 'golangci-lint',
+          description: 'Ejecuta una colección de linters sobre proyectos Go.',
+          setupHint: 'Instala golangci-lint con el método recomendado para tu entorno y añade un archivo .golangci.* al proyecto.'
+        }
+      ];
+    }
+
+    function detectedProjectTools(integrations, config) {
+      const tools = Array.isArray(integrations) ? [...integrations] : [];
+      const sonarVersion = String(config?.sonarCompatibility?.version || '').trim();
+      const projectKey = String(config?.projectKey || '').trim();
+      if (sonarVersion || projectKey) {
+        tools.unshift({
+          id: 'sonarqube',
+          name: 'SonarQube',
+          description: 'Analiza el proyecto con SonarQube y publica sus resultados en el servidor configurado.',
+          command: '',
+          evidence: sonarVersion
+            ? 'Servidor SonarQube ' + sonarVersion + (projectKey ? ' · ' + projectKey : '')
+            : 'Proyecto configurado: ' + projectKey,
+          category: 'quality'
+        });
+      }
+
+      const unique = new Map();
+      for (const tool of tools) {
+        const id = String(tool?.id || tool?.name || '').trim();
+        if (id && !unique.has(id)) unique.set(id, tool);
+      }
+      return [...unique.values()].sort((left, right) =>
+        String(left.name || left.id).localeCompare(String(right.name || right.id))
+      );
+    }
+
+    function integrationCard(integration, available) {
+      const card = document.createElement('article');
+      card.className = 'detected-integration-card' + (available ? '' : ' detected-integration-card--unavailable');
+
+      const content = document.createElement('div');
+      content.className = 'detected-integration-content';
+
+      const title = document.createElement('strong');
+      title.textContent = integration.name || integration.id;
+
+      const description = document.createElement('span');
+      description.textContent = translateLocalizationValue(integration.description || '');
+      content.append(title, description);
+
+      if (available && integration.command) {
+        const command = document.createElement('code');
+        command.textContent = integration.command;
+        content.appendChild(command);
+      }
+
+      if (available && integration.evidence) {
+        const evidence = document.createElement('span');
+        evidence.className = 'detected-integration-evidence';
+        evidence.textContent = translateLocalizationValue('Detectado por: ') + integration.evidence;
+        content.appendChild(evidence);
+      }
+
+      if (!available && integration.setupHint) {
+        const setup = document.createElement('span');
+        setup.className = 'detected-integration-setup';
+        setup.textContent = translateLocalizationValue('Cómo habilitarlo: ') +
+          translateLocalizationValue(integration.setupHint);
+        content.appendChild(setup);
+      }
+
+      if (!available && integration.setupCommand) {
+        const commandLabel = document.createElement('span');
+        commandLabel.className = 'detected-integration-command-label';
+        commandLabel.textContent = translateLocalizationValue('Comando sugerido:');
+        const command = document.createElement('code');
+        command.textContent = integration.setupCommand;
+        content.append(commandLabel, command);
+      }
+
+      card.appendChild(content);
+      return card;
+    }
+
+    function renderIntegrationList(container, integrations, available, emptyMessage) {
+      container.textContent = '';
+      container.classList.toggle('is-empty', integrations.length === 0);
+      if (integrations.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'detected-integration-empty';
-        empty.textContent = translateLocalizationValue(
-          'No se han detectado integraciones predefinidas para este proyecto.'
-        );
-        elements.detectedIntegrations.appendChild(empty);
+        empty.textContent = translateLocalizationValue(emptyMessage);
+        container.appendChild(empty);
         return;
       }
 
-      for (const integration of detected) {
-        const card = document.createElement('article');
-        card.className = 'detected-integration-card';
-
-        const content = document.createElement('div');
-        content.className = 'detected-integration-content';
-
-        const title = document.createElement('strong');
-        title.textContent = integration.name || integration.id;
-
-        const description = document.createElement('span');
-        description.textContent = translateLocalizationValue(
-          integration.description || ''
-        );
-
-        const metadata = document.createElement('code');
-        metadata.textContent = integration.command || '';
-        metadata.title = integration.evidence || '';
-
-        content.append(title, description, metadata);
-
-        const add = document.createElement('button');
-        add.className = 'secondary';
-        add.type = 'button';
-        add.textContent = translateLocalizationValue('Añadir al pipeline');
-        add.addEventListener('click', () => {
-          addDetectedIntegrationToPipeline(integration);
-        });
-
-        card.append(content, add);
-        elements.detectedIntegrations.appendChild(card);
+      for (const integration of integrations) {
+        container.appendChild(integrationCard(integration, available));
       }
+    }
+
+    function renderDetectedIntegrations(integrations, config = currentConfig) {
+      const detected = detectedProjectTools(integrations, config);
+      const detectedIds = new Set(detected.map(integration => String(integration.id || '').trim()));
+      const unavailable = supportedIntegrationCatalog(config)
+        .filter(integration => !detectedIds.has(integration.id))
+        .sort((left, right) => left.name.localeCompare(right.name));
+
+      elements.availableIntegrationsCount.textContent = '(' + detected.length + ')';
+      elements.unavailableIntegrationsCount.textContent = '(' + unavailable.length + ')';
+
+      renderIntegrationList(
+        elements.detectedIntegrations,
+        detected,
+        true,
+        'No se ha detectado ninguna integración compatible.'
+      );
+      renderIntegrationList(
+        elements.unavailableIntegrations,
+        unavailable,
+        false,
+        'Todas las integraciones compatibles están disponibles.'
+      );
     }
 
     function canSaveAnalysisScope() {

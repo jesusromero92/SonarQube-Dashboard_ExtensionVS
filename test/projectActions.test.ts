@@ -33,6 +33,7 @@ test('detecta compilación y tests desde los scripts de package.json', async () 
     assert.equal(actions.buildCommand, 'npm run compile');
     assert.equal(actions.testCommand, 'npm test');
     assert.equal(actions.evidence, 'package.json');
+    assert.equal(actions.packageManager, 'npm');
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -84,6 +85,75 @@ test('separa los pasos disponibles del editor de plantillas', () => {
   assert.match(PIPELINE_EDITOR_SCRIPT, /enablePipelineDrag\(elements\.pipelineTemplateStepsEditor/);
 });
 
+test('prioriza packageManager de package.json y adapta comandos Node al gestor declarado', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-pnpm-actions-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        packageManager: 'pnpm@10.15.0',
+        devDependencies: { eslint: '^9.0.0' }
+      })
+    );
+    await fs.writeFile(path.join(root, 'package-lock.json'), '{}');
+    await fs.writeFile(path.join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9');
+
+    const actions = await detectProjectActions(root);
+    assert.equal(actions.packageManager, 'pnpm');
+    assert.equal(
+      actions.integrations.find(integration => integration.id === 'eslint')?.command,
+      'pnpm exec eslint .'
+    );
+    assert.equal(
+      actions.integrations.find(integration => integration.id === 'dependency-audit')?.command,
+      'pnpm audit --audit-level=high'
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('no habilita la auditoría de otro gestor por un lockfile residual', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-pnpm-stale-lock-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({ packageManager: 'pnpm@10.15.0' })
+    );
+    await fs.writeFile(path.join(root, 'package-lock.json'), '{}');
+
+    const actions = await detectProjectActions(root);
+    assert.equal(actions.packageManager, 'pnpm');
+    assert.equal(
+      actions.integrations.some(integration => integration.id === 'dependency-audit'),
+      false
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('detecta Bun por lockfile y usa sus comandos de scripts y auditoría', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-bun-actions-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({ scripts: { build: 'tsc -p ./' } })
+    );
+    await fs.writeFile(path.join(root, 'bun.lock'), '');
+
+    const actions = await detectProjectActions(root);
+    assert.equal(actions.packageManager, 'bun');
+    assert.equal(actions.buildCommand, 'bun run build');
+    assert.equal(
+      actions.integrations.find(integration => integration.id === 'dependency-audit')?.command,
+      'bun audit --audit-level=high'
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('detecta integraciones predefinidas de seguridad y calidad en proyectos Node', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-integrations-'));
   try {
@@ -119,27 +189,102 @@ test('detecta integraciones predefinidas de seguridad y calidad en proyectos Nod
   }
 });
 
-test('muestra cada integración detectada una sola vez y la mueve al pipeline', () => {
+test('muestra integraciones disponibles y no disponibles en acordeones independientes', () => {
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationIntegrationsTab"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationIntegrationsPanel"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="availableIntegrationsDisclosure"[^>]*open/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="unavailableIntegrationsDisclosure" class="accordion">/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="detectedPackageManagerHint"/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="detectedIntegrations"/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /id="unavailableIntegrations"/);
   assert.ok(
-    CONFIGURATION_PAGE_MARKUP.indexOf('id="pipelineTemplateStepsEditor"') <
-      CONFIGURATION_PAGE_MARKUP.indexOf('id="detectedIntegrations"')
+    CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationPipelinePanel"') <
+      CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationIntegrationsPanel"')
   );
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /availableDetectedIntegrations\(integrations\)/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /addDetectedIntegrationToPipeline/);
+  assert.doesNotMatch(CONFIGURATION_PAGE_MARKUP, /Integraciones predefinidas detectadas/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /function supportedIntegrationCatalog/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /function detectedProjectTools/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /id: 'sonarqube'/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /id: 'react-doctor'/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /id: 'semgrep'/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Cómo habilitarlo:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Comando sugerido:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /function detectedNodePackageManager/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /npm install -D/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /pnpm add -D/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /yarn add -D/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /bun add -d/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /nodeDevInstallCommand\('react-doctor', config\)/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /npx react-doctor@latest/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /pipx install semgrep/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /pip install ruff/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /nodeDevInstallCommand\('snyk', config\)/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /npm install -g snyk/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /elements\.unavailableIntegrations/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /addDetectedIntegrationToPipeline/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /Añadir al pipeline/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function normalizedPipelineCommand/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function configuredPipelineCommandKeys/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function availableDetectedIntegrations/);
-  assert.match(
-    PIPELINE_EDITOR_SCRIPT,
-    /syncConfigurationPipelineFields[\s\S]*renderDetectedIntegrations\(currentConfig\.detectedIntegrations\)/
-  );
   assert.match(
     PIPELINE_EDITOR_SCRIPT,
     /availableDetectedIntegrations\(currentConfig\.detectedIntegrations\)[\s\S]*integration-.*integration\.id/
   );
 });
 
+test('detecta React Doctor, Biome, Stylelint y Prettier cuando están configurados en Node', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-node-tools-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({
+        scripts: {
+          doctor: 'react-doctor .'
+        },
+        devDependencies: {
+          'react-doctor': '^0.0.1',
+          '@biomejs/biome': '^2.0.0',
+          stylelint: '^16.0.0',
+          prettier: '^3.0.0'
+        }
+      })
+    );
+
+    const actions = await detectProjectActions(root);
+    const ids = actions.integrations.map(integration => integration.id);
+    assert.ok(ids.includes('react-doctor'));
+    assert.ok(ids.includes('biome'));
+    assert.ok(ids.includes('stylelint'));
+    assert.ok(ids.includes('prettier'));
+    assert.equal(
+      actions.integrations.find(integration => integration.id === 'react-doctor')?.command,
+      'npm run doctor'
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('detecta herramientas de Python, Go e infraestructura por sus archivos de configuración', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sonar-multi-tools-'));
+  try {
+    await fs.writeFile(
+      path.join(root, 'pyproject.toml'),
+      '[tool.ruff]\nline-length = 100\n\n[tool.bandit]\nskips = []\n'
+    );
+    await fs.writeFile(path.join(root, '.checkov.yml'), 'quiet: true\n');
+    await fs.writeFile(path.join(root, '.golangci.yml'), 'run:\n  timeout: 5m\n');
+
+    const actions = await detectProjectActions(root);
+    const ids = actions.integrations.map(integration => integration.id);
+    assert.ok(ids.includes('ruff'));
+    assert.ok(ids.includes('bandit'));
+    assert.ok(ids.includes('checkov'));
+    assert.ok(ids.includes('golangci-lint'));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test('las acciones y mensajes de plantillas permanecen dentro de su acordeón', () => {
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="pipelineTemplateStatus"/);

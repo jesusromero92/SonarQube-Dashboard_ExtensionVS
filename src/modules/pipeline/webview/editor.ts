@@ -158,7 +158,7 @@ export const PIPELINE_EDITOR_SCRIPT = String.raw`    let pipelineStepCounter = 0
       const steps = readConfigurationPipelineRows();
       elements.preAnalysisCommands.value = serializePipelineSteps(steps);
       elements.postAnalysisCommands.value = '';
-      renderDetectedIntegrations(currentConfig.detectedIntegrations);
+      renderDetectedIntegrations(currentConfig.detectedIntegrations, currentConfig);
     }
 
     function createConfigurationPipelineRow(step) {
@@ -242,23 +242,6 @@ export const PIPELINE_EDITOR_SCRIPT = String.raw`    let pipelineStepCounter = 0
       elements.pipelineStepsEditor.appendChild(row);
       row.querySelector('.pipeline-step-name').focus();
       syncConfigurationPipelineFields();
-    }
-
-    function addDetectedIntegrationToPipeline(integration) {
-      if (!integration?.command) return;
-      elements.pipelineStepsEditor.classList.remove('is-empty');
-      const row = createConfigurationPipelineRow({
-        id: nextPipelineStepId('integration'),
-        name: integration.name || translateLocalizationValue('Integración predefinida'),
-        command: integration.command,
-        kind: 'custom',
-        failurePolicy: integration.failurePolicy === 'stop' ? 'stop' : 'continue',
-        enabled: true
-      });
-      elements.pipelineStepsEditor.appendChild(row);
-      syncConfigurationPipelineFields();
-      row.scrollIntoView({ block: 'nearest' });
-      row.querySelector('.pipeline-step-command')?.focus();
     }
 
     function pipelineTemplateStepSources() {

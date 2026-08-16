@@ -16,7 +16,8 @@ function configurationDropdown(
   });
 }
 
-export const PIPELINE_CONFIGURATION_TAB_MARKUP = `                <button id="configurationPipelineTab" data-module-tab="pipeline" type="button" role="tab" aria-selected="false" aria-controls="configurationPipelinePanel" tabindex="-1" hidden>Pipeline</button>`;
+export const PIPELINE_CONFIGURATION_TAB_MARKUP = `                <button id="configurationPipelineTab" data-module-tab="pipeline" type="button" role="tab" aria-selected="false" aria-controls="configurationPipelinePanel" tabindex="-1" hidden>Pipeline</button>
+                <button id="configurationIntegrationsTab" data-module-tab="pipeline" type="button" role="tab" aria-selected="false" aria-controls="configurationIntegrationsPanel" tabindex="-1" hidden>Integraciones</button>`;
 
 export const PIPELINE_CONFIGURATION_PANEL_MARKUP = `              <section id="configurationPipelinePanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationPipelineTab" hidden>
               <details class="configuration-disclosure" open>
@@ -153,15 +154,28 @@ ${configurationDropdown('pipelineTemplate', 'Plantilla de pipeline', [{ value: '
                     </div>
                   </div>
                 </details>
+              </section>
 
-                <details class="configuration-disclosure" open>
-                  <summary>Integraciones predefinidas detectadas</summary>
-                  <div class="configuration-disclosure-content">
-                    <div class="configuration-section-intro">
-                      <strong>Integraciones predefinidas detectadas</strong>
-                      <p class="hint">Añade al pipeline herramientas compatibles detectadas en el proyecto.</p>
+              <section id="configurationIntegrationsPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationIntegrationsTab" hidden>
+                <div class="configuration-section-intro integrations-section-intro">
+                  <strong>Integraciones compatibles</strong>
+                  <p class="hint">Las herramientas detectadas aparecen como disponibles. Las no detectadas se muestran aparte con una indicación orientativa para habilitar su integración. Esta vista no instala, configura ni ejecuta herramientas automáticamente.</p>
+                  <p id="detectedPackageManagerHint" class="hint">No se detectó un gestor de paquetes Node en este proyecto.</p>
+                </div>
+                <div class="accordion-group integration-availability-groups">
+                  <details id="availableIntegrationsDisclosure" class="accordion" open>
+                    <summary>Disponibles <span id="availableIntegrationsCount" class="muted"></span></summary>
+                    <div class="accordion__content integration-availability-content">
+                      <p class="hint">Integraciones detectadas en el proyecto a partir de su configuración, dependencias, scripts o archivos compatibles.</p>
+                      <div id="detectedIntegrations" class="detected-integrations" aria-label="Integraciones disponibles"></div>
                     </div>
-                    <div id="detectedIntegrations" class="detected-integrations" aria-label="Integraciones predefinidas detectadas"></div>
-                  </div>
-                </details>
+                  </details>
+                  <details id="unavailableIntegrationsDisclosure" class="accordion">
+                    <summary>No disponibles <span id="unavailableIntegrationsCount" class="muted"></span></summary>
+                    <div class="accordion__content integration-availability-content">
+                      <p class="hint">Integraciones compatibles que no se han detectado. Las instrucciones mostradas son orientativas y no se ejecutan automáticamente.</p>
+                      <div id="unavailableIntegrations" class="detected-integrations" aria-label="Integraciones no disponibles"></div>
+                    </div>
+                  </details>
+                </div>
               </section>`;

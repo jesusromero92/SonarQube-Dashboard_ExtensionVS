@@ -453,18 +453,25 @@ Selecting a hotspot loads its details and opens a dialog containing:
 
 The extension loads hotspot details on demand so they do not delay the initial dashboard load.
 
-## Predefined integrations
+## Detected integrations
 
-The extension detects known project tools and offers them as reusable pipeline steps. Depending on the available files, scripts, and dependencies, it can propose:
+When the **Pipeline** module is enabled, configuration includes a separate **Configuration → Integrations** tab. The view is split into two accordions: **Available**, open by default with tools detected in the workspace, and **Unavailable**, closed by default with the remaining supported integrations. For undetected tools, the UI shows a suggested command or configuration hint when possible. The extension never runs those instructions or installs tools automatically.
 
-- dependency auditing with `npm audit`, `pnpm audit`, or `yarn audit`;
-- ESLint;
-- Semgrep;
-- Trivy;
-- Snyk;
-- OWASP Dependency-Check for Maven or Gradle.
+Detection is based on configuration files, scripts, and dependencies present in the project. For Node projects, the extension automatically detects the package manager from the `packageManager` field in `package.json` first and then falls back to common lockfiles (`package-lock.json`/`npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, or `bun.lockb`). Suggested catalog commands are adapted to the detected manager, for example `npm install -D eslint`, `pnpm add -D eslint`, `yarn add -D eslint`, or `bun add -d eslint`. When a Node tool is already available, detected commands also use the executor associated with the project's package manager. None of these commands is run automatically.
 
-Detected integrations appear under **Configuration → Pipeline**, inside the **Detected predefined integrations** accordion below the template editor. Adding an integration removes it from the available list; removing it from custom steps makes it available again. Its command and failure policy remain editable.
+It currently recognizes, among others:
+
+- SonarQube for the configured project;
+- dependency auditing with `npm audit`, `pnpm audit`, `yarn audit`, or `bun audit`;
+- ESLint, Biome, Stylelint, and Prettier;
+- React Doctor;
+- Semgrep, Trivy, and Snyk;
+- OWASP Dependency-Check for Maven or Gradle;
+- Ruff and Bandit for Python;
+- Checkov for infrastructure as code;
+- golangci-lint for Go.
+
+An integration is **available** only when its configuration, dependency, script, or specific evidence is detected (or, for SonarQube, when a project is configured). The **Unavailable** accordion acts as a catalog of integrations the plugin knows how to recognize and explains how to make them available. Pipeline configuration and execution remain under the **Pipeline** tab.
 
 ## Configurable analysis pipeline
 
@@ -646,7 +653,7 @@ The **Clear Problems** command removes only diagnostics published by this extens
 
 The connection workflow is explicit: **Connect** validates the URL and token and loads the visible components without selecting one. The project dropdown remains empty and disabled when validation fails. A project is linked only after the user selects it and presses **Synchronize**. Unsaved server and token drafts are preserved when moving between Data and Configuration.
 
-The configuration page is organized around **SonarQube**, **Modules**, and **Notifications**, together with the optional **Pipeline** and **Live Remediation** tabs. **SonarQube** now owns only connection, project, branch, and local mapping; **Modules** controls which optional runtimes are loaded; **Pipeline** owns scanner, scope, commands, steps, and templates; **Live Remediation** shows its own integration/state; and **Notifications** groups automatic alerts.
+The configuration page is organized around **SonarQube**, **Modules**, and **Notifications**, together with the optional **Pipeline**, **Integrations**, and **Live Remediation** tabs. **SonarQube** now owns only connection, project, branch, and local mapping; **Modules** controls which optional runtimes are loaded; **Pipeline** owns scanner, scope, commands, steps, templates, and tool detection; **Integrations** provides an informational list of detected tools while Pipeline is enabled; **Live Remediation** shows its own integration/state; and **Notifications** groups automatic alerts.
 
 The configuration page manages:
 

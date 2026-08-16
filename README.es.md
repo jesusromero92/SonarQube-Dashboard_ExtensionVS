@@ -453,18 +453,25 @@ Al pulsar un hotspot se consulta su detalle y se abre un modal con:
 
 La extensión obtiene el detalle bajo demanda para no retrasar la carga inicial del dashboard.
 
-## Integraciones predefinidas
+## Integraciones detectadas
 
-La extensión detecta herramientas conocidas del proyecto y las ofrece como pasos reutilizables del pipeline. Según los archivos, scripts y dependencias disponibles, puede proponer:
+Cuando el módulo **Pipeline** está habilitado, la configuración incluye una pestaña independiente **Configuración → Integraciones**. La vista se divide en dos acordeones: **Disponibles**, abierto por defecto con las herramientas detectadas en el workspace, y **No disponibles**, cerrado por defecto con el resto de integraciones compatibles. Para las herramientas no detectadas se muestra, cuando es posible, un comando sugerido o una indicación de configuración para habilitar la integración. La extensión no ejecuta esas instrucciones ni instala herramientas automáticamente.
 
-- auditoría de dependencias con `npm audit`, `pnpm audit` o `yarn audit`;
-- ESLint;
-- Semgrep;
-- Trivy;
-- Snyk;
-- OWASP Dependency-Check para Maven o Gradle.
+La detección se basa en archivos de configuración, scripts y dependencias presentes en el proyecto. Para proyectos Node, la extensión detecta automáticamente el gestor de paquetes usando primero el campo `packageManager` de `package.json` y, si no existe, los lockfiles habituales (`package-lock.json`/`npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock` o `bun.lockb`). Los comandos sugeridos del catálogo se adaptan al gestor detectado: por ejemplo `npm install -D eslint`, `pnpm add -D eslint`, `yarn add -D eslint` o `bun add -d eslint`. Cuando una herramienta Node ya está disponible, los comandos detectados también usan el ejecutor correspondiente al gestor del proyecto. Ninguno de estos comandos se ejecuta automáticamente.
 
-Las integraciones detectadas aparecen en **Configuración → Pipeline**, dentro del acordeón **Integraciones predefinidas detectadas**, situado debajo de las plantillas. Desde allí pueden añadirse a los pasos reutilizables; al añadir una integración deja de aparecer en la lista de disponibles y vuelve a mostrarse si se elimina de los pasos personalizados. El comando y la política de fallo siguen siendo editables.
+Actualmente reconoce, entre otras:
+
+- SonarQube del proyecto configurado;
+- auditoría de dependencias con `npm audit`, `pnpm audit`, `yarn audit` o `bun audit`;
+- ESLint, Biome, Stylelint y Prettier;
+- React Doctor;
+- Semgrep, Trivy y Snyk;
+- OWASP Dependency-Check para Maven o Gradle;
+- Ruff y Bandit para Python;
+- Checkov para infraestructura como código;
+- golangci-lint para Go.
+
+Una integración se considera **disponible** únicamente cuando se detecta su configuración, dependencia, script o evidencia específica (o, en el caso de SonarQube, cuando existe un proyecto configurado). El acordeón **No disponibles** sirve como catálogo de las integraciones que el plugin sabe reconocer y explica cómo hacer que pasen a estar disponibles. La configuración y ejecución del pipeline continúan realizándose desde la pestaña **Pipeline**.
 
 ## Pipeline de análisis configurable
 
@@ -646,7 +653,7 @@ El comando **Limpiar Problems** elimina únicamente los diagnósticos publicados
 
 El flujo de conexión es explícito: **Conectar** valida la URL y el token y carga los componentes visibles sin seleccionar ninguno. Si la validación falla, el desplegable de proyectos permanece vacío y deshabilitado. El proyecto solo queda vinculado cuando el usuario lo selecciona y pulsa **Sincronizar**. Los borradores no guardados del servidor y del token se conservan al cambiar entre Datos y Configuración.
 
-La página de configuración se organiza en **SonarQube**, **Módulos** y **Notificaciones**, junto con las pestañas opcionales **Pipeline** y **Live Remediation**. **SonarQube** contiene únicamente conexión, proyecto, rama y mapeo local; **Módulos** controla qué runtimes opcionales están cargados; **Pipeline** es propietario del scanner, alcance, comandos, pasos y plantillas; **Live Remediation** muestra su integración/estado propio; y **Notificaciones** agrupa los avisos automáticos.
+La página de configuración se organiza en **SonarQube**, **Módulos** y **Notificaciones**, junto con las pestañas opcionales **Pipeline**, **Integraciones** y **Live Remediation**. **SonarQube** contiene únicamente conexión, proyecto, rama y mapeo local; **Módulos** controla qué runtimes opcionales están cargados; **Pipeline** es propietario del scanner, alcance, comandos, pasos, plantillas y detección de herramientas; **Integraciones** muestra de forma informativa las herramientas detectadas cuando Pipeline está habilitado; **Live Remediation** muestra su integración/estado propio; y **Notificaciones** agrupa los avisos automáticos.
 
 La página permite gestionar:
 

@@ -440,11 +440,16 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       gap: 8px;
       margin-top: 8px;
     }
+    .integrations-section-intro {
+      margin-bottom: 14px;
+    }
+    .integration-availability-groups {
+      gap: 10px;
+    }
+    .integration-availability-content > .hint {
+      margin: 0 0 10px;
+    }
     .detected-integration-card {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
       padding: 10px 12px;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 3px;
@@ -464,9 +469,17 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .detected-integration-card > button {
-      flex: 0 0 auto;
-      white-space: nowrap;
+    .detected-integration-evidence,
+    .detected-integration-setup,
+    .detected-integration-command-label {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .detected-integration-card--unavailable {
+      background: var(--vscode-editorWidget-background);
+    }
+    .detected-integration-command-label {
+      margin-top: 3px;
     }
     .detected-integration-empty {
       padding: 10px 12px;

@@ -17,6 +17,7 @@ export interface DetectedProjectActions {
   buildCommand?: string;
   testCommand?: string;
   evidence?: string;
+  packageManager?: NodePackageManager;
   integrations: DetectedProjectIntegration[];
 }
 
@@ -24,13 +25,14 @@ interface PackageJsonShape {
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  packageManager?: string;
 }
 
-type PackageManager = 'npm' | 'pnpm' | 'yarn';
+export type NodePackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
 interface NodeProjectContext {
   packageJson: PackageJsonShape;
-  packageManager: PackageManager;
+  packageManager: NodePackageManager;
 }
 
 export async function detectProjectActions(
@@ -50,6 +52,7 @@ export async function detectProjectActions(
 
   return {
     ...detected,
+    packageManager: nodeContext?.packageManager,
     integrations: await detectPredefinedIntegrations(rootPath, nodeContext)
   };
 }
@@ -63,11 +66,19 @@ export async function detectPredefinedIntegrations(
   const candidates = [
     await detectDependencyAuditIntegration(rootPath, nodeContext),
     await detectEslintIntegration(rootPath, nodeContext),
+    await detectReactDoctorIntegration(rootPath, nodeContext),
+    await detectBiomeIntegration(rootPath, nodeContext),
+    await detectStylelintIntegration(rootPath, nodeContext),
+    await detectPrettierIntegration(rootPath, nodeContext),
     await detectSemgrepIntegration(rootPath, nodeContext),
     await detectSnykIntegration(rootPath, nodeContext),
     await detectTrivyIntegration(rootPath, nodeContext),
     await detectMavenOwaspIntegration(rootPath),
-    await detectGradleOwaspIntegration(rootPath)
+    await detectGradleOwaspIntegration(rootPath),
+    await detectRuffIntegration(rootPath),
+    await detectBanditIntegration(rootPath),
+    await detectCheckovIntegration(rootPath),
+    await detectGolangciLintIntegration(rootPath)
   ];
 
   return uniqueIntegrations(
@@ -80,12 +91,10 @@ async function detectDependencyAuditIntegration(
   nodeContext: NodeProjectContext | undefined
 ): Promise<DetectedProjectIntegration | undefined> {
   if (!nodeContext) return undefined;
-  const lockFile = await firstExisting(rootPath, [
-    'package-lock.json',
-    'npm-shrinkwrap.json',
-    'pnpm-lock.yaml',
-    'yarn.lock'
-  ]);
+  const lockFile = await firstExisting(
+    rootPath,
+    packageManagerLockFiles(nodeContext.packageManager)
+  );
   if (!lockFile) return undefined;
 
   return {
@@ -137,6 +146,118 @@ async function detectEslintIntegration(
       ? packageScriptCommand(nodeContext.packageManager, lintScript)
       : packageExecutableCommand(nodeContext.packageManager, 'eslint .'),
     evidence: lintScript ? `package.json#${lintScript}` : eslintConfig ?? 'package.json#eslint',
+    category: 'quality',
+    failurePolicy: 'stop'
+  };
+}
+
+async function detectReactDoctorIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const script = firstScriptContaining(scripts, /(?:^|\s|[/\\])react-doctor(?:@|\s|$)/i);
+  const config = await firstExisting(rootPath, ['doctor.config.ts']);
+  if (!script && !dependencies['react-doctor'] && !config) return undefined;
+
+  return {
+    id: 'react-doctor',
+    name: 'React Doctor',
+    description: 'Revisa proyectos React para detectar problemas de rendimiento, seguridad, corrección y arquitectura.',
+    command: script
+      ? packageScriptCommand(nodeContext.packageManager, script)
+      : packageExecutableCommand(nodeContext.packageManager, 'react-doctor'),
+    evidence: script ? `package.json#${script}` : config ?? 'package.json#react-doctor',
+    category: 'quality',
+    failurePolicy: 'continue'
+  };
+}
+
+async function detectBiomeIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const script = firstScriptContaining(scripts, /(?:^|\s)(?:biome|@biomejs\/biome)(?:\s|$)/i);
+  const config = await firstExisting(rootPath, ['biome.json', 'biome.jsonc']);
+  if (!script && !dependencies['@biomejs/biome'] && !config) return undefined;
+
+  return {
+    id: 'biome',
+    name: 'Biome',
+    description: 'Comprueba formato, lint y calidad de código JavaScript y TypeScript con Biome.',
+    command: script
+      ? packageScriptCommand(nodeContext.packageManager, script)
+      : packageExecutableCommand(nodeContext.packageManager, 'biome check .'),
+    evidence: script ? `package.json#${script}` : config ?? 'package.json#@biomejs/biome',
+    category: 'quality',
+    failurePolicy: 'stop'
+  };
+}
+
+async function detectStylelintIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const script = firstScriptContaining(scripts, /(?:^|\s)stylelint(?:\s|$)/i);
+  const config = await firstExisting(rootPath, [
+    'stylelint.config.js',
+    'stylelint.config.mjs',
+    'stylelint.config.cjs',
+    '.stylelintrc',
+    '.stylelintrc.json',
+    '.stylelintrc.yml',
+    '.stylelintrc.yaml'
+  ]);
+  if (!script && !dependencies.stylelint && !config) return undefined;
+
+  return {
+    id: 'stylelint',
+    name: 'Stylelint',
+    description: 'Analiza CSS y preprocesadores compatibles mediante reglas Stylelint.',
+    command: script
+      ? packageScriptCommand(nodeContext.packageManager, script)
+      : packageExecutableCommand(nodeContext.packageManager, 'stylelint "**/*.{css,scss,sass,less}"'),
+    evidence: script ? `package.json#${script}` : config ?? 'package.json#stylelint',
+    category: 'quality',
+    failurePolicy: 'stop'
+  };
+}
+
+async function detectPrettierIntegration(
+  rootPath: string,
+  nodeContext: NodeProjectContext | undefined
+): Promise<DetectedProjectIntegration | undefined> {
+  if (!nodeContext) return undefined;
+  const scripts = nodeContext.packageJson.scripts ?? {};
+  const dependencies = nodeDependencies(nodeContext);
+  const script = firstScriptContaining(scripts, /(?:^|\s)prettier(?:\s|$)/i);
+  const config = await firstExisting(rootPath, [
+    '.prettierrc',
+    '.prettierrc.json',
+    '.prettierrc.yml',
+    '.prettierrc.yaml',
+    'prettier.config.js',
+    'prettier.config.mjs',
+    'prettier.config.cjs'
+  ]);
+  if (!script && !dependencies.prettier && !config) return undefined;
+
+  return {
+    id: 'prettier',
+    name: 'Prettier',
+    description: 'Comprueba que el formato del proyecto cumple la configuración de Prettier.',
+    command: script
+      ? packageScriptCommand(nodeContext.packageManager, script)
+      : packageExecutableCommand(nodeContext.packageManager, 'prettier --check .'),
+    evidence: script ? `package.json#${script}` : config ?? 'package.json#prettier',
     category: 'quality',
     failurePolicy: 'stop'
   };
@@ -287,6 +408,92 @@ async function detectGradleOwaspIntegration(
   };
 }
 
+async function detectRuffIntegration(
+  rootPath: string
+): Promise<DetectedProjectIntegration | undefined> {
+  const config = await firstExisting(rootPath, ['ruff.toml', '.ruff.toml']);
+  const pyproject = path.join(rootPath, 'pyproject.toml');
+  const requirements = await firstExisting(rootPath, ['requirements.txt', 'requirements-dev.txt']);
+  const configured = Boolean(config) ||
+    await fileContains(pyproject, /\[tool\.ruff(?:\.|\])/i) ||
+    Boolean(requirements && await fileContains(path.join(rootPath, requirements), /^\s*ruff(?:[<>=~!]|\s|$)/im));
+  if (!configured) return undefined;
+
+  return {
+    id: 'ruff',
+    name: 'Ruff',
+    description: 'Ejecuta lint y comprobaciones rápidas de calidad para proyectos Python.',
+    command: process.platform === 'win32' ? 'py -m ruff check .' : 'python3 -m ruff check .',
+    evidence: config ?? (await fileContains(pyproject, /\[tool\.ruff(?:\.|\])/i) ? 'pyproject.toml' : requirements!),
+    category: 'quality',
+    failurePolicy: 'stop'
+  };
+}
+
+async function detectBanditIntegration(
+  rootPath: string
+): Promise<DetectedProjectIntegration | undefined> {
+  const config = await firstExisting(rootPath, ['.bandit', 'bandit.yaml', 'bandit.yml']);
+  const pyproject = path.join(rootPath, 'pyproject.toml');
+  const requirements = await firstExisting(rootPath, ['requirements.txt', 'requirements-dev.txt']);
+  const configured = Boolean(config) ||
+    await fileContains(pyproject, /\[tool\.bandit(?:\.|\])/i) ||
+    Boolean(requirements && await fileContains(path.join(rootPath, requirements), /^\s*bandit(?:[<>=~!]|\s|$)/im));
+  if (!configured) return undefined;
+
+  return {
+    id: 'bandit',
+    name: 'Bandit',
+    description: 'Busca problemas de seguridad habituales en código Python.',
+    command: process.platform === 'win32' ? 'py -m bandit -r .' : 'python3 -m bandit -r .',
+    evidence: config ?? (await fileContains(pyproject, /\[tool\.bandit(?:\.|\])/i) ? 'pyproject.toml' : requirements!),
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
+
+async function detectCheckovIntegration(
+  rootPath: string
+): Promise<DetectedProjectIntegration | undefined> {
+  const config = await firstExisting(rootPath, ['.checkov.yml', '.checkov.yaml', 'checkov.yml', 'checkov.yaml']);
+  const requirements = await firstExisting(rootPath, ['requirements.txt', 'requirements-dev.txt']);
+  const configured = Boolean(config) ||
+    Boolean(requirements && await fileContains(path.join(rootPath, requirements), /^\s*checkov(?:[<>=~!]|\s|$)/im));
+  if (!configured) return undefined;
+
+  return {
+    id: 'checkov',
+    name: 'Checkov',
+    description: 'Analiza infraestructura como código y configuraciones cloud en busca de riesgos.',
+    command: 'checkov -d .',
+    evidence: config ?? requirements!,
+    category: 'security',
+    failurePolicy: 'continue'
+  };
+}
+
+async function detectGolangciLintIntegration(
+  rootPath: string
+): Promise<DetectedProjectIntegration | undefined> {
+  const config = await firstExisting(rootPath, [
+    '.golangci.yml',
+    '.golangci.yaml',
+    '.golangci.toml',
+    '.golangci.json'
+  ]);
+  if (!config) return undefined;
+
+  return {
+    id: 'golangci-lint',
+    name: 'golangci-lint',
+    description: 'Ejecuta una colección de linters sobre proyectos Go.',
+    command: 'golangci-lint run',
+    evidence: config,
+    category: 'quality',
+    failurePolicy: 'stop'
+  };
+}
+
 async function detectNonNodeActions(
   rootPath: string
 ): Promise<Omit<DetectedProjectActions, 'integrations'>> {
@@ -413,7 +620,7 @@ async function readNodeProject(
     ) as PackageJsonShape;
     return {
       packageJson,
-      packageManager: await detectPackageManager(rootPath)
+      packageManager: await detectNodePackageManager(rootPath, packageJson.packageManager)
     };
   } catch {
     return undefined;
@@ -438,24 +645,55 @@ function detectNodeActions(
   };
 }
 
-async function detectPackageManager(rootPath: string): Promise<PackageManager> {
-  if (await exists(path.join(rootPath, 'pnpm-lock.yaml'))) {
-    return 'pnpm';
+async function detectNodePackageManager(
+  rootPath: string,
+  declaredPackageManager?: string
+): Promise<NodePackageManager> {
+  const declared = normalizeNodePackageManager(declaredPackageManager);
+  if (declared) {
+    return declared;
   }
-  if (await exists(path.join(rootPath, 'yarn.lock'))) {
-    return 'yarn';
+
+  const lockfiles: Array<[string, NodePackageManager]> = [
+    ['pnpm-lock.yaml', 'pnpm'],
+    ['yarn.lock', 'yarn'],
+    ['bun.lock', 'bun'],
+    ['bun.lockb', 'bun'],
+    ['package-lock.json', 'npm'],
+    ['npm-shrinkwrap.json', 'npm']
+  ];
+  for (const [lockfile, packageManager] of lockfiles) {
+    if (await exists(path.join(rootPath, lockfile))) {
+      return packageManager;
+    }
   }
   return 'npm';
 }
 
-function dependencyAuditCommand(packageManager: PackageManager): string {
+function normalizeNodePackageManager(value: string | undefined): NodePackageManager | undefined {
+  const name = value?.trim().toLowerCase().split('@', 1)[0];
+  if (name === 'npm' || name === 'pnpm' || name === 'yarn' || name === 'bun') {
+    return name;
+  }
+  return undefined;
+}
+
+function packageManagerLockFiles(packageManager: NodePackageManager): string[] {
+  if (packageManager === 'npm') return ['package-lock.json', 'npm-shrinkwrap.json'];
+  if (packageManager === 'pnpm') return ['pnpm-lock.yaml'];
+  if (packageManager === 'yarn') return ['yarn.lock'];
+  return ['bun.lock', 'bun.lockb'];
+}
+
+function dependencyAuditCommand(packageManager: NodePackageManager): string {
   if (packageManager === 'npm') return 'npm audit --audit-level=high';
   if (packageManager === 'pnpm') return 'pnpm audit --audit-level=high';
+  if (packageManager === 'bun') return 'bun audit --audit-level=high';
   return 'yarn audit --level high';
 }
 
 function packageScriptCommand(
-  packageManager: PackageManager,
+  packageManager: NodePackageManager,
   script: string
 ): string {
   if (packageManager === 'npm') {
@@ -464,18 +702,24 @@ function packageScriptCommand(
   if (packageManager === 'pnpm') {
     return script === 'test' ? 'pnpm test' : `pnpm run ${script}`;
   }
+  if (packageManager === 'bun') {
+    return `bun run ${script}`;
+  }
   return `yarn ${script}`;
 }
 
 function packageExecutableCommand(
-  packageManager: PackageManager,
+  packageManager: NodePackageManager,
   command: string
 ): string {
   if (packageManager === 'npm') {
-    return `npx ${command}`;
+    return `npm exec -- ${command}`;
   }
   if (packageManager === 'pnpm') {
     return `pnpm exec ${command}`;
+  }
+  if (packageManager === 'bun') {
+    return `bunx ${command}`;
   }
   return `yarn ${command}`;
 }
@@ -485,6 +729,13 @@ function firstScript(
   candidates: string[]
 ): string | undefined {
   return candidates.find(candidate => Boolean(scripts[candidate]?.trim()));
+}
+
+function firstScriptContaining(
+  scripts: Record<string, string>,
+  pattern: RegExp
+): string | undefined {
+  return Object.entries(scripts).find(([, command]) => pattern.test(command))?.[0];
 }
 
 function firstUsableTestScript(
