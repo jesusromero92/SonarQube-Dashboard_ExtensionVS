@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
+import { getRegisteredIntegrationWatchFiles } from './integrations';
 
-const PROJECT_ACTION_WATCH_FILES = [
+const PROJECT_ACTION_BASE_WATCH_FILES = [
   'package.json',
   'package-lock.json',
   'npm-shrinkwrap.json',
@@ -8,70 +9,48 @@ const PROJECT_ACTION_WATCH_FILES = [
   'yarn.lock',
   'bun.lock',
   'bun.lockb',
-  'eslint.config.js',
-  'eslint.config.mjs',
-  'eslint.config.cjs',
-  '.eslintrc',
-  '.eslintrc.js',
-  '.eslintrc.cjs',
-  '.eslintrc.json',
-  '.eslintrc.yml',
-  '.eslintrc.yaml',
-  'doctor.config.ts',
-  'biome.json',
-  'biome.jsonc',
-  'stylelint.config.js',
-  'stylelint.config.mjs',
-  'stylelint.config.cjs',
-  '.stylelintrc',
-  '.stylelintrc.json',
-  '.stylelintrc.yml',
-  '.stylelintrc.yaml',
-  '.prettierrc',
-  '.prettierrc.json',
-  '.prettierrc.yml',
-  '.prettierrc.yaml',
-  'prettier.config.js',
-  'prettier.config.mjs',
-  'prettier.config.cjs',
-  '.semgrep.yml',
-  '.semgrep.yaml',
-  'semgrep.yml',
-  'semgrep.yaml',
-  '.snyk',
-  'trivy.yaml',
-  'trivy.yml',
-  '.trivyignore',
-  'Dockerfile',
-  'docker-compose.yml',
-  'docker-compose.yaml',
   'pom.xml',
   'build.gradle',
   'build.gradle.kts',
-  'ruff.toml',
-  '.ruff.toml',
+  'settings.gradle',
+  'settings.gradle.kts',
+  'Cargo.toml',
+  'go.mod',
   'pyproject.toml',
+  'pytest.ini',
+  'setup.cfg',
   'requirements.txt',
   'requirements-dev.txt',
-  '.bandit',
-  'bandit.yaml',
-  'bandit.yml',
-  '.checkov.yml',
-  '.checkov.yaml',
-  'checkov.yml',
-  'checkov.yaml',
-  '.golangci.yml',
-  '.golangci.yaml',
-  '.golangci.toml',
-  '.golangci.json'
+  'setup.py',
+  'Pipfile',
+  'tox.ini',
+  'tsconfig.json',
+  'tsconfig.*.json',
+  '*.sln',
+  '*.slnx',
+  '*.csproj',
+  '*.vbproj',
+  '*.fsproj',
+  '*.tf',
+  '.terraform.lock.hcl',
+  'Dockerfile',
+  'Dockerfile.*',
+  'docker-compose.yml',
+  'docker-compose.yaml',
+  'compose.yml',
+  'compose.yaml'
 ] as const;
+
+export const PROJECT_ACTION_WATCH_FILES = Object.freeze([
+  ...new Set([...PROJECT_ACTION_BASE_WATCH_FILES, ...getRegisteredIntegrationWatchFiles()])
+]);
 
 export const PROJECT_ACTION_WATCH_PATTERN = `{${PROJECT_ACTION_WATCH_FILES.join(',')}}`;
 
 /**
  * Watches only files that participate in Pipeline project/integration detection.
- * The base path is the configured analysis root, so package installs do not
- * produce events for package.json files created inside node_modules.
+ * Provider-specific files are contributed by the integration registry, so adding
+ * an integration does not require editing this watcher.
  */
 export function watchProjectActionFiles(
   rootPath: string,

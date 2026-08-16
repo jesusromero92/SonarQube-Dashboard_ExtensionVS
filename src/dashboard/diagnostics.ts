@@ -1,273 +1,409 @@
 import * as vscode from 'vscode';
-import { getFolderFormConfig, tokenKey } from '../configuration';
+import { getFolderConfig, getFolderFormConfig } from '../configuration';
 import {
   fetchSonarCompatibilityInfo,
-  probeSonarServer
+  getLastSonarRequestFailure,
+  probeSonarServer,
+  SonarRequestFailure
 } from '../sonarClient';
 
-export interface ExtensionDiagnosticCommand {
-  name: string;
-  command: string;
-  source: string;
-  evidence?: string;
+export interface ExtensionDiagnosticsModuleState {
+  readonly id: string;
+  readonly displayName: string;
+  readonly enabled: boolean;
+  readonly loaded: boolean;
 }
 
-export interface ExtensionDiagnosticTool {
-  name: string;
-  command: string;
-  category: string;
-  evidence?: string;
+export interface ExtensionDiagnosticsModuleItem {
+  readonly label: string;
+  readonly value: string;
+  readonly status?: 'healthy' | 'warning' | 'unknown';
 }
 
-export interface ExtensionFailedRequest {
-  method?: string;
-  endpoint?: string;
-  status?: number | string;
-  message?: string;
-  occurredAt?: string;
+export interface ExtensionDiagnosticsModuleSection {
+  readonly moduleId?: string;
+  readonly title: string;
+  readonly items: readonly ExtensionDiagnosticsModuleItem[];
+}
+
+export interface ExtensionDiagnosticsCommand {
+  readonly name: string;
+  readonly command: string;
+  readonly source?: string;
+  readonly evidence?: string;
+}
+
+export interface ExtensionDiagnosticsTool {
+  readonly name: string;
+  readonly command: string;
+  readonly category?: string;
+  readonly evidence?: string;
+  readonly health?: string;
+  readonly configurationStatus?: string;
+  readonly version?: string;
+  readonly versionSource?: string;
+  readonly probeSupported?: string;
 }
 
 export interface ExtensionDiagnosticsSnapshot {
-  generatedAt: string;
-  extensionVersion: string;
-  vscodeVersion: string;
-  nodeVersion: string;
-  platform: string;
-  architecture: string;
-  workspaceTrusted: boolean;
-  workspaceFolder: string;
-  sonarServer?: string;
-  projectKey?: string;
-  branch?: string;
-  sonarVersion?: string;
-  sonarStatus?: string;
-  compatibilityProfile?: string;
-  compatibilityProfiles?: string[];
-  responseTimeMs?: number;
-  scanner?: string;
-  scannerKind?: string;
-  scannerEvidence?: string;
-  commands: ExtensionDiagnosticCommand[];
-  tools: ExtensionDiagnosticTool[];
-  lastFailedRequest?: ExtensionFailedRequest;
-  errors: string[];
+  readonly generatedAt: string;
+  readonly extensionVersion: string;
+  readonly vscodeVersion: string;
+  readonly nodeVersion: string;
+  readonly platform: string;
+  readonly architecture: string;
+  readonly workspaceTrusted: boolean;
+  readonly workspaceFolder: string;
+  readonly modules: readonly ExtensionDiagnosticsModuleState[];
+  readonly moduleDiagnostics: readonly ExtensionDiagnosticsModuleSection[];
+  readonly sonarServer: string;
+  readonly projectKey: string;
+  readonly branch: string;
+  readonly sonarVersion: string;
+  readonly sonarStatus: string;
+  readonly compatibilityProfile: string;
+  readonly compatibilityProfiles: readonly string[];
+  readonly responseTimeMs?: number;
+  readonly scanner: string;
+  readonly scannerKind: string;
+  readonly scannerEvidence: string;
+  readonly commands: readonly ExtensionDiagnosticsCommand[];
+  readonly tools: readonly ExtensionDiagnosticsTool[];
+  readonly lastFailedRequest?: SonarRequestFailure;
+  readonly errors: readonly string[];
 }
 
-const LAST_FAILED_REQUEST_KEY_PREFIX =
-  'sonarQubeDashboard.diagnostics.lastFailedRequest:';
+interface DiagnosticsContribution {
+  readonly modules?: unknown;
+  readonly moduleDiagnostics?: unknown;
+  readonly moduleDiagnosticErrors?: unknown;
+  readonly scanner?: unknown;
+  readonly scannerKind?: unknown;
+  readonly scannerEvidence?: unknown;
+  readonly commands?: unknown;
+  readonly tools?: unknown;
+}
 
 export async function collectExtensionDiagnostics(
   context: vscode.ExtensionContext,
-  folder?: vscode.WorkspaceFolder,
-  moduleContribution: Record<string, unknown> = {}
+  folder: vscode.WorkspaceFolder | undefined,
+  rawContribution: Record<string, unknown> = {}
 ): Promise<ExtensionDiagnosticsSnapshot> {
-  const errors: string[] = [];
-  const snapshot: ExtensionDiagnosticsSnapshot = {
+  const contribution = rawContribution as DiagnosticsContribution;
+  const errors = normalizeStringArray(contribution.moduleDiagnosticErrors);
+  const form = folder
+    ? await tryCollect(
+        () => getFolderFormConfig(context, folder),
+        errors,
+        'No se pudo leer la configuración de SonarQube.'
+      )
+    : undefined;
+  const config = folder
+    ? await tryCollect(
+        () => getFolderConfig(context, folder),
+        errors,
+        'No se pudo leer el token/configuración completa de SonarQube.'
+      )
+    : undefined;
+
+  let sonarVersion = '';
+  let sonarStatus = '';
+  let compatibilityProfile = '';
+  let compatibilityProfiles: readonly string[] = [];
+  let responseTimeMs: number | undefined;
+
+  if (config) {
+    const compatibility = await tryCollect(
+      () => fetchSonarCompatibilityInfo(config.serverUrl, config.token),
+      errors,
+      'No se pudo obtener la compatibilidad del servidor SonarQube.'
+    );
+    if (compatibility) {
+      sonarVersion = compatibility.version;
+      compatibilityProfile = compatibility.profile;
+      compatibilityProfiles = [...compatibility.appliedProfiles];
+      if (compatibility.warning) {
+        errors.push(compatibility.warning);
+      }
+    }
+
+    const probe = await tryCollect(
+      () => probeSonarServer(config.serverUrl, config.token),
+      errors,
+      'No se pudo comprobar el estado del servidor SonarQube.'
+    );
+    if (probe) {
+      sonarStatus = probe.status;
+      responseTimeMs = probe.durationMs;
+    }
+  }
+
+  return {
     generatedAt: new Date().toISOString(),
-    extensionVersion: extensionVersion(context),
+    extensionVersion: getExtensionVersion(context),
     vscodeVersion: vscode.version,
     nodeVersion: process.version,
     platform: process.platform,
     architecture: process.arch,
     workspaceTrusted: vscode.workspace.isTrusted,
     workspaceFolder: folder?.uri.fsPath ?? '',
-    commands: [],
-    tools: [],
+    modules: normalizeModules(contribution.modules),
+    moduleDiagnostics: normalizeModuleDiagnostics(contribution.moduleDiagnostics),
+    sonarServer: form?.serverUrl ?? '',
+    projectKey: form?.projectKey ?? '',
+    branch: form?.branch ?? '',
+    sonarVersion,
+    sonarStatus,
+    compatibilityProfile,
+    compatibilityProfiles,
+    responseTimeMs,
+    scanner: asString(contribution.scanner),
+    scannerKind: asString(contribution.scannerKind),
+    scannerEvidence: asString(contribution.scannerEvidence),
+    commands: normalizeCommands(contribution.commands),
+    tools: normalizeTools(contribution.tools),
+    lastFailedRequest: getLastSonarRequestFailure(),
     errors
   };
-
-  Object.assign(snapshot, {
-    scanner: typeof moduleContribution.scanner === 'string' ? moduleContribution.scanner : '',
-    scannerKind: typeof moduleContribution.scannerKind === 'string' ? moduleContribution.scannerKind : '',
-    scannerEvidence: typeof moduleContribution.scannerEvidence === 'string' ? moduleContribution.scannerEvidence : '',
-    commands: Array.isArray(moduleContribution.commands) ? moduleContribution.commands : [],
-    tools: Array.isArray(moduleContribution.tools) ? moduleContribution.tools : []
-  });
-  if (Array.isArray(moduleContribution.moduleDiagnosticErrors)) {
-    errors.push(...moduleContribution.moduleDiagnosticErrors.filter(
-      (item): item is string => typeof item === 'string'
-    ));
-  }
-
-  if (!folder) {
-    errors.push('No hay ninguna carpeta del workspace seleccionada.');
-    return snapshot;
-  }
-
-  const form = await getFolderFormConfig(context, folder);
-
-  snapshot.sonarServer = form.serverUrl;
-  snapshot.projectKey = form.projectKey;
-  snapshot.branch = form.branch;
-  snapshot.lastFailedRequest = context.workspaceState.get<ExtensionFailedRequest>(
-    `${LAST_FAILED_REQUEST_KEY_PREFIX}${folder.uri.toString()}`
-  );
-
-
-  const token = await context.secrets.get(tokenKey(folder));
-  if (!form.serverUrl || !token) {
-    if (form.serverUrl && !token) {
-      errors.push('No hay un token guardado para comprobar SonarQube.');
-    }
-    return snapshot;
-  }
-
-  const [compatibilityResult, probeResult] = await Promise.allSettled([
-    fetchSonarCompatibilityInfo(form.serverUrl, token),
-    probeSonarServer(form.serverUrl, token)
-  ]);
-
-  if (compatibilityResult.status === 'fulfilled') {
-    const compatibility = compatibilityResult.value;
-    snapshot.sonarVersion = compatibility.version;
-    snapshot.compatibilityProfile = compatibility.profile;
-    snapshot.compatibilityProfiles = [...compatibility.appliedProfiles];
-  } else {
-    errors.push(
-      `No se pudo detectar la compatibilidad de SonarQube: ${errorMessage(compatibilityResult.reason)}`
-    );
-  }
-
-  if (probeResult.status === 'fulfilled') {
-    snapshot.sonarStatus = probeResult.value.status;
-    snapshot.responseTimeMs = probeResult.value.durationMs;
-  } else {
-    snapshot.sonarStatus = 'UNAVAILABLE';
-    errors.push(
-      `No se pudo comprobar el estado de SonarQube: ${errorMessage(probeResult.reason)}`
-    );
-  }
-
-  return snapshot;
 }
 
-export function formatDiagnosticsReport(
-  snapshot: ExtensionDiagnosticsSnapshot
-): string {
-  const branch = firstNonEmpty(snapshot.branch, 'Rama principal');
-  const compatibilityProfile = firstNonEmpty(
-    snapshot.compatibilityProfiles?.join(' / '),
-    snapshot.compatibilityProfile
-  );
-  const responseTime = snapshot.responseTimeMs === undefined
-    ? '—'
-    : `${snapshot.responseTimeMs} ms`;
-  const lines = [
-    '# SonarQube Dashboard · Diagnóstico',
+export function formatDiagnosticsReport(snapshot: ExtensionDiagnosticsSnapshot): string {
+  const lines: string[] = [
+    'SonarQube Dashboard - Extension Diagnostics',
+    `Generated: ${snapshot.generatedAt}`,
     '',
-    `Generado: ${snapshot.generatedAt}`,
+    '[Environment]',
+    `Extension: ${snapshot.extensionVersion || '—'}`,
+    `VS Code: ${snapshot.vscodeVersion || '—'}`,
+    `Node.js: ${snapshot.nodeVersion || '—'}`,
+    `Platform: ${[snapshot.platform, snapshot.architecture].filter(Boolean).join(' ') || '—'}`,
+    `Workspace trusted: ${snapshot.workspaceTrusted ? 'yes' : 'no'}`,
+    `Workspace folder: ${snapshot.workspaceFolder || '—'}`,
     '',
-    '## Entorno',
-    `- Extensión: ${value(snapshot.extensionVersion)}`,
-    `- VS Code: ${value(snapshot.vscodeVersion)}`,
-    `- Node.js: ${value(snapshot.nodeVersion)}`,
-    `- Plataforma: ${value([snapshot.platform, snapshot.architecture].filter(Boolean).join(' '))}`,
-    `- Workspace confiable: ${snapshot.workspaceTrusted ? 'Sí' : 'No'}`,
-    `- Carpeta: ${value(snapshot.workspaceFolder)}`,
-    '',
-    '## SonarQube y compatibilidad',
-    `- Servidor: ${value(snapshot.sonarServer)}`,
-    `- Proyecto: ${value(snapshot.projectKey)}`,
-    `- Rama: ${value(branch)}`,
-    `- Versión: ${value(snapshot.sonarVersion)}`,
-    `- Estado: ${value(snapshot.sonarStatus)}`,
-    `- Perfil: ${value(compatibilityProfile)}`,
-    `- Tiempo de respuesta: ${responseTime}`,
-    '',
-    '## Scanner',
-    `- Scanner: ${value(snapshot.scanner)}`,
-    `- Tipo: ${value(snapshot.scannerKind)}`,
-    `- Evidencia: ${value(snapshot.scannerEvidence)}`,
-    '',
-    '## Comandos detectados automáticamente',
-    ...formatCommands(snapshot.commands),
-    '',
-    '## Herramientas disponibles',
-    ...formatTools(snapshot.tools),
-    '',
-    '## Última petición fallida',
-    ...formatFailure(snapshot.lastFailedRequest),
-    '',
-    '## Incidencias al recopilar el diagnóstico',
-    ...(snapshot.errors.length > 0
-      ? snapshot.errors.map(item => `- ${item}`)
-      : ['- Ninguna']),
-    '',
-    '> El informe no incluye tokens ni secretos.'
+    '[Modules]'
   ];
 
-  return lines.join('\n');
-}
+  appendRows(
+    lines,
+    snapshot.modules.map(module => [
+      module.displayName || module.id,
+      module.enabled
+        ? module.loaded
+          ? 'enabled / runtime loaded'
+          : 'enabled / runtime not loaded'
+        : 'disabled'
+    ])
+  );
 
-
-function extensionVersion(context: vscode.ExtensionContext): string {
-  const packageJson = context.extension.packageJSON as { version?: unknown };
-  return typeof packageJson.version === 'string' ? packageJson.version : '';
-}
-
-
-function formatCommands(commands: readonly ExtensionDiagnosticCommand[]): string[] {
-  if (commands.length === 0) return ['- Ninguno'];
-  return commands.map(command => {
-    const evidence = formatEvidence(command.evidence);
-    return `- ${command.name}: \`${command.command}\`${evidence}`;
-  });
-}
-
-function formatTools(tools: readonly ExtensionDiagnosticTool[]): string[] {
-  if (tools.length === 0) return ['- Ninguna'];
-  return tools.map(tool => {
-    const evidence = formatEvidence(tool.evidence);
-    return `- ${tool.name} [${tool.category}]: \`${tool.command}\`${evidence}`;
-  });
-}
-
-function formatEvidence(evidence?: string): string {
-  return evidence ? ` (${evidence})` : '';
-}
-
-function formatFailure(failure?: ExtensionFailedRequest): string[] {
-  if (!failure) return ['- No hay peticiones fallidas registradas.'];
-  const title = [failure.method, failure.endpoint, failure.status]
-    .filter(item => item !== undefined && item !== '')
-    .join(' ');
-  return [
-    `- ${title || 'Petición fallida'}`,
-    failure.message ? `  - Mensaje: ${failure.message}` : '',
-    failure.occurredAt ? `  - Fecha: ${failure.occurredAt}` : ''
-  ].filter(Boolean);
-}
-
-function value(input: unknown): string {
-  if (input === undefined || input === null || input === '') return '—';
-  if (
-    typeof input === 'string' ||
-    typeof input === 'number' ||
-    typeof input === 'bigint' ||
-    typeof input === 'boolean'
-  ) {
-    return String(input);
-  }
-  if (typeof input === 'symbol') {
-    return input.description ?? 'Symbol';
-  }
-  if (typeof input === 'function') {
-    return input.name ? `[Function ${input.name}]` : '[Function]';
-  }
-  try {
-    return JSON.stringify(input) ?? '—';
-  } catch {
-    return '—';
-  }
-}
-
-function firstNonEmpty(...values: Array<string | undefined>): string {
-  for (const current of values) {
-    if (current) {
-      return current;
+  lines.push('', '[Module health]');
+  for (const section of snapshot.moduleDiagnostics) {
+    lines.push(`${section.title}:`);
+    for (const item of section.items) {
+      lines.push(`  - ${item.label}: ${item.value}${item.status ? ` [${item.status}]` : ''}`);
     }
   }
-  return '';
+  if (snapshot.moduleDiagnostics.length === 0) {
+    lines.push('—');
+  }
+
+  lines.push(
+    '',
+    '[SonarQube]',
+    `Server: ${snapshot.sonarServer || '—'}`,
+    `Project: ${snapshot.projectKey || '—'}`,
+    `Branch: ${snapshot.branch || 'main/default'}`,
+    `Version: ${snapshot.sonarVersion || '—'}`,
+    `Status: ${snapshot.sonarStatus || '—'}`,
+    `Compatibility profile: ${snapshot.compatibilityProfile || '—'}`,
+    `Applied profiles: ${snapshot.compatibilityProfiles.join(', ') || '—'}`,
+    `Response time: ${snapshot.responseTimeMs === undefined ? '—' : `${snapshot.responseTimeMs} ms`}`,
+    '',
+    '[Scanner]',
+    `Scanner: ${snapshot.scanner || '—'}`,
+    `Kind: ${snapshot.scannerKind || '—'}`,
+    `Evidence: ${snapshot.scannerEvidence || '—'}`,
+    '',
+    '[Detected commands]'
+  );
+
+  appendRows(
+    lines,
+    snapshot.commands.map(command => [
+      command.name,
+      redactSensitiveText(command.command),
+      command.source,
+      command.evidence
+    ])
+  );
+
+  lines.push('', '[Available tools]');
+  appendRows(
+    lines,
+    snapshot.tools.map(tool => [
+      tool.name,
+      redactSensitiveText(tool.command),
+      tool.category,
+      tool.version ? `version=${tool.version}` : '',
+      tool.health ? `health=${tool.health}` : '',
+      tool.configurationStatus ? `configuration=${tool.configurationStatus}` : '',
+      tool.evidence
+    ])
+  );
+
+  lines.push('', '[Last failed SonarQube request]');
+  if (snapshot.lastFailedRequest) {
+    const failure = snapshot.lastFailedRequest;
+    lines.push(
+      `${failure.occurredAt} ${failure.method} ${failure.endpoint}` +
+        `${failure.status === undefined ? '' : ` [${failure.status}]`}`,
+      redactSensitiveText(failure.message)
+    );
+  } else {
+    lines.push('—');
+  }
+
+  lines.push('', '[Collection errors]');
+  if (snapshot.errors.length === 0) {
+    lines.push('—');
+  } else {
+    lines.push(...snapshot.errors.map(error => `- ${redactSensitiveText(error)}`));
+  }
+
+  lines.push('', 'Secrets and SonarQube tokens are not included in this report.');
+  return `${lines.join('\n')}\n`;
+}
+
+function getExtensionVersion(context: vscode.ExtensionContext): string {
+  const packageJson = context.extension?.packageJSON as { version?: unknown } | undefined;
+  if (typeof packageJson?.version === 'string') {
+    return packageJson.version;
+  }
+
+  const fallbackPackageJson = (context as unknown as { extension?: { packageJSON?: unknown } })
+    .extension?.packageJSON as { version?: unknown } | undefined;
+  return typeof fallbackPackageJson?.version === 'string' ? fallbackPackageJson.version : '';
+}
+
+async function tryCollect<T>(
+  action: () => Promise<T>,
+  errors: string[],
+  prefix: string
+): Promise<T | undefined> {
+  try {
+    return await action();
+  } catch (error) {
+    errors.push(`${prefix} ${errorMessage(error)}`);
+    return undefined;
+  }
+}
+
+function normalizeModules(value: unknown): ExtensionDiagnosticsModuleState[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map(item => ({
+      id: asString(item.id),
+      displayName: asString(item.displayName),
+      enabled: item.enabled === true,
+      loaded: item.loaded === true
+    }));
+}
+
+function normalizeModuleDiagnostics(value: unknown): ExtensionDiagnosticsModuleSection[] {
+  if (!Array.isArray(value)) return [];
+  const result: ExtensionDiagnosticsModuleSection[] = [];
+  for (const rawSection of value) {
+    if (!isRecord(rawSection)) continue;
+    const rawItems = Array.isArray(rawSection.items) ? rawSection.items : [];
+    const items: ExtensionDiagnosticsModuleItem[] = [];
+    for (const rawItem of rawItems) {
+      if (!isRecord(rawItem)) continue;
+      const status = normalizeStatus(rawItem.status);
+      items.push({
+        label: asString(rawItem.label),
+        value: asString(rawItem.value),
+        ...(status ? { status } : {})
+      });
+    }
+    result.push({
+      moduleId: asString(rawSection.moduleId) || undefined,
+      title: asString(rawSection.title),
+      items
+    });
+  }
+  return result;
+}
+
+function normalizeCommands(value: unknown): ExtensionDiagnosticsCommand[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map(item => ({
+      name: asString(item.name),
+      command: asString(item.command),
+      source: asString(item.source) || undefined,
+      evidence: asString(item.evidence) || undefined
+    }));
+}
+
+function normalizeTools(value: unknown): ExtensionDiagnosticsTool[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map(item => ({
+      name: asString(item.name),
+      command: asString(item.command),
+      category: asString(item.category) || undefined,
+      evidence: asString(item.evidence) || undefined,
+      health: asString(item.health) || undefined,
+      configurationStatus: asString(item.configurationStatus) || undefined,
+      version: asString(item.version) || undefined,
+      versionSource: asString(item.versionSource) || undefined,
+      probeSupported: asString(item.probeSupported) || undefined
+    }));
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+function normalizeStatus(
+  value: unknown
+): ExtensionDiagnosticsModuleItem['status'] | undefined {
+  return value === 'healthy' || value === 'warning' || value === 'unknown'
+    ? value
+    : undefined;
+}
+
+function appendRows(lines: string[], rows: readonly (readonly (string | undefined)[])[]): void {
+  if (rows.length === 0) {
+    lines.push('—');
+    return;
+  }
+
+  for (const row of rows) {
+    const values = row.filter((value): value is string => Boolean(value));
+    lines.push(values.join(' | '));
+  }
+}
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(
+      /((?:token|password|passwd|secret|api[_-]?key|authorization)\s*[=:]\s*)(["']?)[^\s"'&;]+\2/gi,
+      '$1********'
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer ********');
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function errorMessage(error: unknown): string {

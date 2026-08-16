@@ -63,6 +63,7 @@ ${getSelectDropdownMarkup({
           <div>
             <strong>Pasos que se ejecutarán</strong>
             <span id="analysisConfirmationStepCount" class="muted"></span>
+            <span id="analysisConfirmationEstimatedDuration" class="muted"></span>
           </div>
           <ol id="analysisConfirmationStepsSummary"></ol>
         </section>

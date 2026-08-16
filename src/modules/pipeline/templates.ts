@@ -73,6 +73,13 @@ export function mergePipelineTemplates(
   ];
 }
 
+function isSecurityIntegrationCategory(category: string): boolean {
+  return category === 'security-sast' ||
+    category === 'dependencies-sca' ||
+    category === 'iac' ||
+    category === 'containers';
+}
+
 export function createBuiltinPipelineTemplates(
   actions: DetectedProjectActions,
   buildCommand: string,
@@ -91,7 +98,8 @@ export function createBuiltinPipelineTemplates(
       integration.name,
       'custom',
       integration.command,
-      integration.failurePolicy
+      integration.failurePolicy,
+      integration.id
     )
   );
   const audit = integrations.find(item => item.id === 'integration-dependency-audit');
@@ -99,7 +107,7 @@ export function createBuiltinPipelineTemplates(
     const source = actions.integrations.find(
       integration => `integration-${integration.id}` === item.id
     );
-    return source?.category === 'security';
+    return source ? isSecurityIntegrationCategory(source.category) : false;
   });
 
   return [
@@ -155,6 +163,7 @@ export function serializePipelineTemplateYaml(template: PipelineTemplate): strin
       `    name: ${yamlScalar(item.name)}`,
       `    kind: ${item.kind}`,
       `    command: ${yamlScalar(item.command ?? '')}`,
+      ...(item.integrationId ? [`    integrationId: ${yamlScalar(item.integrationId)}`] : []),
       `    failurePolicy: ${item.failurePolicy}`,
       `    enabled: ${item.enabled !== false}`
     );
@@ -186,6 +195,7 @@ function flushParsedStep(state: PipelineTemplateParseState): void {
     kind: parsedStepKind(state.current.kind),
     command: state.current.command ? String(state.current.command) : undefined,
     failurePolicy: state.current.failurePolicy === 'continue' ? 'continue' : 'stop',
+    integrationId: state.current.integrationId ? String(state.current.integrationId) : undefined,
     enabled: state.current.enabled !== false
   });
   state.current = undefined;
@@ -228,6 +238,9 @@ function applyParsedStepProperty(
       break;
     case 'command':
       current.command = String(parsed);
+      break;
+    case 'integrationId':
+      current.integrationId = String(parsed);
       break;
     case 'failurePolicy':
       current.failurePolicy = String(parsed) as AnalysisExecutionStep['failurePolicy'];
@@ -315,9 +328,10 @@ function step(
   name: string,
   kind: AnalysisExecutionStep['kind'],
   command: string,
-  failurePolicy: AnalysisExecutionStep['failurePolicy']
+  failurePolicy: AnalysisExecutionStep['failurePolicy'],
+  integrationId?: string
 ): AnalysisExecutionStep {
-  return { id, name, kind, command, failurePolicy, enabled: true };
+  return { id, name, kind, command, failurePolicy, integrationId, enabled: true };
 }
 
 function sonarStep(): AnalysisExecutionStep {

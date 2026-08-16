@@ -407,5 +407,16 @@ export const ES_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   'configurationSonarQubeTab': 'SonarQube',
   'configurationNotificationsTab': 'Notificaciones',
   'copied': 'Copiado',
-  'authenticationExcluded': 'Los tokens de autenticación y los secretos se excluyen de forma intencionada.'
+  'authenticationExcluded': 'Los tokens de autenticación y los secretos se excluyen de forma intencionada.',
+  'moduleHealth': 'Salud de módulos',
+  'runtimeLoaded': 'Runtime cargado',
+  'runtimeNotLoaded': 'Runtime no cargado',
+  'moduleDisabled': 'Módulo desactivado',
+  'active': 'Activo',
+  'disabled': 'Desactivado',
+  'version': 'Versión',
+  'moduleRuntimeStatus': 'Estado del runtime',
+  'inactive': 'Inactivo',
+  'yes': 'Sí',
+  'no': 'No'
 } as const;

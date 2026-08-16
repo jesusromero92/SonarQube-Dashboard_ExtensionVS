@@ -208,7 +208,25 @@ export class LiveRemediationModule implements DashboardModule {
   async collectDiagnosticsContribution(
     _folder: vscode.WorkspaceFolder | undefined
   ): Promise<Record<string, unknown>> {
-    return {};
+    const extension = vscode.extensions.getExtension(SONARQUBE_FOR_IDE_EXTENSION_ID);
+    return {
+      moduleDiagnostics: [{
+        moduleId: 'liveRemediation',
+        title: 'Live Remediation',
+        items: [
+          {
+            label: 'Estado del runtime',
+            value: this.manager ? 'Activo' : 'Inactivo',
+            status: this.manager ? 'healthy' : 'warning'
+          },
+          {
+            label: 'SonarQube for IDE',
+            value: extension ? (extension.isActive ? 'Activo' : 'Instalado') : 'No instalado',
+            status: extension?.isActive ? 'healthy' : extension ? 'warning' : 'unknown'
+          }
+        ]
+      }]
+    };
   }
 
   hasCapability(_capability: DashboardModuleCapability): boolean {

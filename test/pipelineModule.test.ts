@@ -104,7 +104,10 @@ test('Pipeline refresca integraciones al cambiar archivos del proyecto sin acopl
   assert.match(watcher, /createFileSystemWatcher/);
   assert.match(watcher, /package\.json/);
   assert.match(watcher, /package-lock\.json/);
-  assert.match(watcher, /doctor\.config\.ts/);
+  const reactDoctorProvider = source('src/modules/pipeline/integrations/providers/reactDoctor.ts');
+  assert.match(watcher, /getRegisteredIntegrationWatchFiles/);
+  assert.doesNotMatch(watcher, /doctor\.config\.ts/);
+  assert.match(reactDoctorProvider, /doctor\.config\.ts/);
   assert.match(watcher, /onDidCreate/);
   assert.match(watcher, /onDidChange/);
   assert.match(watcher, /onDidDelete/);

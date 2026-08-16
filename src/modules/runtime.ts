@@ -30,6 +30,7 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   private readonly disposables: vscode.Disposable[] = [];
   private syncQueue: Promise<void> = Promise.resolve();
   private lastSyncedSignature = '';
+  private disposed = false;
 
   constructor(
     private readonly definitions: readonly DashboardModuleDefinition[],
@@ -74,6 +75,7 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   }
 
   async syncEnabledModules(): Promise<boolean> {
+    if (this.disposed) return false;
     return this.enqueueLifecycle(() => this.performModuleSync());
   }
 
@@ -86,6 +88,7 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   }
 
   private async performModuleSync(): Promise<boolean> {
+    if (this.disposed) return false;
     const state = getDashboardModuleState();
     const signature = this.definitions
       .map(definition => `${definition.id}:${state[definition.id] ? '1' : '0'}`)
@@ -120,13 +123,16 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
       }
     }
 
+    if (this.disposed) return changed;
     await updateDashboardModuleContexts(state);
+    if (this.disposed) return changed;
     this.onIssueOverlayChanged();
     this.lastSyncedSignature = this.getStateSignature(state);
     return changed;
   }
 
   async setEnabled(moduleId: string, enabled: boolean): Promise<boolean> {
+    if (this.disposed) return false;
     const definition = this.definitions.find(item => item.id === moduleId);
     if (!definition) return false;
 
@@ -209,6 +215,10 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
     }
 
     const module = await definition.create();
+    if (this.disposed) {
+      module.dispose();
+      return false;
+    }
     try {
       if (this.bridge) module.attachDashboard(this.bridge);
       module.activate(this.getActivationContext());
@@ -388,14 +398,45 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
     folder: vscode.WorkspaceFolder | undefined
   ): Promise<Record<string, unknown>> {
     const state = getDashboardModuleState();
-    const result: Record<string, unknown> = {};
+    const result: Record<string, unknown> = {
+      modules: this.definitions.map(definition => ({
+        id: definition.id,
+        displayName: definition.displayName,
+        enabled: Boolean(state[definition.id]),
+        loaded: this.loadedModules.has(definition.id)
+      }))
+    };
+    const moduleDiagnostics: unknown[] = [];
+    const moduleDiagnosticErrors: string[] = [];
+
     for (const module of this.loadedModules.values()) {
-      if (state[module.id]) Object.assign(result, await module.collectDiagnosticsContribution(folder));
+      if (!state[module.id]) continue;
+      try {
+        const contribution = await module.collectDiagnosticsContribution(folder);
+        for (const [key, value] of Object.entries(contribution)) {
+          if (key === 'moduleDiagnostics' && Array.isArray(value)) {
+            moduleDiagnostics.push(...value);
+          } else if (key === 'moduleDiagnosticErrors' && Array.isArray(value)) {
+            moduleDiagnosticErrors.push(...value.filter(
+              (item): item is string => typeof item === 'string'
+            ));
+          } else {
+            result[key] = value;
+          }
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        moduleDiagnosticErrors.push(`${module.displayName}: ${detail}`);
+      }
     }
+    if (moduleDiagnostics.length > 0) result.moduleDiagnostics = moduleDiagnostics;
+    if (moduleDiagnosticErrors.length > 0) result.moduleDiagnosticErrors = moduleDiagnosticErrors;
     return result;
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     for (const module of this.loadedModules.values()) module.dispose();
     this.loadedModules.clear();
     while (this.disposables.length > 0) this.disposables.pop()?.dispose();

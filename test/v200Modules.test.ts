@@ -406,3 +406,43 @@ test('los comandos de Live Remediation quedan deshabilitados con su contexto', (
     );
   }
 });
+
+test('el runtime endurece dispose y diagnóstico sin cargar módulos desactivados', () => {
+  const runtime = readFileSync(path.join(process.cwd(), 'src/modules/runtime.ts'), 'utf8');
+  assert.match(runtime, /private disposed = false/);
+  assert.match(runtime, /if \(this\.disposed\) return false/);
+  assert.match(runtime, /if \(this\.disposed\) \{[\s\S]*module\.dispose\(\)/);
+  assert.match(runtime, /modules: this\.definitions\.map/);
+  assert.match(runtime, /moduleDiagnosticErrors\.push/);
+  assert.match(runtime, /await module\.collectDiagnosticsContribution/);
+  assert.match(runtime, /if \(this\.disposed\) return changed;[\s\S]*updateDashboardModuleContexts/);
+});
+
+test('los textos de diagnóstico exclusivos de Pipeline permanecen en su bundle modular', () => {
+  const coreSource = readFileSync(path.join(process.cwd(), 'src/i18n/source.ts'), 'utf8');
+  const pipelineSource = readFileSync(path.join(process.cwd(), 'src/modules/pipeline/i18n/source.ts'), 'utf8');
+  for (const text of [
+    'Watcher de integraciones',
+    'Gestor de paquetes',
+    'Integraciones detectadas',
+    'Integraciones operativas',
+    'Integraciones con avisos',
+    'Seguridad / SAST'
+  ]) {
+    assert.doesNotMatch(coreSource, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(pipelineSource, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+});
+
+test('diagnóstico global muestra módulos y salud aportada sin conocer implementaciones', () => {
+  const page = readFileSync(path.join(process.cwd(), 'src/dashboard/webview/pages/diagnosticsPage.ts'), 'utf8');
+  const script = readFileSync(path.join(process.cwd(), 'src/dashboard/webview/scripts/diagnostics.ts'), 'utf8');
+  const diagnostics = readFileSync(path.join(process.cwd(), 'src/dashboard/diagnostics.ts'), 'utf8');
+  assert.match(page, /id="diagnosticsModules"/);
+  assert.match(page, /id="diagnosticsModuleHealth"/);
+  assert.match(script, /currentDiagnostics\.modules/);
+  assert.match(script, /currentDiagnostics\.moduleDiagnostics/);
+  assert.match(script, /translateLocalizationValue\(item\.value/);
+  assert.match(diagnostics, /ExtensionDiagnosticsModule/);
+  assert.doesNotMatch(diagnostics, /PipelineDashboardController|LiveRemediationModule/);
+});

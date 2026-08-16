@@ -8,6 +8,7 @@ import {
 } from '../src/modules/pipeline/parser';
 import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
 import { PIPELINE_STYLES } from '../src/modules/pipeline/webview/styles';
+import { PIPELINE_VARIABLES_SCRIPT } from '../src/modules/pipeline/webview/variables';
 
 test('parseAnalysisPipeline crea etapas nombradas, condiciones y omite comentarios', () => {
   const stages = parseAnalysisPipeline(
@@ -58,25 +59,27 @@ test('serializeAnalysisPipeline conserva el orden y la condición de fallo', () 
 
 test('expandAnalysisPipelineCommand sustituye las variables admitidas', () => {
   const command = expandAnalysisPipelineCommand(
-    'tool --root "${workspaceFolder}" --project "${projectKey}" --name "${projectName}" --server "${serverUrl}" --branch "${branch}"',
+    'tool --root "${workspaceFolder}" --project "${projectKey}" --name "${projectName}" --server "${serverUrl}" --branch "${branch}" --pm "${packageManager}"',
     {
       workspaceFolder: '/repo',
       projectKey: 'sample',
       projectName: 'Sample project',
       serverUrl: 'https://sonar.example.test',
-      branch: 'main'
+      branch: 'main',
+      packageManager: 'pnpm'
     }
   );
 
   assert.equal(
     command,
-    'tool --root "/repo" --project "sample" --name "Sample project" --server "https://sonar.example.test" --branch "main"'
+    'tool --root "/repo" --project "sample" --name "Sample project" --server "https://sonar.example.test" --branch "main" --pm "pnpm"'
   );
 });
 
 
-test('el script del editor de pipeline genera JavaScript válido', () => {
+test('los scripts del editor y variables de pipeline generan JavaScript válido', () => {
   assert.doesNotThrow(() => new Script(PIPELINE_EDITOR_SCRIPT));
+  assert.doesNotThrow(() => new Script(PIPELINE_VARIABLES_SCRIPT));
 });
 
 test('el paso nuevo se monta antes de aplicar la plantilla seleccionada', () => {

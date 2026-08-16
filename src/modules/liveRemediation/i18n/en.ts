@@ -13,5 +13,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "noLocallyModifiedIssues": "There are no locally modified issues pending validation or confirmation.",
   "locallyModifiedAwaitingConfirmation": "Modified locally · awaiting SonarQube confirmation",
   'disableLiveRemediationModuleConfirm': 'Are you sure you want to disable the Live Remediation module? Local tracking will stop and its view will be hidden. Standard SonarQube diagnostics will continue to work.',
-  'liveRemediationHint': 'Touched issues become locally modified and pending validation. If SonarQube for IDE stops reporting the same issue, it remains locally modified and moves to awaiting SonarQube confirmation; only server analysis can confirm that it is resolved.'
+  'liveRemediationHint': 'Touched issues become locally modified and pending validation. If SonarQube for IDE stops reporting the same issue, it remains locally modified and moves to awaiting SonarQube confirmation; only server analysis can confirm that it is resolved.',
+  'liveDiagnosticsInstalled': 'Installed',
+  'liveDiagnosticsNotInstalled': 'Not installed'
 };

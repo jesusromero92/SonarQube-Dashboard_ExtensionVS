@@ -7,11 +7,11 @@ import {
   hasExplicitAnalysisScope,
   normalizeAnalysisPatterns
 } from './scanner/analysisScope';
-import {
-  expandAnalysisPipelineCommand,
-  parseAnalysisPipeline
-} from './parser';
+import { parseAnalysisPipeline } from './parser';
+import { resolvePipelineCommand } from './commandVariables';
 import { PipelineHistoryStore } from './history';
+import { getRegisteredIntegrationProvider } from './integrations';
+import { emptyStructuredResult } from './results';
 import { ProcessRunner } from './scanner/processRunner';
 import { trimTrailingSlashes } from '../../textUtils';
 import {
@@ -22,6 +22,7 @@ import {
 } from './models';
 import {
   DetectedScanner,
+  ProcessResult,
   ProcessSpec,
   SonarCeTaskResponse
 } from './scanner/types';
@@ -54,7 +55,7 @@ export class AnalysisService implements vscode.Disposable {
   private controller: AbortController | undefined;
   private state: AnalysisState = emptyAnalysisState();
   private detectedScanner: DetectedScanner | undefined;
-  private token = '';
+  private sensitiveValues: string[] = [];
   private logCharacterCount = 0;
 
   constructor(
@@ -101,7 +102,7 @@ export class AnalysisService implements vscode.Disposable {
       throw error;
     } finally {
       this.controller = undefined;
-      this.token = '';
+      this.sensitiveValues = [];
     }
   }
 
@@ -110,7 +111,12 @@ export class AnalysisService implements vscode.Disposable {
     executionSteps: AnalysisExecutionStep[]
   ): void {
     this.controller = new AbortController();
-    this.token = request.config.token;
+    this.sensitiveValues = [
+      request.config.token,
+      ...Object.values(request.variables.secrets)
+    ].filter((value, index, values): value is string =>
+      Boolean(value) && values.indexOf(value) === index
+    ).sort((left, right) => right.length - left.length);
     this.logCharacterCount = 0;
     this.state = {
       running: true,
@@ -338,24 +344,22 @@ export class AnalysisService implements vscode.Disposable {
       throw new Error(`El paso “${step.name}” no tiene comando.`);
     }
 
-    const variables = {
-      workspaceFolder: scanner.rootPath,
-      projectKey: request.config.projectKey,
-      projectName: request.config.projectName || request.config.projectKey,
-      serverUrl: request.config.serverUrl,
-      branch: request.config.branch ?? ''
-    };
-    const expandedCommand = expandAnalysisPipelineCommand(command, variables);
+    const resolved = this.resolveCommand(command, request, scanner.rootPath);
     const phase = step.kind === 'build' ? 'building' : 'preActions';
     this.update(phase, executionStepMessage(step));
     await this.execute({
       command: '',
       args: [],
       cwd: scanner.rootPath,
-      env: this.sonarEnvironment(request),
-      shellCommand: expandedCommand,
-      displayCommand: expandedCommand
-    });
+      env: { ...this.sonarEnvironment(request), ...resolved.environment },
+      shellCommand: resolved.command,
+      displayCommand: resolved.displayCommand
+    }, result => this.captureStructuredStepResult(
+      step,
+      scanner.rootPath,
+      resolved.displayCommand,
+      result
+    ));
   }
 
 
@@ -493,14 +497,15 @@ export class AnalysisService implements vscode.Disposable {
       build ? 'building' : 'preActions',
       build ? 'Compilando el proyecto…' : 'Ejecutando tests…'
     );
-    this.appendLog(`[Pipeline · ${label}] ${command}`);
+    const resolved = this.resolveCommand(command, request, rootPath);
+    this.appendLog(`[Pipeline · ${label}] ${resolved.displayCommand}`);
     await this.execute({
       command: '',
       args: [],
       cwd: rootPath,
-      env: this.sonarEnvironment(request),
-      shellCommand: command,
-      displayCommand: command
+      env: { ...this.sonarEnvironment(request), ...resolved.environment },
+      shellCommand: resolved.command,
+      displayCommand: resolved.displayCommand
     });
     this.appendLog(
       build
@@ -524,14 +529,6 @@ export class AnalysisService implements vscode.Disposable {
       return;
     }
 
-    const variables = {
-      workspaceFolder: rootPath,
-      projectKey: request.config.projectKey,
-      projectName: request.config.projectName || request.config.projectKey,
-      serverUrl: request.config.serverUrl,
-      branch: request.config.branch ?? ''
-    };
-
     for (const [index, stage] of stages.entries()) {
       this.ensureNotCancelled();
       const position = `${index + 1}/${stages.length}`;
@@ -543,14 +540,14 @@ export class AnalysisService implements vscode.Disposable {
         `[Pipeline · ${before ? 'Antes del análisis' : 'Después del análisis'} · ${position}] ${stage.name}`
       );
 
-      const command = expandAnalysisPipelineCommand(stage.command, variables);
+      const resolved = this.resolveCommand(stage.command, request, rootPath);
       await this.execute({
         command: '',
         args: [],
         cwd: rootPath,
-        env: this.sonarEnvironment(request),
-        shellCommand: command,
-        displayCommand: command
+        env: { ...this.sonarEnvironment(request), ...resolved.environment },
+        shellCommand: resolved.command,
+        displayCommand: resolved.displayCommand
       });
       this.appendLog(`Etapa completada: ${stage.name}.`);
     }
@@ -779,23 +776,19 @@ export class AnalysisService implements vscode.Disposable {
     if (!template) {
       throw new Error('Selecciona otro scanner o configura un comando personalizado.');
     }
-    const command = template
-      .replaceAll('${workspaceFolder}', scanner.rootPath)
-      .replaceAll('${projectKey}', request.config.projectKey)
-      .replaceAll('${projectName}', request.config.projectName || request.config.projectKey)
-      .replaceAll('${serverUrl}', request.config.serverUrl)
-      .replaceAll('${branch}', request.config.branch ?? '')
-      .replaceAll('${analysisInclusions}', normalizeAnalysisPatterns(request.config.analysisInclusions))
-      .replaceAll('${analysisExclusions}', normalizeAnalysisPatterns(request.config.analysisExclusions));
+    const resolved = this.resolveCommand(template, request, scanner.rootPath, {
+      analysisInclusions: normalizeAnalysisPatterns(request.config.analysisInclusions),
+      analysisExclusions: normalizeAnalysisPatterns(request.config.analysisExclusions)
+    });
 
     this.update('scanning', 'Ejecutando el comando de análisis personalizado…');
     await this.execute({
       command: '',
       args: [],
       cwd: scanner.rootPath,
-      env: this.sonarEnvironment(request),
-      shellCommand: command,
-      displayCommand: command
+      env: { ...this.sonarEnvironment(request), ...resolved.environment },
+      shellCommand: resolved.command,
+      displayCommand: resolved.displayCommand
     });
   }
 
@@ -844,7 +837,10 @@ export class AnalysisService implements vscode.Disposable {
     }
   }
 
-  private async execute(spec: ProcessSpec): Promise<void> {
+  private async execute(
+    spec: ProcessSpec,
+    onCompleted?: (result: ProcessResult) => void
+  ): Promise<ProcessResult> {
     this.ensureNotCancelled();
     this.appendLog(`> ${this.redact(spec.displayCommand ?? [spec.command, ...spec.args].join(' '))}`);
     let result;
@@ -864,6 +860,7 @@ export class AnalysisService implements vscode.Disposable {
       }
       throw error;
     }
+    onCompleted?.(result);
     if (result.exitCode !== 0) {
       const tail = result.output.slice(-16).join('').slice(-8_000);
       if (/not recognized|no se reconoce|not found|command not found/i.test(tail)) {
@@ -871,6 +868,66 @@ export class AnalysisService implements vscode.Disposable {
       }
       throw new Error(`El proceso terminó con el código ${result.exitCode}. Revisa el registro del análisis.`);
     }
+    return result;
+  }
+
+  private captureStructuredStepResult(
+    step: AnalysisExecutionStep,
+    cwd: string,
+    displayCommand: string,
+    result: ProcessResult
+  ): void {
+    const integrationId = step.integrationId?.trim();
+    if (!integrationId) return;
+    const provider = getRegisteredIntegrationProvider(integrationId);
+    const parser = provider?.parseResult;
+    if (!provider || !parser) return;
+
+    try {
+      const structured = parser({
+        toolId: integrationId,
+        toolName: step.name || provider.descriptor.displayName,
+        command: displayCommand,
+        cwd,
+        exitCode: result.exitCode,
+        output: result.output.map(chunk => this.redact(chunk)).join('')
+      });
+      this.updateStepStructuredResult(step.id, structured);
+      const summary = structured.summary.total;
+      const suffix = structured.truncated ? ' (resultado truncado para el historial)' : '';
+      this.appendLog(`[Resultados · ${step.name}] ${summary} findings estructurados${suffix}.`);
+    } catch (error) {
+      const message = errorMessage(error);
+      this.updateStepStructuredResult(step.id, emptyStructuredResult(
+        {
+          toolId: integrationId,
+          toolName: step.name || provider.descriptor.displayName,
+          command: displayCommand,
+          cwd,
+          exitCode: result.exitCode,
+          output: ''
+        },
+        `${integrationId}-parser`,
+        'error',
+        [],
+        message
+      ));
+      console.warn(
+        `[SonarQube Dashboard] no se pudo interpretar el resultado de ${integrationId}`,
+        error
+      );
+    }
+  }
+
+  private updateStepStructuredResult(
+    id: string,
+    result: NonNullable<AnalysisState['steps'][number]['result']>
+  ): void {
+    this.state = {
+      ...this.state,
+      steps: this.state.steps.map(step => step.id === id ? { ...step, result } : step)
+    };
+    this.emit();
   }
 
   private sonarProperties(request: AnalysisRequest, prefix: '-D' | '/d:'): string[] {
@@ -1021,10 +1078,33 @@ export class AnalysisService implements vscode.Disposable {
   }
 
   private redact(value: string): string {
-    if (!this.token) {
-      return value;
+    let redacted = value;
+    for (const sensitiveValue of this.sensitiveValues) {
+      if (sensitiveValue) redacted = redacted.split(sensitiveValue).join('********');
     }
-    return value.split(this.token).join('********');
+    return redacted;
+  }
+
+  private resolveCommand(
+    template: string,
+    request: AnalysisRequest,
+    rootPath: string,
+    extraValues: Readonly<Record<string, string | undefined>> = {}
+  ) {
+    return resolvePipelineCommand(template, {
+      values: {
+        workspaceFolder: rootPath,
+        projectKey: request.config.projectKey,
+        projectName: request.config.projectName || request.config.projectKey,
+        serverUrl: request.config.serverUrl,
+        branch: request.config.branch ?? '',
+        packageManager: request.variables.packageManager,
+        ...extraValues
+      },
+      customVariables: request.variables.customVariables,
+      integrationCommands: request.variables.integrationCommands,
+      secrets: request.variables.secrets
+    });
   }
 
   private emit(): void {
@@ -1069,7 +1149,29 @@ function cloneState(state: AnalysisState): AnalysisState {
   return {
     ...state,
     log: [...state.log],
-    steps: state.steps.map(step => ({ ...step })),
+    steps: state.steps.map(step => ({
+      ...step,
+      result: step.result ? {
+        ...step.result,
+        summary: { ...step.result.summary },
+        metrics: step.result.metrics.map(metric => ({ ...metric })),
+        findings: step.result.findings.map(finding => ({
+          ...finding,
+          location: finding.location ? { ...finding.location } : undefined
+        }))
+      } : undefined,
+      resultDiff: step.resultDiff ? {
+        ...step.resultDiff,
+        newFindings: step.resultDiff.newFindings.map(finding => ({
+          ...finding,
+          location: finding.location ? { ...finding.location } : undefined
+        })),
+        resolvedFindings: step.resultDiff.resolvedFindings.map(finding => ({
+          ...finding,
+          location: finding.location ? { ...finding.location } : undefined
+        }))
+      } : undefined
+    })),
     baseline: state.baseline ? { ...state.baseline } : undefined,
     comparison: state.comparison
       ? {

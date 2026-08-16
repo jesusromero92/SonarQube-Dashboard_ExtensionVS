@@ -86,11 +86,32 @@ export const DIAGNOSTICS_SCRIPT = `
     function diagnosticCategoryLabel(category) {
       const labels = {
         security: 'Seguridad',
+        'security-sast': 'Seguridad / SAST',
         quality: 'Calidad',
         dependencies: 'Dependencias',
-        testing: 'Tests'
+        'dependencies-sca': 'Dependencias / SCA',
+        'formatting-lint': 'Formato / Lint',
+        testing: 'Tests',
+        tests: 'Tests',
+        iac: 'Infraestructura / IaC',
+        containers: 'Containers',
+        sonarqube: 'SonarQube'
       };
       return translateLocalizationValue(labels[category] || category || '');
+    }
+
+    function diagnosticCategoryKind(category) {
+      if (category === 'security-sast' || category === 'containers' || category === 'iac') return 'security';
+      if (category === 'dependencies-sca') return 'dependencies';
+      if (category === 'tests') return 'testing';
+      if (category === 'quality' || category === 'formatting-lint' || category === 'sonarqube') return 'quality';
+      return category || 'terminal';
+    }
+
+    function diagnosticHealthLabel(health) {
+      if (health === 'healthy') return translateLocalizationValue('Operativa');
+      if (health === 'warning') return translateLocalizationValue('Requiere revisión');
+      return translateLocalizationValue('Estado no verificado');
     }
 
     function renderDiagnostics(snapshot) {
@@ -115,6 +136,38 @@ export const DIAGNOSTICS_SCRIPT = `
       appendDiagnosticPair(elements.diagnosticsEnvironment, 'Plataforma', [currentDiagnostics.platform, currentDiagnostics.architecture].filter(Boolean).join(' '));
       appendDiagnosticPair(elements.diagnosticsEnvironment, 'Workspace confiable', currentDiagnostics.workspaceTrusted ? 'Sí' : 'No');
       appendDiagnosticPair(elements.diagnosticsEnvironment, 'Carpeta', currentDiagnostics.workspaceFolder);
+
+      renderDiagnosticsList(
+        elements.diagnosticsModules,
+        currentDiagnostics.modules,
+        item => ({
+          title: item.displayName || item.id || '',
+          detail: item.enabled
+            ? (item.loaded ? translateLocalizationValue('Runtime cargado') : translateLocalizationValue('Runtime no cargado'))
+            : translateLocalizationValue('Módulo desactivado'),
+          badge: item.enabled ? translateLocalizationValue('Activo') : translateLocalizationValue('Desactivado'),
+          kind: item.enabled && item.loaded ? 'quality' : 'terminal'
+        })
+      );
+      const moduleHealthItems = [];
+      for (const section of Array.isArray(currentDiagnostics.moduleDiagnostics) ? currentDiagnostics.moduleDiagnostics : []) {
+        for (const item of Array.isArray(section.items) ? section.items : []) {
+          moduleHealthItems.push({ section: section.title, ...item });
+        }
+      }
+      renderDiagnosticsList(
+        elements.diagnosticsModuleHealth,
+        moduleHealthItems,
+        item => ({
+          title: [item.section, item.label]
+            .filter(Boolean)
+            .map(value => translateLocalizationValue(value))
+            .join(' · '),
+          detail: translateLocalizationValue(item.value || '—'),
+          badge: item.status ? diagnosticHealthLabel(item.status) : '',
+          kind: item.status === 'warning' ? 'security' : 'quality'
+        })
+      );
 
       appendDiagnosticPair(elements.diagnosticsSonar, 'Servidor', currentDiagnostics.sonarServer);
       appendDiagnosticPair(elements.diagnosticsSonar, 'Proyecto', currentDiagnostics.projectKey);
@@ -145,10 +198,13 @@ export const DIAGNOSTICS_SCRIPT = `
           title: item.name,
           detail: item.command || '',
           badge: diagnosticCategoryLabel(item.category),
-          hint: item.evidence
-            ? translateLocalizationValue('Evidencia') + ': ' + item.evidence
-            : '',
-          kind: item.category || 'security'
+          hint: [
+            item.version ? translateLocalizationValue('Versión') + ': ' + item.version : '',
+            item.health ? translateLocalizationValue('Estado') + ': ' + diagnosticHealthLabel(item.health) : '',
+            item.configurationStatus ? translateLocalizationValue('Configuración') + ': ' + item.configurationStatus : '',
+            item.evidence ? translateLocalizationValue('Evidencia') + ': ' + item.evidence : ''
+          ].filter(Boolean).join(' · '),
+          kind: diagnosticCategoryKind(item.category)
         })
       );
 

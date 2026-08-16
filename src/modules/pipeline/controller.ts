@@ -33,7 +33,10 @@ import {
   type PipelineAnalysisConfig
 } from './configuration';
 import { AnalysisService, emptyAnalysisState } from './executionService';
-import { createRunningPipelineHistoryEntry } from './history';
+import {
+  calculatePipelineStepTimingStatistics,
+  createRunningPipelineHistoryEntry
+} from './history';
 import type {
   AnalysisBaselineSnapshot,
   AnalysisExecutionOptions,
@@ -43,9 +46,24 @@ import type {
   PipelineRunHistoryEntry
 } from './models';
 import { detectProjectActions, type DetectedProjectIntegration } from './projectActions';
+import {
+  createIntegrationDetectionContext,
+  getRegisteredIntegrationProvider,
+  IntegrationProbeRunner
+} from './integrations';
 import { watchProjectActionFiles } from './projectActionsWatcher';
 import { appendAnalysisPipelineStage } from './parser';
-import { createDefaultPipelineSteps, normalizeRequestedPipelineSteps } from './requests';
+import { integrationCommandRecord } from './commandVariables';
+import {
+  PipelineVariableStore,
+  pipelineVariablesRecord,
+  type PipelineVariableEntry
+} from './variables';
+import {
+  associatePipelineStepsWithIntegrations,
+  createDefaultPipelineSteps,
+  normalizeRequestedPipelineSteps
+} from './requests';
 import {
   createBuiltinPipelineTemplates,
   mergePipelineTemplates,
@@ -78,6 +96,9 @@ interface PipelineMessage extends ModuleWebviewMessage {
   templateId?: string;
   executionId?: string;
   integrationId?: string;
+  integrationSetupAction?: 'copy' | 'terminal';
+  pipelineVariables?: PipelineVariableEntry[];
+  secretName?: string;
 }
 
 export class PipelineDashboardController implements vscode.Disposable {
@@ -92,11 +113,16 @@ export class PipelineDashboardController implements vscode.Disposable {
   private watchedProjectActions: { key: string; folderUri: string; rootPath: string } | undefined;
   private projectActionsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   private projectActionsRefreshRevision = 0;
+  private integrationProbeRunner: IntegrationProbeRunner | undefined;
+  private readonly integrationProbesInFlight = new Set<string>();
+  private readonly variableStore: PipelineVariableStore;
 
   readonly onDidChangeAnalysis = this.analysisEmitter.event;
   readonly onDidChangeLanguage = this.languageEmitter.event;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.variableStore = new PipelineVariableStore(context);
+  }
 
   attachDashboard(bridge: DashboardModuleBridge): void {
     this.bridge = bridge;
@@ -105,6 +131,7 @@ export class PipelineDashboardController implements vscode.Disposable {
   activate(): void {
     if (this.analysisService) return;
     this.templateStore = new PipelineTemplateStore(this.context);
+    this.integrationProbeRunner = new IntegrationProbeRunner();
     this.analysisService = new AnalysisService(this.context, state => {
       const localized = localizeAnalysisState(state, this.language);
       this.postMessage({ type: 'analysisState', state: localized });
@@ -114,6 +141,9 @@ export class PipelineDashboardController implements vscode.Disposable {
 
   deactivate(): void {
     this.stopWatchingProjectActions();
+    this.integrationProbeRunner?.dispose();
+    this.integrationProbeRunner = undefined;
+    this.integrationProbesInFlight.clear();
     if (!this.analysisService) return;
     this.analysisService.cancel();
     this.analysisService.dispose();
@@ -204,6 +234,21 @@ export class PipelineDashboardController implements vscode.Disposable {
       case 'addIntegrationToPipelineSteps':
         await this.addIntegrationToPipelineSteps(pipelineMessage);
         return true;
+      case 'testPipelineIntegration':
+        await this.testPipelineIntegration(pipelineMessage);
+        return true;
+      case 'preparePipelineIntegrationInstall':
+        await this.preparePipelineIntegrationInstall(pipelineMessage);
+        return true;
+      case 'savePipelineVariables':
+        await this.savePipelineVariables(pipelineMessage);
+        return true;
+      case 'setPipelineSecret':
+        await this.setPipelineSecret(pipelineMessage);
+        return true;
+      case 'deletePipelineSecret':
+        await this.deletePipelineSecret(pipelineMessage);
+        return true;
       case 'deletePipelineTemplate':
         await this.deletePipelineTemplate(pipelineMessage);
         return true;
@@ -232,6 +277,211 @@ export class PipelineDashboardController implements vscode.Disposable {
     }
   }
 
+  private async testPipelineIntegration(message: PipelineMessage): Promise<void> {
+    const integrationId = (message.integrationId ?? '').trim();
+    if (!integrationId || this.integrationProbesInFlight.has(integrationId)) return;
+    this.integrationProbesInFlight.add(integrationId);
+    try {
+      const target = await this.resolveIntegrationTarget(message);
+      if (!target) return;
+      const { integration, provider, detectionContext } = target;
+      if (!provider.getProbe) {
+        this.postMessage({
+          type: 'pipelineIntegrationTestError',
+          integrationId: integration.id,
+          message: 'Esta integración no ofrece una prueba segura de disponibilidad.'
+        });
+        return;
+      }
+
+      const runner = this.integrationProbeRunner;
+      if (!runner) return;
+      try {
+        const result = await runner.run(provider.getProbe(detectionContext, integration));
+        if (this.integrationProbeRunner !== runner || !isDashboardModuleEnabled('pipeline')) return;
+        this.postMessage({
+          type: 'pipelineIntegrationTestResult',
+          integrationId: integration.id,
+          result
+        });
+      } catch (error) {
+        if (this.integrationProbeRunner !== runner || !isDashboardModuleEnabled('pipeline')) return;
+        this.postMessage({
+          type: 'pipelineIntegrationTestError',
+          integrationId: integration.id,
+          message: `No se pudo probar la integración: ${this.errorMessage(error)}`
+        });
+      }
+    } finally {
+      this.integrationProbesInFlight.delete(integrationId);
+    }
+  }
+
+  private async preparePipelineIntegrationInstall(message: PipelineMessage): Promise<void> {
+    const folder = this.bridge?.getWorkspaceFolder(message.folderUri);
+    const integrationId = (message.integrationId ?? '').trim();
+    if (!folder || !integrationId) return;
+    const sonar = await getFolderConfig(this.context, folder);
+    const rootPath = this.analysisRoot(folder, sonar?.baseDir) ?? folder.uri.fsPath;
+    const detectionContext = await createIntegrationDetectionContext(rootPath);
+    const provider = getRegisteredIntegrationProvider(integrationId);
+    const command = provider?.getSetup(detectionContext).command?.trim();
+    if (!provider || !command) {
+      this.postMessage({
+        type: 'pipelineIntegrationSetupError',
+        integrationId,
+        message: 'Esta integración no dispone de un comando de instalación asistida.'
+      });
+      return;
+    }
+
+    if (message.integrationSetupAction === 'copy') {
+      await vscode.env.clipboard.writeText(command);
+      this.postMessage({
+        type: 'pipelineIntegrationSetupPrepared',
+        integrationId,
+        action: 'copy',
+        message: 'Comando copiado al portapapeles.'
+      });
+      return;
+    }
+    if (message.integrationSetupAction === 'terminal') {
+      const terminal = vscode.window.createTerminal({
+        name: 'SonarQube Dashboard · Pipeline',
+        cwd: rootPath
+      });
+      terminal.sendText(command, false);
+      terminal.show();
+      this.postMessage({
+        type: 'pipelineIntegrationSetupPrepared',
+        integrationId,
+        action: 'terminal',
+        message: 'Comando preparado en el terminal. Revísalo y pulsa Enter para ejecutarlo.'
+      });
+    }
+  }
+
+  private async savePipelineVariables(message: PipelineMessage): Promise<void> {
+    const folder = this.bridge?.getWorkspaceFolder(
+      message.folderUri ?? this.bridge.getSelectedFolderUri()
+    );
+    if (!folder) return;
+    try {
+      const variables = await this.variableStore.saveVariables(
+        folder.uri.toString(),
+        message.pipelineVariables ?? []
+      );
+      this.postMessage({
+        type: 'pipelineVariablesUpdated',
+        variables,
+        secretNames: this.variableStore.listSecretNames(folder.uri.toString()),
+        message: 'Variables de Pipeline guardadas.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineVariablesError',
+        message: `No se pudieron guardar las variables: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async setPipelineSecret(message: PipelineMessage): Promise<void> {
+    const folder = this.bridge?.getWorkspaceFolder(
+      message.folderUri ?? this.bridge.getSelectedFolderUri()
+    );
+    if (!folder) return;
+    const existingName = String(message.secretName ?? '').trim();
+    const name = existingName || await vscode.window.showInputBox({
+      title: localizeRuntimeText('Pipeline · Nuevo secreto', this.language),
+      prompt: localizeRuntimeText('Nombre del secreto. Se usará como ${secret.NOMBRE}.', this.language),
+      placeHolder: 'SNYK_TOKEN',
+      ignoreFocusOut: true,
+      validateInput: (value: string) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value.trim())
+        ? undefined
+        : 'Usa letras, números y guiones bajos, empezando por una letra o _.'
+    });
+    if (!name) return;
+    const value = await vscode.window.showInputBox({
+      title: `${localizeRuntimeText(existingName ? 'Actualizar secreto' : 'Guardar secreto', this.language)} · ${name.trim()}`,
+      prompt: localizeRuntimeText('El valor se guarda en VS Code SecretStorage y nunca se envía al webview.', this.language),
+      password: true,
+      ignoreFocusOut: true,
+      validateInput: (candidate: string) => candidate ? undefined : 'El secreto no puede estar vacío.'
+    });
+    if (value === undefined) return;
+    try {
+      const secretNames = await this.variableStore.setSecret(
+        folder.uri.toString(),
+        name,
+        value
+      );
+      this.postMessage({
+        type: 'pipelineSecretsUpdated',
+        secretNames,
+        message: existingName ? 'Secreto actualizado.' : 'Secreto guardado.'
+      });
+    } catch (error) {
+      this.postMessage({
+        type: 'pipelineVariablesError',
+        message: `No se pudo guardar el secreto: ${this.errorMessage(error)}`
+      });
+    }
+  }
+
+  private async deletePipelineSecret(message: PipelineMessage): Promise<void> {
+    const folder = this.bridge?.getWorkspaceFolder(
+      message.folderUri ?? this.bridge.getSelectedFolderUri()
+    );
+    const name = String(message.secretName ?? '').trim();
+    if (!folder || !name) return;
+    const remove = localizeRuntimeText('Eliminar', this.language);
+    const warning = localizeRuntimeText(
+      '¿Eliminar este secreto de Pipeline? Los pasos que lo usen dejarán de poder ejecutarse hasta que vuelvas a configurarlo.',
+      this.language
+    );
+    const selected = await vscode.window.showWarningMessage(
+      `${warning}\n\n${name} · \${secret.${name}}`,
+      { modal: true },
+      remove
+    );
+    if (selected !== remove) return;
+    const secretNames = await this.variableStore.deleteSecret(folder.uri.toString(), name);
+    this.postMessage({
+      type: 'pipelineSecretsUpdated',
+      secretNames,
+      message: 'Secreto eliminado.'
+    });
+  }
+
+  private async resolveIntegrationTarget(message: PipelineMessage): Promise<{
+    integration: DetectedProjectIntegration;
+    provider: NonNullable<ReturnType<typeof getRegisteredIntegrationProvider>>;
+    detectionContext: Awaited<ReturnType<typeof createIntegrationDetectionContext>>;
+  } | undefined> {
+    const folder = this.bridge?.getWorkspaceFolder(message.folderUri);
+    const integrationId = (message.integrationId ?? '').trim();
+    if (!folder || !integrationId) return undefined;
+    const sonar = await getFolderConfig(this.context, folder);
+    const rootPath = this.analysisRoot(folder, sonar?.baseDir) ?? folder.uri.fsPath;
+    const detectionContext = await createIntegrationDetectionContext(rootPath);
+    const provider = getRegisteredIntegrationProvider(integrationId);
+    if (!provider) return undefined;
+    const integration = await provider.detect(detectionContext);
+    if (!integration) {
+      this.postMessage({
+        type: 'pipelineIntegrationTestError',
+        integrationId,
+        message: 'La integración ya no está disponible en el proyecto.'
+      });
+      return undefined;
+    }
+    return {
+      integration: { ...integration, probeSupported: Boolean(provider.getProbe) },
+      provider,
+      detectionContext
+    };
+  }
+
   async configurationState(
     folder: vscode.WorkspaceFolder | undefined,
     form: FolderSonarFormConfig | undefined,
@@ -246,6 +496,9 @@ export class PipelineDashboardController implements vscode.Disposable {
     const rootPath = this.analysisRoot(folder, form.baseDir) ?? folder.uri.fsPath;
     this.watchProjectActions(folder, rootPath);
     const actions = await detectProjectActions(rootPath);
+    const pipelineStepTimingStatistics = calculatePipelineStepTimingStatistics(
+      await this.getAnalysisService().listHistory(rootPath)
+    );
     const templates = mergePipelineTemplates(
       createBuiltinPipelineTemplates(
         actions,
@@ -257,6 +510,7 @@ export class PipelineDashboardController implements vscode.Disposable {
     const permission = connectionDraftDirty
       ? 'unknown'
       : await this.analysisPermission(folder);
+    const variableState = this.variableStore.state(folder.uri.toString());
 
     return {
       ...config,
@@ -266,7 +520,29 @@ export class PipelineDashboardController implements vscode.Disposable {
       detectedTestCommand: actions.testCommand ?? '',
       detectedPackageManager: actions.packageManager ?? '',
       detectedIntegrations: actions.integrations,
+      supportedIntegrations: actions.integrationCatalog,
+      recommendedIntegrations: actions.recommendedIntegrations,
+      detectedProjectStack: actions.stack,
+      pipelineStepTimingStatistics,
       pipelineTemplates: templates,
+      pipelineVariables: variableState.variables,
+      pipelineSecretNames: variableState.secretNames,
+      integrationCommandVariables: actions.integrations
+        .filter(integration => Boolean(integration.command?.trim()))
+        .map(integration => ({
+          id: integration.id,
+          name: integration.name,
+          token: `\${integration.${integration.id}.command}`,
+          command: integration.command
+        })),
+      pipelineVariableValues: {
+        workspaceFolder: rootPath,
+        projectKey: form.projectKey ?? '',
+        projectName: form.projectName || form.projectKey || '',
+        serverUrl: form.serverUrl ?? '',
+        branch: form.branch ?? '',
+        packageManager: actions.packageManager
+      },
       analysisPermission: permission,
       pipelineModuleEnabled: true
     };
@@ -283,7 +559,15 @@ export class PipelineDashboardController implements vscode.Disposable {
       detectedTestCommand: '',
       detectedPackageManager: '',
       detectedIntegrations: [],
+      supportedIntegrations: [],
+      recommendedIntegrations: [],
+      detectedProjectStack: { technologies: [], ids: [] },
+      pipelineStepTimingStatistics: [],
       pipelineTemplates: [],
+      pipelineVariables: [],
+      pipelineSecretNames: [],
+      integrationCommandVariables: [],
+      pipelineVariableValues: {},
       customScannerCommand: '',
       preAnalysisCommands: '',
       postAnalysisCommands: '',
@@ -316,8 +600,12 @@ export class PipelineDashboardController implements vscode.Disposable {
     });
     this.analysisPermissions.delete(folder.uri.toString());
     const form = await getPipelineFolderConfig(this.context, folder);
-    const rootPath = this.analysisRoot(folder, (await getFolderConfig(this.context, folder))?.baseDir) ?? folder.uri.fsPath;
+    const sonarConfig = await getFolderConfig(this.context, folder);
+    const rootPath = this.analysisRoot(folder, sonarConfig?.baseDir) ?? folder.uri.fsPath;
     const actions = await detectProjectActions(rootPath);
+    const pipelineStepTimingStatistics = calculatePipelineStepTimingStatistics(
+      await this.getAnalysisService().listHistory(rootPath)
+    );
     const templates = mergePipelineTemplates(
       createBuiltinPipelineTemplates(
         actions,
@@ -327,13 +615,36 @@ export class PipelineDashboardController implements vscode.Disposable {
       await this.getTemplateStore().list(folder.uri.toString())
     );
     const permission = await this.analysisPermission(folder);
+    const variableState = this.variableStore.state(folder.uri.toString());
     return {
       ...form,
       detectedBuildCommand: actions.buildCommand ?? '',
       detectedTestCommand: actions.testCommand ?? '',
       detectedPackageManager: actions.packageManager ?? '',
       detectedIntegrations: actions.integrations,
+      supportedIntegrations: actions.integrationCatalog,
+      recommendedIntegrations: actions.recommendedIntegrations,
+      detectedProjectStack: actions.stack,
+      pipelineStepTimingStatistics,
       pipelineTemplates: templates,
+      pipelineVariables: variableState.variables,
+      pipelineSecretNames: variableState.secretNames,
+      integrationCommandVariables: actions.integrations
+        .filter(integration => Boolean(integration.command?.trim()))
+        .map(integration => ({
+          id: integration.id,
+          name: integration.name,
+          token: `\${integration.${integration.id}.command}`,
+          command: integration.command
+        })),
+      pipelineVariableValues: {
+        workspaceFolder: rootPath,
+        projectKey: sonarConfig?.projectKey ?? '',
+        projectName: sonarConfig?.projectName || sonarConfig?.projectKey || '',
+        serverUrl: sonarConfig?.serverUrl ?? '',
+        branch: sonarConfig?.branch ?? '',
+        packageManager: actions.packageManager
+      },
       analysisPermission: permission,
       pipelineModuleEnabled: true
     };
@@ -354,6 +665,7 @@ export class PipelineDashboardController implements vscode.Disposable {
     let scannerEvidence = '';
     let commands: Array<Record<string, string>> = [];
     let tools: Array<Record<string, string>> = [];
+    const moduleDiagnostics: Array<Record<string, unknown>> = [];
     try {
       const actions = await detectProjectActions(rootPath);
       commands = [];
@@ -377,8 +689,39 @@ export class PipelineDashboardController implements vscode.Disposable {
         name: integration.name,
         command: integration.command,
         category: integration.category,
-        evidence: integration.evidence ?? ''
+        evidence: integration.evidence ?? '',
+        health: integration.health,
+        configurationStatus: integration.configurationStatus,
+        version: integration.version ?? '',
+        versionSource: integration.versionSource ?? '',
+        probeSupported: integration.probeSupported ? 'true' : 'false'
       }));
+      const healthy = actions.integrations.filter(item => item.health === 'healthy').length;
+      const warnings = actions.integrations.filter(item => item.health === 'warning').length;
+      const packageManager = actions.packageManager ?? '—';
+      const watcherActive = Boolean(
+        this.projectActionsWatcher && this.watchedProjectActions?.rootPath === rootPath
+      );
+      commands.push({
+        name: 'Gestor de paquetes',
+        command: packageManager,
+        source: actions.packageManager ? 'Detectado automáticamente' : 'No disponible',
+        evidence: actions.evidence ?? ''
+      });
+      (moduleDiagnostics as Array<Record<string, unknown>>).push({
+        moduleId: 'pipeline',
+        title: 'Pipeline',
+        items: [
+          { label: 'Estado del runtime', value: this.analysisService ? 'Activo' : 'Inactivo', status: this.analysisService ? 'healthy' : 'warning' },
+          { label: 'Watcher de integraciones', value: watcherActive ? 'Activo' : 'Inactivo', status: watcherActive ? 'healthy' : 'warning' },
+          { label: 'Gestor de paquetes', value: packageManager },
+          { label: 'Integraciones detectadas', value: String(actions.integrations.length) },
+          { label: 'Stack detectado', value: actions.stack.technologies.map(item => item.displayName).join(', ') || 'No detectado' },
+          { label: 'Integraciones operativas', value: String(healthy), status: 'healthy' },
+          { label: 'Integraciones con avisos', value: String(warnings), status: warnings > 0 ? 'warning' : 'healthy' },
+          { label: 'Análisis en ejecución', value: this.isRunning() ? 'Sí' : 'No' }
+        ]
+      });
     } catch (error) {
       errors.push(`No se pudieron detectar comandos y herramientas: ${this.errorMessage(error)}`);
     }
@@ -390,7 +733,15 @@ export class PipelineDashboardController implements vscode.Disposable {
     } catch (error) {
       errors.push(`No se pudo detectar el scanner: ${this.errorMessage(error)}`);
     }
-    return { scanner, scannerKind, scannerEvidence, commands, tools, moduleDiagnosticErrors: errors };
+    return {
+      scanner,
+      scannerKind,
+      scannerEvidence,
+      commands,
+      tools,
+      moduleDiagnostics,
+      moduleDiagnosticErrors: errors
+    };
   }
 
   async getPipelineExecutions(): Promise<PipelineRunHistoryEntry[]> {
@@ -491,6 +842,9 @@ export class PipelineDashboardController implements vscode.Disposable {
           detectedTestCommand: actions.testCommand ?? '',
           detectedPackageManager: actions.packageManager ?? '',
           detectedIntegrations: actions.integrations,
+          supportedIntegrations: actions.integrationCatalog,
+          recommendedIntegrations: actions.recommendedIntegrations,
+          detectedProjectStack: actions.stack,
           pipelineTemplates: templates,
           preAnalysisCommands: message.preAnalysisCommands ?? '',
           postAnalysisCommands: message.postAnalysisCommands ?? ''
@@ -592,7 +946,10 @@ export class PipelineDashboardController implements vscode.Disposable {
         config: {
           preAnalysisCommands: result.value,
           postAnalysisCommands: '',
-          detectedIntegrations: actions.integrations
+          detectedIntegrations: actions.integrations,
+          supportedIntegrations: actions.integrationCatalog,
+          recommendedIntegrations: actions.recommendedIntegrations,
+          detectedProjectStack: actions.stack
         },
         message: result.added
           ? 'Integración añadida a los pasos disponibles.'
@@ -812,10 +1169,18 @@ export class PipelineDashboardController implements vscode.Disposable {
     const buildCommand = firstNonEmpty(config.buildCommand?.trim(), detected.buildCommand);
     const testCommand = firstNonEmpty(config.testCommand?.trim(), detected.testCommand);
     const requestedSteps = requestedActions?.steps ?? [];
-    const steps = requestedSteps.length > 0
+    const rawSteps = requestedSteps.length > 0
       ? requestedSteps
       : createDefaultPipelineSteps(config, buildCommand, testCommand);
-    return { config, rootPath, actions: { steps }, baseline };
+    const steps = associatePipelineStepsWithIntegrations(rawSteps, detected.integrations);
+    const folderKey = folder.uri.toString();
+    const variables = {
+      packageManager: detected.packageManager,
+      customVariables: pipelineVariablesRecord(this.variableStore.listVariables(folderKey)),
+      integrationCommands: integrationCommandRecord(detected.integrations),
+      secrets: await this.variableStore.readSecrets(folderKey)
+    };
+    return { config, rootPath, actions: { steps }, variables, baseline };
   }
 
   private async captureAnalysisBaseline(config: PipelineAnalysisConfig): Promise<AnalysisBaselineSnapshot | undefined> {
@@ -932,7 +1297,26 @@ export class PipelineDashboardController implements vscode.Disposable {
           detectedBuildCommand: actions.buildCommand ?? '',
           detectedTestCommand: actions.testCommand ?? '',
           detectedPackageManager: actions.packageManager ?? '',
-          detectedIntegrations: actions.integrations
+          detectedIntegrations: actions.integrations,
+          supportedIntegrations: actions.integrationCatalog,
+          recommendedIntegrations: actions.recommendedIntegrations,
+          detectedProjectStack: actions.stack,
+          integrationCommandVariables: actions.integrations
+            .filter(integration => Boolean(integration.command?.trim()))
+            .map(integration => ({
+              id: integration.id,
+              name: integration.name,
+              token: `\${integration.${integration.id}.command}`,
+              command: integration.command
+            })),
+          pipelineVariableValues: {
+            workspaceFolder: currentRoot,
+            projectKey: sonar?.projectKey ?? '',
+            projectName: sonar?.projectName || sonar?.projectKey || '',
+            serverUrl: sonar?.serverUrl ?? '',
+            branch: sonar?.branch ?? '',
+            packageManager: actions.packageManager
+          }
         }
       });
     } catch {

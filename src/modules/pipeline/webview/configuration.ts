@@ -32,7 +32,7 @@ ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'a
                     <div id="customScannerField" class="field full-width-field" hidden>
                       <label for="customScannerCommand">Comando personalizado</label>
                       <input id="customScannerCommand" type="text" placeholder="sonar-scanner -Dsonar.projectKey=\${projectKey}" spellcheck="false">
-                      <div class="hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code>, <code>\${branch}</code>, <code>\${analysisInclusions}</code>, <code>\${analysisExclusions}</code>. El token se entrega mediante <code>SONAR_TOKEN</code>.</div>
+                      <div class="hint">Variables dinámicas: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code>, <code>\${branch}</code>, <code>\${packageManager}</code>, <code>\${analysisInclusions}</code> y <code>\${analysisExclusions}</code>. También admite <code>\${variable.NOMBRE}</code>, <code>\${secret.NOMBRE}</code> e <code>\${integration.&lt;id&gt;.command}</code>. El token de SonarQube se entrega mediante <code>SONAR_TOKEN</code>.</div>
                     </div>
                   </div>
                   <div class="configuration-section-intro">
@@ -88,12 +88,67 @@ ${configurationDropdown('scannerMode', 'Método de análisis', SCANNER_MODES, 'a
                       <textarea id="preAnalysisCommands" hidden aria-hidden="true"></textarea>
                       <textarea id="postAnalysisCommands" hidden aria-hidden="true"></textarea>
                       <div class="pipeline-steps-footer">
-                        <div class="hint pipeline-variables-hint">Variables disponibles: <code>\${workspaceFolder}</code>, <code>\${projectKey}</code>, <code>\${projectName}</code>, <code>\${serverUrl}</code> y <code>\${branch}</code>.</div>
+                        <div class="hint pipeline-variables-hint">Variables disponibles: dinámicas, <code>\${variable.NOMBRE}</code>, <code>\${secret.NOMBRE}</code> e <code>\${integration.&lt;id&gt;.command}</code>.</div>
                         <div class="pipeline-save-controls">
                           <span id="pipelineSaveStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>
                           <button id="savePipeline" type="button">Guardar pasos</button>
                         </div>
                       </div>
+                    </section>
+                  </div>
+                </details>
+
+                <details class="configuration-disclosure">
+                  <summary>Variables y secretos</summary>
+                  <div class="configuration-disclosure-content">
+                    <div class="configuration-section-intro">
+                      <strong>Variables reutilizables para comandos</strong>
+                      <p class="hint">Las variables normales se guardan para este workspace. Los secretos se almacenan únicamente en VS Code SecretStorage: sus valores nunca se envían al webview, no se exportan en YAML y se ocultan del registro.</p>
+                    </div>
+
+                    <section class="pipeline-subsection pipeline-variable-reference" aria-labelledby="pipelineDynamicVariablesTitle">
+                      <div class="pipeline-editor-heading">
+                        <div>
+                          <h3 id="pipelineDynamicVariablesTitle">Variables dinámicas</h3>
+                          <div class="hint">Se resuelven justo antes de ejecutar cada paso.</div>
+                        </div>
+                      </div>
+                      <div class="pipeline-variable-token-grid">
+                        <code>\${workspaceFolder}</code>
+                        <code>\${projectKey}</code>
+                        <code>\${projectName}</code>
+                        <code>\${serverUrl}</code>
+                        <code>\${branch}</code>
+                        <code>\${packageManager}</code>
+                      </div>
+                      <div class="hint">Las integraciones detectadas exponen además <code>\${integration.&lt;id&gt;.command}</code>.</div>
+                      <div id="pipelineIntegrationVariableList" class="pipeline-variable-reference-list"></div>
+                    </section>
+
+                    <section class="pipeline-subsection" aria-labelledby="pipelineCustomVariablesTitle">
+                      <div class="pipeline-editor-heading">
+                        <div>
+                          <h3 id="pipelineCustomVariablesTitle">Variables personalizadas</h3>
+                          <div class="hint">Usa <code>\${variable.NOMBRE}</code> dentro de cualquier comando de Pipeline.</div>
+                        </div>
+                        <button id="addPipelineVariable" class="secondary" type="button">+ Añadir variable</button>
+                      </div>
+                      <div id="pipelineVariablesEditor" class="pipeline-variable-list" aria-label="Variables personalizadas de Pipeline"></div>
+                      <div class="pipeline-save-row pipeline-variable-save-row">
+                        <span id="pipelineVariablesStatus" class="pipeline-save-status" role="status" aria-live="polite" hidden></span>
+                        <button id="savePipelineVariables" type="button">Guardar variables</button>
+                      </div>
+                    </section>
+
+                    <section class="pipeline-subsection" aria-labelledby="pipelineSecretsTitle">
+                      <div class="pipeline-editor-heading">
+                        <div>
+                          <h3 id="pipelineSecretsTitle">Secretos</h3>
+                          <div class="hint">Usa <code>\${secret.NOMBRE}</code>. El valor se solicita mediante un campo protegido de VS Code y nunca se inserta en esta página.</div>
+                        </div>
+                        <button id="addPipelineSecret" class="secondary" type="button">+ Añadir secreto</button>
+                      </div>
+                      <div id="pipelineSecretsList" class="pipeline-secret-list" aria-label="Secretos de Pipeline configurados"></div>
                     </section>
                   </div>
                 </details>
@@ -158,9 +213,24 @@ ${configurationDropdown('pipelineTemplate', 'Plantilla de pipeline', [{ value: '
 
               <section id="configurationIntegrationsPanel" class="configuration-tab-panel" role="tabpanel" aria-labelledby="configurationIntegrationsTab" hidden>
                 <div class="configuration-section-intro integrations-section-intro">
-                  <strong>Integraciones compatibles</strong>
-                  <p class="hint">Las herramientas detectadas aparecen como disponibles y pueden añadirse a los pasos reutilizables de Pipeline. Las no detectadas se muestran aparte con una indicación orientativa para habilitar su integración. Esta vista no instala, configura ni ejecuta herramientas automáticamente.</p>
+                  <strong>Integraciones del proyecto</strong>
+                  <p class="hint">Pipeline detecta el stack del workspace y prioriza únicamente las integraciones relevantes para ese proyecto. Las herramientas disponibles pueden convertirse en pasos reutilizables; las recomendaciones no instalan ni ejecutan nada automáticamente.</p>
+                  <p id="detectedProjectStackHint" class="hint">No se ha detectado todavía el stack del proyecto.</p>
                   <p id="detectedPackageManagerHint" class="hint">No se detectó un gestor de paquetes Node en este proyecto.</p>
+                  <div class="integration-category-filter">
+                    <label for="integrationCategoryFilter">Categoría</label>
+                    <select id="integrationCategoryFilter">
+                      <option value="">Todas</option>
+                      <option value="quality">Calidad</option>
+                      <option value="security-sast">Seguridad / SAST</option>
+                      <option value="dependencies-sca">Dependencias / SCA</option>
+                      <option value="formatting-lint">Formato / Lint</option>
+                      <option value="tests">Tests</option>
+                      <option value="iac">Infraestructura / IaC</option>
+                      <option value="containers">Containers</option>
+                      <option value="sonarqube">SonarQube</option>
+                    </select>
+                  </div>
                   <span id="integrationStepStatus" class="pipeline-save-status integration-step-status" role="status" aria-live="polite" hidden></span>
                 </div>
                 <div class="accordion-group integration-availability-groups">
@@ -172,10 +242,10 @@ ${configurationDropdown('pipelineTemplate', 'Plantilla de pipeline', [{ value: '
                     </div>
                   </details>
                   <details id="unavailableIntegrationsDisclosure" class="accordion">
-                    <summary>No disponibles <span id="unavailableIntegrationsCount" class="muted"></span></summary>
+                    <summary>Recomendadas para este proyecto <span id="unavailableIntegrationsCount" class="muted"></span></summary>
                     <div class="accordion__content integration-availability-content">
-                      <p class="hint">Integraciones compatibles que no se han detectado. Las instrucciones mostradas son orientativas y no se ejecutan automáticamente.</p>
-                      <div id="unavailableIntegrations" class="detected-integrations" aria-label="Integraciones no disponibles"></div>
+                      <p class="hint">Integraciones que encajan con el stack detectado y todavía no están disponibles. Se muestran sólo recomendaciones relevantes para este workspace.</p>
+                      <div id="unavailableIntegrations" class="detected-integrations" aria-label="Integraciones recomendadas para este proyecto"></div>
                     </div>
                   </details>
                 </div>

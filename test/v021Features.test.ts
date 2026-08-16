@@ -45,8 +45,12 @@ test('la versión 0.21.0 ofrece las cuatro plantillas integradas', () => {
           description: 'Audit',
           command: 'npm audit --audit-level=high',
           evidence: 'package-lock.json',
-          category: 'security',
-          failurePolicy: 'continue'
+          evidences: [{ source: 'lockfile', value: 'package-lock.json' }],
+          category: 'dependencies-sca',
+          failurePolicy: 'continue',
+          configurationStatus: 'configured',
+          health: 'healthy',
+          probeSupported: false
         },
         {
           id: 'semgrep',
@@ -54,10 +58,17 @@ test('la versión 0.21.0 ofrece las cuatro plantillas integradas', () => {
           description: 'SAST',
           command: 'semgrep scan --config auto',
           evidence: '.semgrep.yml',
-          category: 'security',
-          failurePolicy: 'stop'
+          evidences: [{ source: 'config', value: '.semgrep.yml' }],
+          category: 'security-sast',
+          failurePolicy: 'stop',
+          configurationStatus: 'configured',
+          health: 'healthy',
+          probeSupported: false
         }
-      ]
+      ],
+      integrationCatalog: [],
+      recommendedIntegrations: [],
+      stack: { technologies: [], ids: [] }
     },
     'npm run compile',
     'npm test'
@@ -101,7 +112,14 @@ test('una integración detectada se convierte en paso disponible sin duplicar co
 
 test('una plantilla integrada modificada reemplaza a la predeterminada sin duplicarse', () => {
   const builtins = createBuiltinPipelineTemplates(
-    { buildCommand: 'npm run compile', testCommand: 'npm test', integrations: [] },
+    {
+      buildCommand: 'npm run compile',
+      testCommand: 'npm test',
+      integrations: [],
+      integrationCatalog: [],
+      recommendedIntegrations: [],
+      stack: { technologies: [], ids: [] }
+    },
     'npm run compile',
     'npm test'
   );
@@ -157,6 +175,7 @@ test('las plantillas YAML conservan el orden, incluido un paso posterior a Sonar
         name: 'Report',
         kind: 'custom' as const,
         command: 'npm run report',
+        integrationId: 'eslint',
         failurePolicy: 'continue' as const,
         enabled: true
       }
@@ -169,6 +188,20 @@ test('las plantillas YAML conservan el orden, incluido un paso posterior a Sonar
   assert.deepEqual(parsed.steps.map(step => step.id), ['build', 'sonar', 'report']);
   assert.equal(parsed.steps[1]?.kind, 'sonar');
   assert.equal(parsed.steps[2]?.failurePolicy, 'continue');
+  assert.equal(parsed.steps[2]?.integrationId, 'eslint');
+});
+
+
+test('el servicio de diagnóstico del Extension Host no se confunde con el script del webview', () => {
+  const diagnosticsHostSource = readFileSync(
+    path.resolve(process.cwd(), 'src/dashboard/diagnostics.ts'),
+    'utf8'
+  );
+
+  assert.match(diagnosticsHostSource, /export async function collectExtensionDiagnostics/);
+  assert.match(diagnosticsHostSource, /export interface ExtensionDiagnosticsSnapshot/);
+  assert.match(diagnosticsHostSource, /export function formatDiagnosticsReport/);
+  assert.doesNotMatch(diagnosticsHostSource, /export const DIAGNOSTICS_SCRIPT/);
 });
 
 test('el diagnóstico muestra solo comandos detectados automáticamente con tarjetas enriquecidas', () => {

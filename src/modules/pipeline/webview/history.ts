@@ -53,7 +53,19 @@ export const HISTORY_SCRIPT = `    function formatDuration(durationMs) {
         Number(step.durationMs) || 0,
         step.command || '',
         step.failurePolicy || 'stop',
-        step.message || ''
+        step.message || '',
+        step.result ? [
+          step.result.status || '',
+          step.result.summary || {},
+          (step.result.findings || []).map(finding => finding.fingerprint || '')
+        ] : null,
+        step.resultDiff ? [
+          step.resultDiff.baselineEntryId || '',
+          Number(step.resultDiff.newCount) || 0,
+          Number(step.resultDiff.resolvedCount) || 0,
+          Number(step.resultDiff.persistentCount) || 0,
+          step.resultDiff.reliable !== false
+        ] : null
       ]));
     }
 
@@ -67,6 +79,148 @@ export const HISTORY_SCRIPT = `    function formatDuration(durationMs) {
       description.textContent = String(value);
       row.append(term, description);
       container.appendChild(row);
+    }
+
+    function structuredSeverityLabel(severity) {
+      const labels = {
+        critical: 'Crítica',
+        high: 'Alta',
+        medium: 'Media',
+        low: 'Baja',
+        info: 'Info',
+        unknown: 'Desconocida'
+      };
+      return translateLocalizationValue(labels[severity] || severity || 'Desconocida');
+    }
+
+    function structuredFindingLocation(finding) {
+      const location = finding?.location || {};
+      if (!location.file) return '';
+      let value = String(location.file);
+      if (location.line) value += ':' + location.line;
+      if (location.column) value += ':' + location.column;
+      return value;
+    }
+
+    function appendStructuredFindingList(container, title, findings) {
+      const values = Array.isArray(findings) ? findings : [];
+      if (!values.length) return;
+      const section = document.createElement('div');
+      section.className = 'pipeline-structured-findings';
+      const heading = document.createElement('strong');
+      heading.textContent = translateLocalizationValue(title) + ' (' + values.length + ')';
+      const list = document.createElement('ul');
+      for (const finding of values.slice(0, 20)) {
+        const item = document.createElement('li');
+        const severity = document.createElement('span');
+        severity.className = 'pipeline-structured-severity pipeline-structured-severity--' +
+          (finding.severity || 'unknown');
+        severity.textContent = structuredSeverityLabel(finding.severity);
+        const copy = document.createElement('span');
+        copy.className = 'pipeline-structured-finding-copy';
+        const titleText = finding.title || finding.ruleId || translateLocalizationValue('Hallazgo');
+        const location = structuredFindingLocation(finding);
+        copy.textContent = location ? titleText + ' · ' + location : titleText;
+        item.append(severity, copy);
+        list.appendChild(item);
+      }
+      if (values.length > 20) {
+        const omitted = document.createElement('li');
+        omitted.className = 'muted';
+        omitted.textContent = '+ ' + (values.length - 20) + ' ' +
+          translateLocalizationValue('hallazgos omitidos en la vista');
+        list.appendChild(omitted);
+      }
+      section.append(heading, list);
+      container.appendChild(section);
+    }
+
+    function renderPipelineStructuredResult(container, result, diff) {
+      if (!result) return;
+      const section = document.createElement('section');
+      section.className = 'pipeline-structured-result';
+      const heading = document.createElement('div');
+      heading.className = 'pipeline-structured-result-heading';
+      const title = document.createElement('strong');
+      title.textContent = translateLocalizationValue('Resultados estructurados');
+      const total = document.createElement('span');
+      total.className = 'pipeline-structured-total';
+      total.textContent = String(result.summary?.total || 0) + ' ' +
+        translateLocalizationValue('hallazgos');
+      heading.append(title, total);
+      section.appendChild(heading);
+
+      const severitySummary = document.createElement('div');
+      severitySummary.className = 'pipeline-structured-summary';
+      for (const severity of ['critical', 'high', 'medium', 'low', 'info', 'unknown']) {
+        const count = Number(result.summary?.[severity]) || 0;
+        if (!count) continue;
+        const badge = document.createElement('span');
+        badge.className = 'pipeline-structured-severity pipeline-structured-severity--' + severity;
+        badge.textContent = structuredSeverityLabel(severity) + ': ' + count;
+        severitySummary.appendChild(badge);
+      }
+      if (severitySummary.children.length) section.appendChild(severitySummary);
+
+      const metrics = Array.isArray(result.metrics) ? result.metrics : [];
+      if (metrics.length) {
+        const metricsGrid = document.createElement('div');
+        metricsGrid.className = 'pipeline-structured-metrics';
+        for (const metric of metrics) {
+          const item = document.createElement('span');
+          item.textContent = translateLocalizationValue(metric.label || metric.key || 'Métrica') +
+            ': ' + metric.value + (metric.unit ? ' ' + metric.unit : '');
+          metricsGrid.appendChild(item);
+        }
+        section.appendChild(metricsGrid);
+      }
+
+      if (result.message) {
+        const note = document.createElement('p');
+        note.className = 'muted pipeline-structured-note';
+        note.textContent = result.message;
+        section.appendChild(note);
+      }
+      if (result.truncated) {
+        const note = document.createElement('p');
+        note.className = 'muted pipeline-structured-note';
+        note.textContent = translateLocalizationValue(
+          'El snapshot se truncó para limitar el tamaño del historial.'
+        );
+        section.appendChild(note);
+      }
+
+      if (diff) {
+        const diffRow = document.createElement('div');
+        diffRow.className = 'pipeline-structured-diff';
+        const newItem = document.createElement('span');
+        newItem.className = 'pipeline-structured-diff-new';
+        newItem.textContent = '+' + (Number(diff.newCount) || 0) + ' ' +
+          translateLocalizationValue('nuevos');
+        const resolvedItem = document.createElement('span');
+        resolvedItem.className = 'pipeline-structured-diff-resolved';
+        resolvedItem.textContent = '-' + (Number(diff.resolvedCount) || 0) + ' ' +
+          translateLocalizationValue('resueltos');
+        const persistentItem = document.createElement('span');
+        persistentItem.textContent = String(Number(diff.persistentCount) || 0) + ' ' +
+          translateLocalizationValue('persistentes');
+        diffRow.append(newItem, resolvedItem, persistentItem);
+        section.appendChild(diffRow);
+        if (diff.reliable === false) {
+          const warning = document.createElement('p');
+          warning.className = 'muted pipeline-structured-note';
+          warning.textContent = translateLocalizationValue(
+            'El diff es orientativo porque uno de los snapshots está truncado.'
+          );
+          section.appendChild(warning);
+        }
+        appendStructuredFindingList(section, 'Nuevos', diff.newFindings);
+        appendStructuredFindingList(section, 'Resueltos', diff.resolvedFindings);
+      } else {
+        appendStructuredFindingList(section, 'Hallazgos', result.findings);
+      }
+
+      container.appendChild(section);
     }
 
     function renderPipelineHistorySteps(container, steps) {
@@ -120,6 +274,7 @@ export const HISTORY_SCRIPT = `    function formatDuration(durationMs) {
         if (step.completedAt) {
           appendPipelineStepDetail(details, 'Fin', formatHistoryDate(step.completedAt));
         }
+        renderPipelineStructuredResult(details, step.result, step.resultDiff);
 
         item.append(summary, details);
         container.appendChild(item);

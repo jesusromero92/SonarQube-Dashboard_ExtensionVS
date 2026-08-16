@@ -12,6 +12,16 @@ export const DIAGNOSTICS_PAGE_MARKUP = `      <section id="diagnosticsPage" clas
               <h3>Entorno</h3>
               <dl id="diagnosticsEnvironment" class="diagnostics-grid"></dl>
             </section>
+            <section class="diagnostics-section diagnostics-columns">
+              <div>
+                <h3>Módulos</h3>
+                <div id="diagnosticsModules" class="diagnostics-list"></div>
+              </div>
+              <div>
+                <h3>Salud de módulos</h3>
+                <div id="diagnosticsModuleHealth" class="diagnostics-list"></div>
+              </div>
+            </section>
             <section class="diagnostics-section">
               <h3>SonarQube y compatibilidad</h3>
               <dl id="diagnosticsSonar" class="diagnostics-grid"></dl>

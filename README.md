@@ -455,14 +455,33 @@ The extension loads hotspot details on demand so they do not delay the initial d
 
 ## Detected integrations
 
-When the **Pipeline** module is enabled, configuration includes a separate **Configuration → Integrations** tab. The view is split into two accordions: **Available**, open by default with tools detected in the workspace, and **Unavailable**, closed by default with the remaining supported integrations. For undetected tools, the UI shows a suggested command or configuration hint when possible. The extension never runs those instructions or installs tools automatically.
+When the **Pipeline** module is enabled, configuration includes a separate **Configuration → Integrations** tab. The view is split into **Available**, open by default with tools actually detected in the workspace, and **Recommended for this project**, closed by default with only integrations that match the current stack. The tab also shows the detected stack and can filter both lists by category. For a recommendation that is not installed, the UI shows setup guidance or a suggested command when possible; the extension never installs or automatically runs it.
 
-Detection is based on configuration files, scripts, and dependencies present in the project. For Node projects, the extension automatically detects the package manager from the `packageManager` field in `package.json` first and then falls back to common lockfiles (`package-lock.json`/`npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, or `bun.lockb`). Suggested catalog commands are adapted to the detected manager, for example `npm install -D eslint`, `pnpm add -D eslint`, `yarn add -D eslint`, or `bun add -d eslint`. When a Node tool is already available, detected commands also use the executor associated with the project's package manager. None of these commands is run automatically.
+Each available integration now exposes a **health state** in addition to its name and detection evidence. Its card shows the functional category, version when resolvable, detection origins (dependency, `devDependency`, script, config, lockfile, project file, plugin, binary, or server), configuration status, and the actual command Pipeline would use. Health distinguishes an operational integration from a partial installation/configuration or a state that cannot yet be verified safely.
 
-It currently recognizes, among others:
+Detection and catalog rules are no longer encoded in `projectActions.ts`. Pipeline owns an internal **Integration Provider API** under `src/modules/pipeline/integrations/`. Each provider declares its identity, category, failure policy, watched files, detection logic, suggested command, and setup guidance. The registry runs providers independently and normalizes their results. The watcher also gets tool-specific files from that registry, so a new integration does not require modifying the central watcher or controller.
 
-- SonarQube for the configured project;
-- dependency auditing with `npm audit`, `pnpm audit`, `yarn audit`, or `bun audit`;
+Compatibility is also declared by each provider through open tokens (`node`, `react`, `python`, `java`, `dotnet`, `go`, `terraform`, `docker`, etc.) plus a recommendation priority. There is no central union that must be extended for each new technology: `src/modules/pipeline/stackDetection/` produces the workspace snapshot and the registry matches that snapshot against providers. A detected tool always appears under **Available**; an absent tool appears under **Recommended for this project** only when its provider matches at least one detected technology.
+
+```text
+src/modules/pipeline/integrations/
+├── contracts.ts
+├── context.ts
+├── registry.ts
+├── nodeToolProvider.ts
+└── providers/
+    ├── eslint.ts
+    ├── reactDoctor.ts
+    ├── semgrep.ts
+    ├── ruff.ts
+    └── ...
+```
+
+Detection uses configuration files, scripts, dependencies, binaries, and project-stack signals. Pipeline currently recognizes Node.js/JavaScript, TypeScript, React, Vitest/Jest, Python/pytest, Java with Maven or Gradle, .NET, Go, Terraform, and Docker from files such as `package.json`, `tsconfig*.json`, `pyproject.toml`, `pom.xml`, `build.gradle*`, `*.sln`/`*.csproj`, `go.mod`, `*.tf`, and Docker/Compose files. For Node projects, package-manager detection still prioritizes `packageManager` and then lockfiles, and generated commands adapt to npm, pnpm, yarn, or Bun.
+
+Providers currently cover:
+
+- Node dependency auditing with `npm audit`, `pnpm audit`, `yarn audit`, or `bun audit`;
 - ESLint, Biome, Stylelint, and Prettier;
 - React Doctor;
 - Semgrep, Trivy, and Snyk;
@@ -471,9 +490,69 @@ It currently recognizes, among others:
 - Checkov for infrastructure as code;
 - golangci-lint for Go.
 
-An integration is **available** only when its configuration, dependency, script, or specific evidence is detected (or, for SonarQube, when a project is configured). Each available integration with an executable command offers **Add to available steps**. The Pipeline module re-validates detection in the extension host, avoids command duplicates, and saves the tool as a reusable step under **Configuration → Pipeline → Pipeline steps**. From there, the step can be selected in any template like any other custom step. The template editor only exposes the integration as a reusable source after it has been added to the available steps; built-in templates that already adapt to detected tools keep that adaptive behavior. SonarQube is not duplicated because it is the native required analysis step.
+SonarQube is represented as the native required analysis integration and derives its state from SonarQube configuration/connection; it is not duplicated as a reusable step.
 
-The **Unavailable** accordion acts as a catalog of integrations the plugin knows how to recognize and explains how to make them available. All this logic remains owned by `src/modules/pipeline/`: the core only composes the module contribution and does not know about concrete integrations or pipeline steps.
+An integration is **available** when sufficient presence or configuration evidence is detected. Each available integration with an executable command offers **Add to available steps**. Pipeline re-validates detection in the extension host, avoids command duplicates, and saves the tool as a reusable step under **Configuration → Pipeline → Pipeline steps**. It can then be selected in any template like any other custom step.
+
+Available integrations can also run **Test integration**. Each provider defines a safe `--version`-style probe; it runs without a shell, has a timeout and output limit, prevents duplicate probes for the same integration, and is cancelled when Pipeline is disabled. Probes never install packages or modify the workspace. For unavailable integrations with a setup command, the UI offers **Copy command** and **Open in terminal**; the latter only prepares the command and leaves execution explicitly to the user.
+
+Changes to `package.json`, lockfiles, and provider-contributed config files are watched while Pipeline is active. Detection is rerun with debounce and the Integrations catalog updates without switching the active tab or rebuilding the whole dashboard. All this logic remains owned by `src/modules/pipeline/`: the core only composes the module contribution and does not know about ESLint, React Doctor, Semgrep, or any other concrete integration.
+
+The **Diagnostics** page now reports module state without forcing disabled modules to load and merges generic health contributions from each loaded module. Pipeline contributes runtime state, integration watcher status, package manager, detected/operational/warning integration counts, and execution state; tools also expose category, version, health, configuration, and evidence. A module diagnostic failure is isolated from the rest of the report.
+
+### Integrations and Pipeline roadmap
+
+Development proceeds in small phases so Pipeline remains independently removable and each architectural boundary can be validated before adding the next layer:
+
+| Phase | Status | Scope |
+|---|---|---|
+| 1. Integration Provider API | ✅ Complete | Contracts, registry, independent providers, common context, and provider-contributed watch files. |
+| 2. Smart catalog / health | ✅ Complete | Category, available/declared version, detection origins, configuration, health, actual command, and host-generated setup. |
+| 3. Stack detection | ✅ Complete | Node/JavaScript, TypeScript, React, Vitest/Jest, Python/pytest, Java/Maven/Gradle, .NET, Go, Terraform, and Docker with workspace evidence and live refresh. |
+| 4. Project recommendations | ✅ Complete | Providers declare compatibility/priority; the catalog shows only detected-stack recommendations, explains why, and supports category filtering. |
+| 5. Test integration | ✅ Complete | Provider-owned safe/cancellable probe with timeout, output limit, no shell, and no project modification. |
+| 6. Assisted installation | ✅ Complete | Copy or prepare setup commands in a terminal using the detected package manager; execution remains explicit. |
+| 7. Variables and secrets | ✅ Complete | Dynamic/workspace variables, integration commands, and per-workspace secrets stored exclusively in `SecretStorage`, with masked preview and log redaction. |
+| 8. Pipeline preview | ✅ Complete | Pre-run review of steps/commands, failure policy, template/scope, and historical duration estimate. |
+| 9. Historical step duration | ✅ Complete | Last/mean/median duration per step and whole-pipeline estimate from history. |
+| 10. Common result model | ✅ Completed | Normalized per-step snapshot with findings, severity, location, metrics, parser identity, and parse status while keeping stdout/stderr separately. |
+| 11. Provider parsers | ✅ Completed | ESLint, Node dependency audit, Semgrep, React Doctor, and Ruff own their parsers; tools without a parser continue to run as normal steps. |
+| 12. Structured history | ✅ Completed | Each execution persists the structured snapshot with the step, with size limits and backwards compatibility for older history entries. |
+| 13. Execution diff | ✅ Completed | Project/branch/tool and parser-compatible comparison using stable fingerprints: new, persistent, and resolved findings. |
+| 14. Plugin Health/Diagnostics | ✅ Complete | Generic module health page/contributions without loading disabled implementations. |
+| 15. Integration diagnostics | ✅ Complete | Health/config/version/evidence, watcher status, and individual safe probes from the catalog. |
+| 16. Hardening | ✅ Complete | Provider/module failure isolation, safe lifecycle/dispose, cancellation, debounce/revision, and duplicate-probe prevention. |
+
+
+### Structured results and differential history
+
+Pipeline keeps the complete console log, while integrations that understand their output can also contribute a structured result. The common contract carries tool/parser identity, parse status, metrics, and findings with severity, rule, message, fingerprint, and file/line location when available. Snapshots are capped so `workspaceState` cannot grow without bounds, and older history entries remain valid because all structured fields are optional.
+
+The **ESLint**, **Node dependency audit (`npm`/`pnpm`/`yarn`)**, **Semgrep**, **React Doctor**, and **Ruff** providers now own parsers. When Pipeline controls the suggested command, ESLint, supported audits, Semgrep, and Ruff request JSON output; if an existing user script does not emit a structured format, parsers degrade to partial metrics where that can be done without inventing findings. Parser failures do not invalidate the pipeline step itself.
+
+When an execution is stored, Pipeline looks for the latest compatible execution for the same folder/project/branch containing the same provider and logical parser version. Findings are compared by fingerprint to calculate **new**, **persistent**, and **resolved** items. The history detail shows severity totals, metrics, the diff, and a sample of new/resolved findings; diffs involving truncated snapshots are explicitly marked as indicative.
+
+## Pipeline variables and secrets
+
+Pipeline resolves variables immediately before each step is executed. Built-in dynamic variables are `${workspaceFolder}`, `${projectKey}`, `${projectName}`, `${serverUrl}`, `${branch}`, and `${packageManager}`. Detected integrations also expose `${integration.<id>.command}`; for example, `${integration.eslint.command}` resolves to the actual ESLint command adapted to the project's detected package manager.
+
+Normal workspace variables are managed from **Configuration → Pipeline → Variables and secrets** and referenced as `${variable.NAME}`. Their values are stored in `workspaceState` and are not embedded when a template is exported: YAML keeps the reference so the same template can resolve differently in another workspace. Pipeline preview uses the same non-sensitive values as real execution.
+
+Secrets are referenced as `${secret.NAME}` and their value is collected exclusively through a native VS Code password `showInputBox`. The webview receives secret names only. Values are stored exclusively in `ExtensionContext.secrets` / VS Code `SecretStorage`; they are never written to `settings.json`, `workspaceState`, template YAML, history, or webview messages. At execution time they are injected through ephemeral environment variables, and Pipeline log redaction covers both the SonarQube token and configured secret values if a tool attempts to print them. Preview always renders `${secret.*}` as `********`.
+
+Example reusable step:
+
+```text
+${integration.eslint.command} --max-warnings ${variable.MAX_WARNINGS}
+```
+
+A credential-dependent step can keep only the reference:
+
+```text
+my-security-cli scan --token ${secret.SECURITY_TOKEN} --project ${projectKey}
+```
+
+The custom scanner command uses the same resolver in addition to its existing scope variables (`${analysisInclusions}` and `${analysisExclusions}`). If a required variable, integration, or secret cannot be resolved, Pipeline stops that step with an explicit error instead of executing a partially resolved command.
 
 ## Configurable analysis pipeline
 
@@ -486,14 +565,14 @@ Each custom step provides:
 - editable name and command;
 - drag & drop ordering from the `⋮⋮` handle;
 - **Stop on failure** or **Continue on failure** behavior;
-- `${workspaceFolder}`, `${projectKey}`, `${projectName}`, `${serverUrl}`, and `${branch}` variables;
+- dynamic `${workspaceFolder}`, `${projectKey}`, `${projectName}`, `${serverUrl}`, `${branch}`, and `${packageManager}` variables, plus `${variable.*}`, `${secret.*}`, and `${integration.<id>.command}`;
 - independent persistence through **Save pipeline**.
 
 ![Selecting and ordering steps before analysis](docs/images/analysis-pipeline-confirmation.png)
 
-When **Analyze repository** is opened, the run initially contains only the required SonarQube step. **Add step** can include the detected build command, tests, or any saved custom step. The command can be adjusted for that run, and its position relative to SonarQube is controlled by dragging the row from its handle.
+When **Analyze repository** is opened, the run initially contains only the required SonarQube step. **Add step** can include the detected build command, tests, or any saved custom step. The command can be adjusted for that run, and its position relative to SonarQube is controlled by dragging the row from its handle. Before execution, the review screen shows resolved commands, failure policy and, when history exists, the last duration, per-step average, and a whole-pipeline estimate.
 
-The **Analyze** button remains disabled while any step is incomplete. Optional steps can be removed before execution without changing the saved pipeline configuration.
+History keeps the real duration of every stage. Pipeline groups compatible executions by step/command and calculates sample count, last duration, mean, and median while excluding runs still in progress. The **Analyze** button remains disabled while any step is incomplete. Optional steps can be removed before execution without changing the saved pipeline configuration.
 
 ![Pipeline stepper and execution log](docs/images/analysis-pipeline-execution.png)
 

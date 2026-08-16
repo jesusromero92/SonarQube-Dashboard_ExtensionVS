@@ -13,6 +13,7 @@ export interface AnalysisPipelineVariables {
   projectName: string;
   serverUrl: string;
   branch: string;
+  packageManager?: string;
 }
 
 export interface AppendAnalysisPipelineStageResult {
@@ -96,7 +97,8 @@ export function expandAnalysisPipelineCommand(
     .replaceAll('${projectKey}', variables.projectKey)
     .replaceAll('${projectName}', variables.projectName)
     .replaceAll('${serverUrl}', variables.serverUrl)
-    .replaceAll('${branch}', variables.branch);
+    .replaceAll('${branch}', variables.branch)
+    .replaceAll('${packageManager}', variables.packageManager ?? '');
 }
 
 function slug(value: string): string {

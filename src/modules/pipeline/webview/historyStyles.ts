@@ -14,6 +14,9 @@ export const PIPELINE_HISTORY_STYLES = `
       --pipeline-accent: var(--vscode-descriptionForeground);
       display: grid;
       gap: 16px;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       padding: 18px;
       background:
         linear-gradient(
@@ -119,8 +122,10 @@ export const PIPELINE_HISTORY_STYLES = `
     }
     .pipeline-execution-accordions {
       gap: 12px;
+      min-width: 0;
     }
     .pipeline-execution-accordions > .accordion {
+      min-width: 0;
       border-color: color-mix(in srgb, var(--pipeline-accent) 24%, var(--vscode-panel-border));
       background: var(--vscode-editorWidget-background);
     }
@@ -207,14 +212,85 @@ export const PIPELINE_HISTORY_STYLES = `
       overflow-wrap: anywhere;
       font-weight: 400;
     }
+    .pipeline-structured-result {
+      display: grid;
+      gap: 10px;
+      margin: 10px 12px 12px;
+      padding: 12px;
+      border: 1px solid var(--vscode-panel-border);
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 78%, transparent);
+    }
+    .pipeline-structured-result-heading,
+    .pipeline-structured-summary,
+    .pipeline-structured-metrics,
+    .pipeline-structured-diff {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .pipeline-structured-result-heading {
+      justify-content: space-between;
+    }
+    .pipeline-structured-total,
+    .pipeline-structured-metrics > span,
+    .pipeline-structured-diff > span,
+    .pipeline-structured-severity {
+      padding: 2px 7px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 999px;
+      font-size: 11px;
+    }
+    .pipeline-structured-severity--critical,
+    .pipeline-structured-severity--high,
+    .pipeline-structured-diff-new {
+      color: var(--vscode-errorForeground);
+    }
+    .pipeline-structured-severity--medium {
+      color: var(--vscode-editorWarning-foreground);
+    }
+    .pipeline-structured-severity--low,
+    .pipeline-structured-severity--info {
+      color: var(--vscode-descriptionForeground);
+    }
+    .pipeline-structured-diff-resolved {
+      color: var(--vscode-testing-iconPassed);
+    }
+    .pipeline-structured-note { margin: 0; }
+    .pipeline-structured-findings {
+      display: grid;
+      gap: 6px;
+    }
+    .pipeline-structured-findings > ul {
+      display: grid;
+      gap: 5px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .pipeline-structured-findings li {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      align-items: start;
+      gap: 8px;
+    }
+    .pipeline-structured-finding-copy {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
     .pipeline-execution-log-content {
+      min-width: 0;
       padding: 12px;
     }
     .pipeline-history-log {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
       min-height: 280px;
       max-height: 58vh;
       margin: 0;
       padding: 14px;
+      box-sizing: border-box;
       overflow: auto;
       border: 1px solid var(--vscode-panel-border);
       color: var(--vscode-terminal-foreground, var(--vscode-foreground));

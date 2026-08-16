@@ -1,4 +1,29 @@
-export const ANALYSIS_SCRIPT = `    function analysisConfirmationFolderLabel() {
+export const ANALYSIS_SCRIPT = `    function analysisTimingCommandKey(command) {
+      return String(command || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function analysisStepTiming(step) {
+      const stats = Array.isArray(currentConfig.pipelineStepTimingStatistics)
+        ? currentConfig.pipelineStepTimingStatistics
+        : [];
+      const commandKey = analysisTimingCommandKey(step.command);
+      return stats.find(item => {
+        if (step.kind === 'sonar' && item.kind === 'sonar') return true;
+        if (commandKey && analysisTimingCommandKey(item.command) === commandKey) return true;
+        return item.id === step.id;
+      });
+    }
+
+    function formatAnalysisDuration(durationMs) {
+      const value = Math.max(0, Number(durationMs) || 0);
+      if (value < 1000) return Math.round(value) + ' ms';
+      if (value < 60000) return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
+      const minutes = Math.floor(value / 60000);
+      const seconds = Math.round((value % 60000) / 1000);
+      return minutes + ' min ' + seconds + ' s';
+    }
+
+    function analysisConfirmationFolderLabel() {
       const selectedFolder = elements.folder.selectedOptions[0];
       const folderName = selectedFolder?.textContent || currentFolderUri || '—';
       const baseDir = String(currentConfig.baseDir || '').trim();
@@ -55,12 +80,29 @@ export const ANALYSIS_SCRIPT = `    function analysisConfirmationFolderLabel() {
         const detail = document.createElement('small');
         detail.textContent = step.kind === 'sonar'
           ? translateLocalizationValue('Scanner configurado')
-          : (step.command || '—');
-        copy.append(name, detail);
+          : resolvePipelineCommandPreview(step.command || '—');
+        const meta = document.createElement('small');
+        meta.className = 'muted';
+        const timing = analysisStepTiming(step);
+        const policy = step.kind === 'sonar' || step.failurePolicy !== 'continue'
+          ? translateLocalizationValue('Detener si falla')
+          : translateLocalizationValue('Continuar si falla');
+        const timingLabel = timing
+          ? translateLocalizationValue('Media histórica: ') + formatAnalysisDuration(timing.averageDurationMs) +
+            ' · ' + translateLocalizationValue('Última: ') + formatAnalysisDuration(timing.lastDurationMs)
+          : translateLocalizationValue('Sin histórico de duración');
+        meta.textContent = policy + ' · ' + timingLabel;
+        copy.append(name, detail, meta);
         item.append(number, copy);
         elements.analysisConfirmationStepsSummary.appendChild(item);
       }
       elements.analysisConfirmationStepCount.textContent = String(steps.length);
+      const estimatedDurationMs = steps.reduce((total, step) =>
+        total + Number(analysisStepTiming(step)?.averageDurationMs || 0), 0
+      );
+      elements.analysisConfirmationEstimatedDuration.textContent = estimatedDurationMs > 0
+        ? translateLocalizationValue('Duración estimada: ') + formatAnalysisDuration(estimatedDurationMs)
+        : translateLocalizationValue('Duración estimada: sin histórico');
     }
 
     function showAnalysisConfirmationStep(stepNumber) {

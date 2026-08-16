@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { promises as fs } from 'node:fs';
+import { promises as fs, readFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
 import { detectProjectActions } from '../src/modules/pipeline/projectActions';
+import { calculatePipelineStepTimingStatistics } from '../src/modules/pipeline/history';
 import { ANALYSIS_CONFIRMATION_DIALOG_MARKUP } from '../src/modules/pipeline/webview/modals/analysisConfirmationDialog';
 import { ANALYSIS_SCRIPT } from '../src/modules/pipeline/webview/analysis';
 import { PIPELINE_EDITOR_SCRIPT } from '../src/modules/pipeline/webview/editor';
@@ -102,11 +103,11 @@ test('prioriza packageManager de package.json y adapta comandos Node al gestor d
     assert.equal(actions.packageManager, 'pnpm');
     assert.equal(
       actions.integrations.find(integration => integration.id === 'eslint')?.command,
-      'pnpm exec eslint .'
+      'pnpm exec eslint . --format json'
     );
     assert.equal(
       actions.integrations.find(integration => integration.id === 'dependency-audit')?.command,
-      'pnpm audit --audit-level=high'
+      'pnpm audit --audit-level=high --json'
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
@@ -182,57 +183,41 @@ test('detecta integraciones predefinidas de seguridad y calidad en proyectos Nod
     );
     assert.equal(
       actions.integrations.find(integration => integration.id === 'dependency-audit')?.command,
-      'npm audit --audit-level=high'
+      'npm audit --audit-level=high --json'
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test('muestra integraciones disponibles y no disponibles en acordeones independientes', () => {
+test('muestra integraciones disponibles y recomendaciones del stack desde el catálogo del host', () => {
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationIntegrationsTab"/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="configurationIntegrationsPanel"/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="availableIntegrationsDisclosure"[^>]*open/);
   assert.match(CONFIGURATION_PAGE_MARKUP, /id="unavailableIntegrationsDisclosure" class="accordion">/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /id="detectedPackageManagerHint"/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /id="detectedIntegrations"/);
-  assert.match(CONFIGURATION_PAGE_MARKUP, /id="unavailableIntegrations"/);
-  assert.ok(
-    CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationPipelinePanel"') <
-      CONFIGURATION_PAGE_MARKUP.indexOf('id="configurationIntegrationsPanel"')
-  );
-  assert.doesNotMatch(CONFIGURATION_PAGE_MARKUP, /Integraciones predefinidas detectadas/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /function supportedIntegrationCatalog/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /config\?\.recommendedIntegrations/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /function detectedProjectTools/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /id: 'sonarqube'/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /id: 'react-doctor'/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /id: 'semgrep'/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /nodeDevInstallCommand/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /npm install -D/);
+  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /pip install ruff/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /integrationCategoryLabel/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /integrationHealthLabel/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Versión instalada:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Configuración:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Origen:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Comando de ejecución:/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Cómo habilitarlo:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Por qué se recomienda:/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /detectedProjectStack/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /integrationCategoryFilter/);
+  assert.match(CONFIGURATION_PAGE_MARKUP, /Recomendadas para este proyecto/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Comando sugerido:/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /function detectedNodePackageManager/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /npm install -D/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /pnpm add -D/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /yarn add -D/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /bun add -d/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /nodeDevInstallCommand\('react-doctor', config\)/);
-  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /npx react-doctor@latest/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /pipx install semgrep/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /pip install ruff/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /nodeDevInstallCommand\('snyk', config\)/);
-  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /npm install -g snyk/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /elements\.unavailableIntegrations/);
-  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /addDetectedIntegrationToPipeline/);
-  assert.doesNotMatch(PIPELINE_INTEGRATION_SCRIPT, /Añadir al pipeline/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /addIntegrationToPipelineSteps/);
   assert.match(PIPELINE_INTEGRATION_SCRIPT, /Añadir a pasos disponibles/);
-  assert.match(PIPELINE_INTEGRATION_SCRIPT, /configuredPipelineCommandKeys/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function normalizedPipelineCommand/);
   assert.match(PIPELINE_EDITOR_SCRIPT, /function configuredPipelineCommandKeys/);
   assert.doesNotMatch(PIPELINE_EDITOR_SCRIPT, /function availableDetectedIntegrations/);
-  assert.doesNotMatch(
-    PIPELINE_EDITOR_SCRIPT,
-    /currentConfig\.detectedIntegrations[\s\S]*templateId: 'integration-/
-  );
 });
 
 test('detecta React Doctor, Biome, Stylelint y Prettier cuando están configurados en Node', async () => {
@@ -326,4 +311,61 @@ test('la detección refleja instalaciones y desinstalaciones al cambiar package.
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test('Integraciones permite probar herramientas y preparar instalaciones sin ejecutarlas', () => {
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Probar integración/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /testPipelineIntegration/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Copiar comando/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /Abrir en terminal/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /preparePipelineIntegrationInstall/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /integrationSetupAction: 'terminal'/);
+});
+
+
+test('el refresco de integraciones queda aislado por carpeta en workspaces multi-root', () => {
+  const controller = readFileSync(path.join(process.cwd(), 'src/modules/pipeline/controller.ts'), 'utf8');
+  assert.match(controller, /const key = `\$\{folderUri\}\\u0000\$\{rootPath\}`/);
+  assert.match(controller, /this\.stopWatchingProjectActions\(\);[\s\S]*this\.watchedProjectActions = \{ key, folderUri, rootPath \}/);
+  assert.match(controller, /getSelectedFolderUri\(\) !== watched\.folderUri/);
+  assert.match(PIPELINE_INTEGRATION_SCRIPT, /message\.folderUri !== currentFolderUri/);
+});
+
+test('protege las pruebas de integración contra ejecuciones duplicadas y las cancela al desactivar', () => {
+  const controller = readFileSync(path.join(process.cwd(), 'src/modules/pipeline/controller.ts'), 'utf8');
+  assert.match(controller, /integrationProbesInFlight = new Set<string>/);
+  assert.match(controller, /integrationProbesInFlight\.has\(integrationId\)/);
+  assert.match(controller, /integrationProbeRunner\?\.dispose\(\)/);
+  assert.match(controller, /integrationProbesInFlight\.clear\(\)/);
+});
+
+test('calcula histórico por paso y lo usa en la previsualización del pipeline', () => {
+  const entries = [
+    {
+      status: 'success',
+      steps: [
+        { id: 'lint', name: 'ESLint', kind: 'custom', command: 'npm exec -- eslint .', durationMs: 2000 },
+        { id: 'sonar', name: 'SonarQube', kind: 'sonar', durationMs: 10000 }
+      ]
+    },
+    {
+      status: 'success',
+      steps: [
+        { id: 'lint-old', name: 'ESLint', kind: 'custom', command: 'npm   exec -- eslint .', durationMs: 4000 },
+        { id: 'sonar-old', name: 'SonarQube', kind: 'sonar', durationMs: 14000 }
+      ]
+    }
+  ] as any;
+  const stats = calculatePipelineStepTimingStatistics(entries);
+  const eslint = stats.find(item => item.command?.includes('eslint'));
+  const sonar = stats.find(item => item.kind === 'sonar');
+  assert.equal(eslint?.samples, 2);
+  assert.equal(eslint?.averageDurationMs, 3000);
+  assert.equal(eslint?.medianDurationMs, 3000);
+  assert.equal(eslint?.lastDurationMs, 2000);
+  assert.equal(sonar?.averageDurationMs, 12000);
+  assert.match(ANALYSIS_SCRIPT, /pipelineStepTimingStatistics/);
+  assert.match(ANALYSIS_SCRIPT, /Media histórica:/);
+  assert.match(ANALYSIS_SCRIPT, /Duración estimada:/);
+  assert.match(ANALYSIS_CONFIRMATION_DIALOG_MARKUP, /analysisConfirmationEstimatedDuration/);
 });

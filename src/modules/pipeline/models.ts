@@ -1,5 +1,6 @@
 import { QualityGateStatus } from '../../types';
 import type { PipelineAnalysisConfig } from './configuration';
+import type { PipelineStructuredResult, PipelineStructuredResultDiff } from './results';
 
 export type AnalysisStepKind = 'build' | 'test' | 'custom' | 'sonar';
 export type AnalysisFailurePolicy = 'stop' | 'continue';
@@ -18,6 +19,7 @@ export interface AnalysisExecutionStep {
   command?: string;
   failurePolicy: AnalysisFailurePolicy;
   enabled: boolean;
+  integrationId?: string;
 }
 
 export interface AnalysisStepProgress extends AnalysisExecutionStep {
@@ -26,6 +28,8 @@ export interface AnalysisStepProgress extends AnalysisExecutionStep {
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;
+  result?: PipelineStructuredResult;
+  resultDiff?: PipelineStructuredResultDiff;
 }
 
 export interface AnalysisBaselineSnapshot {
@@ -64,11 +68,14 @@ export interface PipelineRunHistoryStep {
   kind: AnalysisStepKind;
   command?: string;
   failurePolicy: AnalysisFailurePolicy;
+  integrationId?: string;
   status: AnalysisStepStatus;
   message?: string;
   startedAt?: string;
   completedAt?: string;
   durationMs?: number;
+  result?: PipelineStructuredResult;
+  resultDiff?: PipelineStructuredResultDiff;
 }
 
 export interface PipelineRunHistoryEntry {
@@ -120,9 +127,17 @@ export interface AnalysisExecutionOptions {
   steps: AnalysisExecutionStep[];
 }
 
+export interface PipelineExecutionVariables {
+  packageManager?: string;
+  customVariables: Record<string, string>;
+  integrationCommands: Record<string, string>;
+  secrets: Record<string, string>;
+}
+
 export interface AnalysisRequest {
   rootPath: string;
   config: PipelineAnalysisConfig;
   actions: AnalysisExecutionOptions;
+  variables: PipelineExecutionVariables;
   baseline?: AnalysisBaselineSnapshot;
 }

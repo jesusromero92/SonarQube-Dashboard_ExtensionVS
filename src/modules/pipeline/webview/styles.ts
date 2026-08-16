@@ -443,6 +443,22 @@ export const PIPELINE_STYLES = `    .analysis-panel {
     .integrations-section-intro {
       margin-bottom: 14px;
     }
+    .integration-category-filter {
+      display: flex;
+      max-width: 360px;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .integration-category-filter label {
+      flex: 0 0 auto;
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+    }
+    .integration-category-filter select {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
     .integration-availability-groups {
       gap: 10px;
     }
@@ -469,6 +485,56 @@ export const PIPELINE_STYLES = `    .analysis-panel {
     .detected-integration-content > span {
       color: var(--vscode-descriptionForeground);
     }
+    .detected-integration-title-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+    }
+    .detected-integration-title-row > strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .detected-integration-category,
+    .detected-integration-health {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      min-height: 18px;
+      padding: 1px 6px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 999px;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      font-size: 10px;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+    .detected-integration-health--healthy {
+      border-color: var(--vscode-testing-iconPassed, var(--vscode-panel-border));
+      background: transparent;
+      color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+    }
+    .detected-integration-health--warning {
+      border-color: var(--vscode-editorWarning-foreground, var(--vscode-panel-border));
+      background: transparent;
+      color: var(--vscode-editorWarning-foreground, var(--vscode-foreground));
+    }
+    .detected-integration-health--unknown {
+      background: transparent;
+      color: var(--vscode-descriptionForeground);
+    }
+    .detected-integration-metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 12px;
+      align-items: center;
+      margin-top: 3px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+    }
     .detected-integration-content > code {
       overflow: hidden;
       color: var(--vscode-textLink-foreground);
@@ -476,6 +542,7 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       white-space: nowrap;
     }
     .detected-integration-evidence,
+    .detected-integration-recommendation,
     .detected-integration-setup,
     .detected-integration-command-label {
       font-size: 11px;
@@ -484,8 +551,16 @@ export const PIPELINE_STYLES = `    .analysis-panel {
     .detected-integration-card--unavailable {
       background: var(--vscode-editorWidget-background);
     }
+    .detected-integration-card--unavailable.has-actions {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 1fr);
+      align-items: stretch;
+    }
     .detected-integration-command-label {
       margin-top: 3px;
+    }
+    .detected-integration-recommendation {
+      margin-top: 4px;
+      color: var(--vscode-textLink-foreground) !important;
     }
     .detected-integration-step-controls,
     .detected-integration-step-hint {
@@ -497,8 +572,20 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       border-left: 1px solid var(--vscode-panel-border);
       text-align: center;
     }
+    .detected-integration-step-controls {
+      flex-direction: column;
+      gap: 6px;
+    }
     .detected-integration-step-controls > button {
+      width: 100%;
       max-width: 100%;
+      white-space: normal;
+    }
+    .detected-integration-probe--success {
+      color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+    }
+    .detected-integration-probe--error {
+      color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
     }
     .detected-integration-step-hint {
       color: var(--vscode-descriptionForeground);
@@ -716,6 +803,83 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       white-space: nowrap;
     }
 
+    .pipeline-variable-token-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 8px;
+    }
+    .pipeline-variable-token-grid code,
+    .pipeline-variable-reference-item code,
+    .pipeline-variable-syntax,
+    .pipeline-secret-copy code {
+      padding: 2px 6px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-textCodeBlock-background);
+    }
+    .pipeline-variable-reference-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .pipeline-variable-reference-item {
+      display: grid;
+      grid-template-columns: minmax(120px, .7fr) minmax(190px, auto) minmax(180px, 1.4fr);
+      gap: 8px;
+      align-items: center;
+      padding: 7px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+    }
+    .pipeline-variable-list,
+    .pipeline-secret-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .pipeline-variable-list.is-empty::before {
+      padding: 12px;
+      border: 1px dashed var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+      content: "No hay variables personalizadas.";
+      text-align: center;
+    }
+    .pipeline-variable-row {
+      display: grid;
+      grid-template-columns: minmax(130px, .65fr) minmax(180px, 1.35fr) minmax(180px, auto) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editor-background);
+    }
+    .pipeline-variable-row.is-invalid {
+      border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-editorError-foreground));
+    }
+    .pipeline-variable-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+    .pipeline-variable-syntax { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pipeline-variable-remove { min-width: 30px; padding: 3px 8px; font-size: 18px; line-height: 1; }
+    .pipeline-variable-save-row { justify-content: flex-end; margin-top: 10px; }
+    .pipeline-secret-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 3px;
+      background: var(--vscode-editor-background);
+    }
+    .pipeline-secret-copy { display: flex; min-width: 0; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pipeline-secret-actions { display: flex; flex: 0 0 auto; gap: 6px; }
+    .pipeline-secrets-empty {
+      padding: 12px;
+      border: 1px dashed var(--vscode-panel-border);
+      text-align: center;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .analysis-icon.running::before,
       .analysis-status-indicator {
@@ -723,7 +887,8 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       }
     }
     @media (max-width: 760px) {
-      .detected-integration-card--available { grid-template-columns: minmax(0, 1fr); }
+      .detected-integration-card--available,
+      .detected-integration-card--unavailable.has-actions { grid-template-columns: minmax(0, 1fr); }
       .detected-integration-step-controls,
       .detected-integration-step-hint {
         justify-content: flex-start;
@@ -748,6 +913,12 @@ export const PIPELINE_STYLES = `    .analysis-panel {
       .pipeline-step-row .pipeline-step-policy-dropdown,
       .analysis-run-step .pipeline-step-policy-dropdown { grid-column: 2 / -1; }
       .analysis-run-heading { flex-direction: column; }
+      .pipeline-variable-row { grid-template-columns: 1fr auto; }
+      .pipeline-variable-row .pipeline-variable-value,
+      .pipeline-variable-row .pipeline-variable-syntax { grid-column: 1 / -1; }
+      .pipeline-variable-reference-item { grid-template-columns: 1fr; }
+      .pipeline-secret-row { align-items: stretch; flex-direction: column; }
+      .pipeline-secret-actions button { flex: 1; }
     }
     @media (max-width: 980px) {
       .analysis-baseline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

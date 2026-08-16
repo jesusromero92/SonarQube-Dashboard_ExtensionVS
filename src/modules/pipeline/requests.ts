@@ -3,6 +3,7 @@ import type {
   AnalysisExecutionStep
 } from './models';
 import { parseAnalysisPipeline } from './parser';
+import type { DetectedProjectIntegration } from './integrations';
 
 const MAX_PIPELINE_STEPS = 50;
 const MAX_STEP_ID_LENGTH = 120;
@@ -36,7 +37,8 @@ export function normalizeRequestedPipelineSteps(
         ? step.command.trim().slice(0, MAX_STEP_COMMAND_LENGTH)
         : undefined,
       failurePolicy,
-      enabled: step?.enabled !== false
+      enabled: step?.enabled !== false,
+      integrationId: cleanIntegrationId(step?.integrationId)
     };
   });
 }
@@ -91,6 +93,50 @@ export function createDefaultPipelineSteps(
       enabled: true
     }))
   ];
+}
+
+export function associatePipelineStepsWithIntegrations(
+  steps: readonly AnalysisExecutionStep[],
+  integrations: readonly DetectedProjectIntegration[]
+): AnalysisExecutionStep[] {
+  return steps.map(step => {
+    const matched = integrationForStep(step, integrations);
+    return matched ? { ...step, integrationId: matched.id } : { ...step };
+  });
+}
+
+function integrationForStep(
+  step: AnalysisExecutionStep,
+  integrations: readonly DetectedProjectIntegration[]
+): DetectedProjectIntegration | undefined {
+  const explicit = cleanIntegrationId(step.integrationId);
+  if (explicit) {
+    const matched = integrations.find(integration => integration.id === explicit);
+    if (matched) return matched;
+  }
+
+  const id = step.id?.trim();
+  if (id?.startsWith('integration-')) {
+    const integrationId = id.slice('integration-'.length);
+    const matched = integrations.find(integration => integration.id === integrationId);
+    if (matched) return matched;
+  }
+
+  const command = normalizedCommand(step.command);
+  if (!command) return undefined;
+  return integrations.find(integration =>
+    normalizedCommand(integration.command) === command ||
+    command.includes(`\${integration.${integration.id}.command}`.toLowerCase())
+  );
+}
+
+function normalizedCommand(command: string | undefined): string {
+  return String(command ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function cleanIntegrationId(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized.slice(0, 120) : undefined;
 }
 
 function firstNonEmpty(...values: Array<string | undefined>): string {
