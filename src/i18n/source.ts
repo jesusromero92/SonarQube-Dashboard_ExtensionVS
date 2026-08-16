@@ -416,5 +416,7 @@ export const SOURCE_MESSAGES = {
   'moduleRuntimeStatus': 'Estado del runtime',
   'inactive': 'Inactivo',
   'yes': 'Sí',
-  'no': 'No'
+  'no': 'No',
+  'contactSupport': 'Contactar soporte',
+  'rateExtension': 'Puntuar extensión'
 } as const;

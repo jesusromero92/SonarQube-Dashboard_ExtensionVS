@@ -6,6 +6,9 @@ All notable changes to SonarQube Dashboard & Pipeline will be documented in this
 
 ## [2.0.0] - 2026-08-15
 
+- Added a unified **Support & Marketplace feedback** mechanism. User-facing errors expose **Contact support**, which opens a prefilled GitHub issue containing only redacted error text and safe environment metadata. Support and **Rate extension** are also available from Diagnostics and the Command Palette. Rating prompts are delayed until repeated successful use, suppressed after recent errors, rate-limited, and permanently dismissible.
+  *Se ha añadido un mecanismo unificado de **Soporte y valoración en Marketplace**. Los errores visibles ofrecen **Contactar soporte**, que abre una incidencia de GitHub precompletada únicamente con el error redactado y metadatos de entorno seguros. Soporte y **Puntuar extensión** también están disponibles desde Diagnóstico y la paleta de comandos. Las invitaciones a valorar se retrasan hasta acumular uso satisfactorio, se posponen tras errores recientes, tienen cooldown y pueden desactivarse permanentemente.*
+
 ### Added
 
 - Added the **modular 2.0 architecture** with a dedicated **Configuration → Modules** area. **Pipeline** and **Live Remediation** can be enabled or disabled independently at runtime, their native views/configuration tabs follow module state immediately, and disabling a module requires confirmation through a native VS Code modal. If Pipeline is running, the modal explicitly warns that the analysis will be cancelled.

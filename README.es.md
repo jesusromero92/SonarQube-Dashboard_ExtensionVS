@@ -839,3 +839,9 @@ Si cambia la carpeta activa, la extensión selecciona su configuración correspo
 ## Licencia
 
 Consulta [LICENSE](LICENSE) para conocer los términos de uso y distribución. La licencia no está aprobada como Open Source por la Open Source Initiative porque limita la modificación y distribución de trabajos derivados.
+
+### Soporte y valoración
+
+Los errores mostrados por la extensión ofrecen una acción **Contactar soporte**. En el dashboard, cualquier estado de error muestra el acceso junto al mensaje; los errores nativos de VS Code incluyen la misma acción. También está disponible desde **Diagnóstico** y desde la paleta de comandos. Al abrir soporte se prepara una incidencia de GitHub con versión de la extensión, VS Code y plataforma, y redacta credenciales habituales, rutas absolutas y URLs del error visible antes de añadirlo.
+
+La extensión puede sugerir una valoración en Visual Studio Marketplace únicamente después de uso satisfactorio repetido. La invitación no aparece durante los primeros usos, se pospone después de errores recientes, respeta un intervalo amplio entre recordatorios y permite **No volver a preguntar**. **Puntuar extensión** está disponible en todo momento desde Diagnóstico y la paleta de comandos.

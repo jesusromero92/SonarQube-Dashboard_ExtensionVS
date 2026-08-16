@@ -46,6 +46,12 @@ import { CoverageDecorationManager } from './coverageDecorations';
 import { IssueFlowController } from './issueFlowController';
 import { DuplicationComparisonPanel } from './dashboard/duplicationComparisonPanel';
 import {
+  contactSupport,
+  rateExtension,
+  recordSuccessfulUse,
+  recordUserFacingError
+} from './userFeedback';
+import {
   fetchHotspotDetail,
   fetchIssueLifecycle,
   fetchRuleDetail,
@@ -436,6 +442,17 @@ export class DashboardPanel implements DashboardModuleBridge {
         return true;
       case 'copyDiagnostics':
         await this.copyDiagnostics(message.folderUri);
+        return true;
+      case 'contactSupport':
+        await contactSupport({
+          source: 'Dashboard',
+          errorMessage: typeof message.errorMessage === 'string'
+            ? message.errorMessage
+            : undefined
+        });
+        return true;
+      case 'rateExtension':
+        await rateExtension();
         return true;
       case 'copyIssues':
         await this.copyIssues(message.clipboardText);
@@ -1479,6 +1496,11 @@ export class DashboardPanel implements DashboardModuleBridge {
   }
 
   postStatus(kind: 'loading' | 'success' | 'error', message: string): void {
+    if (kind === 'error') {
+      recordUserFacingError();
+    } else if (kind === 'success') {
+      recordSuccessfulUse();
+    }
     this.postMessage({
       type: 'status',
       kind,

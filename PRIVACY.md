@@ -85,3 +85,11 @@ Los tokens no se escriben en `settings.json`. Los informes de diagnóstico y la 
 - Limpia el historial desde la interfaz de ejecuciones para eliminar las ejecuciones guardadas.
 - Elimina la configuración del workspace o desinstala la extensión y borra sus datos desde Visual Studio Code cuando necesites un reinicio completo.
 - Elimina por separado los archivos, cachés o informes creados por scanners y herramientas externas.
+
+## Support and Marketplace feedback
+
+The extension does not automatically transmit errors, diagnostics, ratings, or usage telemetry to the publisher.
+
+- **Contact support** opens the system browser only after an explicit user action and prepares a GitHub issue. Common credentials, absolute file paths, and URLs are redacted from the user-facing error before it is added to the issue draft.
+- **Rate extension** opens the Visual Studio Marketplace listing only after an explicit user action. The optional rating reminder is based solely on counters/timestamps stored in VS Code `globalState`; those values are not sent to the publisher.
+

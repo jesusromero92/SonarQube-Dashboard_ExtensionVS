@@ -840,3 +840,9 @@ When the active folder changes, the extension selects the matching configuration
 ## License
 
 See [LICENSE](LICENSE) for usage and distribution terms. The license is not approved as Open Source by the Open Source Initiative because it restricts modification and distribution of derivative works.
+
+### Support and rating
+
+Errors surfaced by the extension provide a **Contact support** action. Dashboard error states expose it next to the message, while native VS Code errors include the same action. Support is also available from **Diagnostics** and the Command Palette. Opening support prepares a GitHub issue with the extension version, VS Code version, and platform, while common credentials, absolute file paths, and URLs are redacted from the user-facing error before it is added.
+
+The extension may suggest a Visual Studio Marketplace rating only after repeated successful use. The prompt is suppressed during early use, postponed after recent errors, uses a long cooldown between reminders, and offers **Don't ask again**. **Rate extension** remains available at any time from Diagnostics and the Command Palette.

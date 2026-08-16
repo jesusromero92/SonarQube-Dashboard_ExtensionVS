@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { DASHBOARD_COMMANDS } from './constants';
 import { getDashboardLanguage } from './i18n';
 import { DashboardIssue } from './types';
+import { showErrorWithSupport } from './userFeedback';
 
 export class IssueNavigationManager implements vscode.Disposable {
   private issues: DashboardIssue[] = [];
@@ -163,7 +164,7 @@ export class IssueNavigationManager implements vscode.Disposable {
       this.updateStatus();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await vscode.window.showErrorMessage(message);
+      await showErrorWithSupport(message, 'Issue navigation');
     } finally {
       this.explicitNavigation = false;
     }

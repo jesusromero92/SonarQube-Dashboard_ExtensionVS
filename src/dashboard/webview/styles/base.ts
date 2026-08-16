@@ -176,6 +176,21 @@ export function getBaseStyles({ bugIconUri, codeSmellIconUri, vulnerabilityIconU
     .connection-status--loading {
       color: var(--vscode-descriptionForeground);
     }
+    .connection-status-message {
+      min-width: 0;
+    }
+    .connection-status--error {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .status-support-action {
+      flex: 0 0 auto;
+      padding: 3px 8px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
     .compatibility-summary {
       display: flex;
       align-items: center;

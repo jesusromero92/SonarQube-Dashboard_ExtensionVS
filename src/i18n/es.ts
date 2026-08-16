@@ -418,5 +418,7 @@ export const ES_MESSAGES: Record<keyof typeof SOURCE_MESSAGES, string> = {
   'moduleRuntimeStatus': 'Estado del runtime',
   'inactive': 'Inactivo',
   'yes': 'Sí',
-  'no': 'No'
+  'no': 'No',
+  'contactSupport': 'Contactar soporte',
+  'rateExtension': 'Puntuar extensión'
 } as const;

@@ -1,4 +1,7 @@
 export const DIAGNOSTICS_SCRIPT = `
+    let currentDiagnosticsModuleTab = 'diagnosticsModulesPanel';
+    let diagnosticsTabsInitialized = false;
+
     function appendDiagnosticPair(list, label, value) {
       const term = document.createElement('dt');
       term.textContent = translateLocalizationValue(label);
@@ -22,9 +25,10 @@ export const DIAGNOSTICS_SCRIPT = `
       return paths[kind] || paths.terminal;
     }
 
-    function createDiagnosticIcon(kind) {
+    function createDiagnosticIcon(kind, status) {
       const icon = document.createElement('span');
-      icon.className = 'diagnostics-card-icon diagnostics-card-icon--' + kind;
+      const safeStatus = status || 'neutral';
+      icon.className = 'diagnostics-card-icon diagnostics-card-icon--' + kind + ' diagnostics-card-icon--status-' + safeStatus;
       icon.setAttribute('aria-hidden', 'true');
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 16 16');
@@ -33,6 +37,32 @@ export const DIAGNOSTICS_SCRIPT = `
       svg.appendChild(path);
       icon.appendChild(svg);
       return icon;
+    }
+
+    function activateDiagnosticsModuleTab(targetId) {
+      const buttons = [elements.diagnosticsModulesTab, elements.diagnosticsModuleHealthTab].filter(Boolean);
+      const panels = [elements.diagnosticsModulesPanel, elements.diagnosticsModuleHealthPanel].filter(Boolean);
+      currentDiagnosticsModuleTab = targetId;
+      for (const button of buttons) {
+        const active = button.dataset.target === targetId;
+        button.classList.toggle('diagnostics-tab--active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+      }
+      for (const panel of panels) {
+        panel.hidden = panel.id !== targetId;
+      }
+    }
+
+    function ensureDiagnosticsTabs() {
+      if (diagnosticsTabsInitialized) return;
+      const buttons = [elements.diagnosticsModulesTab, elements.diagnosticsModuleHealthTab].filter(Boolean);
+      for (const button of buttons) {
+        button.addEventListener('click', function () {
+          activateDiagnosticsModuleTab(String(button.dataset.target || 'diagnosticsModulesPanel'));
+        });
+      }
+      diagnosticsTabsInitialized = true;
+      activateDiagnosticsModuleTab(currentDiagnosticsModuleTab);
     }
 
     function renderDiagnosticsList(container, items, formatter) {
@@ -48,8 +78,9 @@ export const DIAGNOSTICS_SCRIPT = `
       for (const item of values) {
         const metadata = formatter(item);
         const kind = metadata.kind || 'terminal';
+        const status = metadata.status || 'neutral';
         const row = document.createElement('article');
-        row.className = 'diagnostics-list-item diagnostics-list-item--' + kind;
+        row.className = 'diagnostics-list-item diagnostics-list-item--' + kind + ' diagnostics-list-item--status-' + status;
 
         const body = document.createElement('div');
         body.className = 'diagnostics-card-body';
@@ -78,7 +109,7 @@ export const DIAGNOSTICS_SCRIPT = `
           body.appendChild(hint);
         }
 
-        row.append(createDiagnosticIcon(kind), body);
+        row.append(createDiagnosticIcon(kind, status), body);
         container.appendChild(row);
       }
     }
@@ -114,12 +145,28 @@ export const DIAGNOSTICS_SCRIPT = `
       return translateLocalizationValue('Estado no verificado');
     }
 
+    function normalizeDiagnosticStatus(status) {
+      if (status === 'healthy') return 'healthy';
+      if (status === 'warning') return 'warning';
+      if (status === 'error') return 'error';
+      if (status === 'unknown') return 'error';
+      return 'neutral';
+    }
+
+    function moduleRuntimeStatus(item) {
+      if (item.enabled && item.loaded) return 'healthy';
+      if (item.enabled && !item.loaded) return 'error';
+      return 'warning';
+    }
+
     function renderDiagnostics(snapshot) {
       currentDiagnostics = snapshot || null;
       elements.diagnosticsLoading.hidden = true;
       elements.diagnosticsContent.hidden = !currentDiagnostics;
       elements.copyDiagnostics.disabled = !currentDiagnostics;
       if (!currentDiagnostics) return;
+
+      ensureDiagnosticsTabs();
 
       elements.diagnosticsGeneratedAt.textContent = currentDiagnostics.generatedAt
         ? new Date(currentDiagnostics.generatedAt).toLocaleString(dashboardLocale)
@@ -146,7 +193,8 @@ export const DIAGNOSTICS_SCRIPT = `
             ? (item.loaded ? translateLocalizationValue('Runtime cargado') : translateLocalizationValue('Runtime no cargado'))
             : translateLocalizationValue('Módulo desactivado'),
           badge: item.enabled ? translateLocalizationValue('Activo') : translateLocalizationValue('Desactivado'),
-          kind: item.enabled && item.loaded ? 'quality' : 'terminal'
+          kind: 'quality',
+          status: moduleRuntimeStatus(item)
         })
       );
       const moduleHealthItems = [];
@@ -165,7 +213,8 @@ export const DIAGNOSTICS_SCRIPT = `
             .join(' · '),
           detail: translateLocalizationValue(item.value || '—'),
           badge: item.status ? diagnosticHealthLabel(item.status) : '',
-          kind: item.status === 'warning' ? 'security' : 'quality'
+          kind: 'quality',
+          status: normalizeDiagnosticStatus(item.status)
         })
       );
 
@@ -230,7 +279,7 @@ export const DIAGNOSTICS_SCRIPT = `
       renderDiagnosticsList(
         elements.diagnosticsErrors,
         errors,
-        item => ({ title: translateLocalizationValue('Error'), detail: String(item) })
+        item => ({ title: translateLocalizationValue('Error'), detail: String(item), status: 'error' })
       );
     }
 `;

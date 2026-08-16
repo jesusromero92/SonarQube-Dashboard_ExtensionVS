@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getDashboardLanguage } from '../../i18n';
 import { DashboardIssue } from '../../types';
+import { showErrorWithSupport } from '../../userFeedback';
 import type {
   IssueDiagnosticPresentation,
   IssueDiagnosticSnapshot
@@ -690,10 +691,13 @@ export class LiveRemediationManager implements vscode.Disposable {
     );
     const applied = await vscode.workspace.applyEdit(edit);
     if (!applied) {
-      await vscode.window.showErrorMessage(this.text(
-        'VS Code no pudo aplicar el revert del issue.',
-        'VS Code could not apply the issue revert.'
-      ));
+      await showErrorWithSupport(
+        this.text(
+          'VS Code no pudo aplicar el revert del issue.',
+          'VS Code could not apply the issue revert.'
+        ),
+        'Live Remediation revert'
+      );
       return;
     }
 

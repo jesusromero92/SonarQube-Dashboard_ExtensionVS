@@ -30,6 +30,12 @@ import {
 } from './i18n';
 import { DashboardPanel } from './dashboardPanel';
 import {
+  contactSupport,
+  initializeUserFeedback,
+  rateExtension,
+  showErrorWithSupport
+} from './userFeedback';
+import {
   issueSeverityRank,
   mapFolderCoverage,
   mapFolderHotspots,
@@ -837,6 +843,8 @@ function sonarIssueUri(config: FolderSonarConfig, issue: DashboardIssue): vscode
 
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const feedback = initializeUserFeedback(context, getDashboardLanguage);
+  context.subscriptions.push(feedback);
   issueDiagnostics = new IssueDiagnosticManager();
   issueDecorations = new IssueDecorationManager(context.extensionUri);
   coverageDecorations = new CoverageDecorationManager(context, context.extensionUri);
@@ -882,6 +890,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   modules.attachDashboard(dashboardPanel);
+  context.subscriptions.push(
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.contactSupport, () =>
+      contactSupport({ source: 'Command Palette' })
+    ),
+    vscode.commands.registerCommand(DASHBOARD_COMMANDS.rateExtension, () =>
+      rateExtension()
+    )
+  );
   // Resolve enabled modules before a command or serializer can build the
   // dashboard. Restored panels must see the same contributions as new panels.
   await modules.syncEnabledModules();
@@ -1023,10 +1039,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             'Issue marked as accepted in SonarQube.'
           );
         } catch (error) {
-          await vscode.window.showErrorMessage(
+          await showErrorWithSupport(
             `${spanish ? 'No se pudo actualizar el issue' : 'Could not update the issue'}: ${
               error instanceof Error ? error.message : String(error)
-            }`
+            }`,
+            'Issue mutation'
           );
         }
       }
@@ -1079,10 +1096,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             `Issue assigned to ${currentUser.name || currentUser.login}.`
           );
         } catch (error) {
-          await vscode.window.showErrorMessage(
+          await showErrorWithSupport(
             `${spanish ? 'No se pudo asignar el issue' : 'Could not assign the issue'}: ${
               error instanceof Error ? error.message : String(error)
-            }`
+            }`,
+            'Issue assignment'
           );
         }
       }

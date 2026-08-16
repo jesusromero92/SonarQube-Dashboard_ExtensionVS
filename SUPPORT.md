@@ -153,3 +153,14 @@ Las transiciones dependen del estado, versión de SonarQube, permisos del proyec
 Para solicitar soporte, incluye el informe sin secretos, versión de la extensión, VS Code, sistema operativo, versión de SonarQube, scanner, pasos reproducibles, resultado esperado, resultado real y sección relevante del log.
 
 Soporte y seguimiento de incidencias: <https://github.com/jesusromero92/SonarQube-Dashboard_ExtensionVS/issues>
+
+## In-extension support entry points
+
+The extension exposes **Contact support** in the Command Palette and on the Diagnostics page. Dashboard errors also render the action next to the error message, while native VS Code error notifications include the same action.
+
+The generated GitHub issue contains only safe environment metadata (extension version, VS Code version, operating system/architecture, and remote host type) plus the redacted user-facing error text. Tokens and secrets are not attached as diagnostics, and common credentials, absolute file paths, and URLs are redacted from the user-facing error before it is added. If more context is required, use **Diagnostics → Copy report** and review the report before attaching it.
+
+## Marketplace rating
+
+**Rate extension** is available from the Command Palette and Diagnostics page. An optional rating reminder can appear only after repeated successful use, is postponed after recent errors, observes a long cooldown, and can be permanently dismissed.
+

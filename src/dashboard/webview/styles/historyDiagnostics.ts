@@ -24,6 +24,33 @@ export const HISTORY_DIAGNOSTICS_STYLES = `
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 18px;
     }
+    .diagnostics-tabs {
+      display: inline-flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 4px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+    }
+    .diagnostics-tab {
+      min-height: 28px;
+      padding: 4px 12px;
+      border: 1px solid transparent;
+      color: var(--vscode-descriptionForeground);
+      background: transparent;
+      cursor: pointer;
+    }
+    .diagnostics-tab:hover {
+      color: var(--vscode-foreground);
+      background: var(--vscode-list-hoverBackground);
+    }
+    .diagnostics-tab--active {
+      color: var(--vscode-foreground);
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-list-activeSelectionBackground);
+    }
+    .diagnostics-tab-panels { display: block; }
+    .diagnostics-tab-panel[hidden] { display: none; }
     .diagnostics-list { display: grid; gap: 8px; }
     .diagnostics-list-item {
       display: grid;
@@ -38,15 +65,39 @@ export const HISTORY_DIAGNOSTICS_STYLES = `
     .diagnostics-list-item:hover {
       background: var(--vscode-list-hoverBackground);
     }
+    .diagnostics-list-item--status-healthy {
+      border-left: 3px solid var(--vscode-testing-iconPassed, #2ea043);
+    }
+    .diagnostics-list-item--status-warning {
+      border-left: 3px solid var(--vscode-testing-iconQueued, #d29922);
+    }
+    .diagnostics-list-item--status-error {
+      border-left: 3px solid var(--vscode-errorForeground, #f85149);
+    }
     .diagnostics-card-icon {
       display: grid;
       width: 28px;
       height: 28px;
       place-items: center;
       border: 1px solid var(--vscode-panel-border);
-      border-radius: 3px;
+      border-radius: 999px;
       color: var(--vscode-descriptionForeground);
       background: transparent;
+    }
+    .diagnostics-card-icon--status-healthy {
+      color: var(--vscode-testing-iconPassed, #2ea043);
+      border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #2ea043) 55%, transparent);
+      background: color-mix(in srgb, var(--vscode-testing-iconPassed, #2ea043) 12%, transparent);
+    }
+    .diagnostics-card-icon--status-warning {
+      color: var(--vscode-testing-iconQueued, #d29922);
+      border-color: color-mix(in srgb, var(--vscode-testing-iconQueued, #d29922) 55%, transparent);
+      background: color-mix(in srgb, var(--vscode-testing-iconQueued, #d29922) 12%, transparent);
+    }
+    .diagnostics-card-icon--status-error {
+      color: var(--vscode-errorForeground, #f85149);
+      border-color: color-mix(in srgb, var(--vscode-errorForeground, #f85149) 55%, transparent);
+      background: color-mix(in srgb, var(--vscode-errorForeground, #f85149) 12%, transparent);
     }
     .diagnostics-card-icon svg {
       width: 15px;
@@ -108,5 +159,9 @@ export const HISTORY_DIAGNOSTICS_STYLES = `
     .diagnostics-security-note { margin: 0; padding: 12px 16px 16px; }
     @media (max-width: 760px) {
       .diagnostics-columns { grid-template-columns: 1fr; }
+      .diagnostics-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
     }
 `;

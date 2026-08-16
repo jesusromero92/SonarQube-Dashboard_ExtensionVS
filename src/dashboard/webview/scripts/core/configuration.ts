@@ -65,7 +65,21 @@ export const CONFIGURATION_CORE_SCRIPT = `
       }
 
       elements.connectionStatus.hidden = false;
-      elements.connectionStatus.textContent = message;
+      elements.connectionStatus.textContent = '';
+      const statusMessage = document.createElement('span');
+      statusMessage.className = 'connection-status-message';
+      statusMessage.textContent = message;
+      elements.connectionStatus.appendChild(statusMessage);
+      if (kind === 'error') {
+        const supportButton = document.createElement('button');
+        supportButton.className = 'secondary status-support-action';
+        supportButton.type = 'button';
+        supportButton.textContent = translateLocalizationValue('Contactar soporte');
+        supportButton.addEventListener('click', () => {
+          vscode.postMessage({ type: 'contactSupport', errorMessage: message });
+        });
+        elements.connectionStatus.appendChild(supportButton);
+      }
       elements.connectionStatus.className =
         'connection-status connection-status--' + kind;
       elements.connectionStatus.setAttribute(

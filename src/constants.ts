@@ -48,7 +48,9 @@ export const DASHBOARD_COMMANDS = {
   nextFlowLocation: 'sonarQubeDashboard.nextFlowLocation',
   openFlowLocation: 'sonarQubeDashboard.openFlowLocation',
   showCoverage: 'sonarQubeDashboard.showCoverage',
-  showDuplications: 'sonarQubeDashboard.showDuplications'
+  showDuplications: 'sonarQubeDashboard.showDuplications',
+  contactSupport: 'sonarQubeDashboard.contactSupport',
+  rateExtension: 'sonarQubeDashboard.rateExtension'
 } as const;
 
 

@@ -75,5 +75,7 @@
   "command.liveRemediation.revert": "SonarQube Dashboard & Pipeline: Revertir cambio de remediación",
   "command.liveRemediation.clearSession": "SonarQube Dashboard & Pipeline: Borrar sesión de remediación",
   "command.liveRemediation.clearSolvedResults": "SonarQube Dashboard & Pipeline: Borrar solucionados del último análisis",
-  "command.liveRemediation.clearStillDetectedResults": "SonarQube Dashboard & Pipeline: Borrar los que siguen detectándose del último análisis"
+  "command.liveRemediation.clearStillDetectedResults": "SonarQube Dashboard & Pipeline: Borrar los que siguen detectándose del último análisis",
+  "command.contactSupport": "SonarQube Dashboard & Pipeline: Contactar con soporte",
+  "command.rateExtension": "SonarQube Dashboard & Pipeline: Puntuar extensión"
 }

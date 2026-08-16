@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { DASHBOARD_CONFIGURATION_SECTION } from '../constants';
 import type { IssueDiagnosticManager } from '../issueDiagnostics';
 import type { DashboardIssue, FolderSonarFormConfig } from '../types';
+import { showErrorWithSupport } from '../userFeedback';
 import { ANALYZE_REPOSITORY_CAPABILITY_COMMAND } from './constants';
 import type {
   DashboardModule,
@@ -313,7 +314,7 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
       ? `No se pudo cambiar el estado del módulo ${definition.displayName}: ${detail}`
       : `The state of the ${definition.displayName} module could not be changed: ${detail}`;
     this.bridge?.postStatus('error', message);
-    void vscode.window.showErrorMessage(message);
+    void showErrorWithSupport(message, 'Module runtime');
   }
 
   async handleWebviewMessage(message: ModuleWebviewMessage): Promise<boolean> {

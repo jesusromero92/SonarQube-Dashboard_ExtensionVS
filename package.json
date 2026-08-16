@@ -211,6 +211,16 @@
         "title": "%command.liveRemediation.clearStillDetectedResults%",
         "icon": "$(trash)",
         "enablement": "sonarQubeDashboard.module.liveRemediation.enabled"
+      },
+      {
+        "command": "sonarQubeDashboard.contactSupport",
+        "title": "%command.contactSupport%",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "sonarQubeDashboard.rateExtension",
+        "title": "%command.rateExtension%",
+        "icon": "$(star-full)"
       }
     ],
     "configuration": {

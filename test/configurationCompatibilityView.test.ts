@@ -225,7 +225,7 @@ test('los errores de conexión se muestran bajo las credenciales y ocultan la co
   assert.match(ELEMENT_REGISTRY_SCRIPT, /querySelectorAll\('\[id\]'\)/);
   assert.match(
     CONFIGURATION_CORE_SCRIPT,
-    /function setStatus\(kind, message = ''\)[\s\S]*elements\.connectionStatus\.textContent = message/
+    /function setStatus\(kind, message = ''\)[\s\S]*statusMessage\.textContent = message/
   );
   assert.match(
     CONFIGURATION_CORE_SCRIPT,

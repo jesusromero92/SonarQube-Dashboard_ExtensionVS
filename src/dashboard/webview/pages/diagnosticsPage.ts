@@ -5,6 +5,8 @@ export const DIAGNOSTICS_PAGE_MARKUP = `      <section id="diagnosticsPage" clas
             <span id="diagnosticsGeneratedAt" class="muted"></span>
             <button id="refreshDiagnostics" class="secondary" type="button">Actualizar diagnóstico</button>
             <button id="copyDiagnostics" type="button" disabled>Copiar informe</button>
+            <button id="contactSupport" class="secondary" type="button">Contactar soporte</button>
+            <button id="rateExtension" class="secondary" type="button">Puntuar extensión</button>
           </div>
           <div id="diagnosticsLoading" class="diagnostics-loading">Recopilando diagnóstico…</div>
           <div id="diagnosticsContent" class="diagnostics-content" hidden>
@@ -12,14 +14,39 @@ export const DIAGNOSTICS_PAGE_MARKUP = `      <section id="diagnosticsPage" clas
               <h3>Entorno</h3>
               <dl id="diagnosticsEnvironment" class="diagnostics-grid"></dl>
             </section>
-            <section class="diagnostics-section diagnostics-columns">
-              <div>
-                <h3>Módulos</h3>
-                <div id="diagnosticsModules" class="diagnostics-list"></div>
+            <section class="diagnostics-section">
+              <h3>Módulos y salud</h3>
+              <div class="diagnostics-tabs" role="tablist" aria-label="Diagnóstico de módulos">
+                <button
+                  id="diagnosticsModulesTab"
+                  class="diagnostics-tab diagnostics-tab--active"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="diagnosticsModulesPanel"
+                  data-target="diagnosticsModulesPanel"
+                >
+                  Módulos
+                </button>
+                <button
+                  id="diagnosticsModuleHealthTab"
+                  class="diagnostics-tab"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="diagnosticsModuleHealthPanel"
+                  data-target="diagnosticsModuleHealthPanel"
+                >
+                  Salud de módulos
+                </button>
               </div>
-              <div>
-                <h3>Salud de módulos</h3>
-                <div id="diagnosticsModuleHealth" class="diagnostics-list"></div>
+              <div class="diagnostics-tab-panels">
+                <div id="diagnosticsModulesPanel" class="diagnostics-tab-panel" role="tabpanel" aria-labelledby="diagnosticsModulesTab">
+                  <div id="diagnosticsModules" class="diagnostics-list"></div>
+                </div>
+                <div id="diagnosticsModuleHealthPanel" class="diagnostics-tab-panel" role="tabpanel" aria-labelledby="diagnosticsModuleHealthTab" hidden>
+                  <div id="diagnosticsModuleHealth" class="diagnostics-list"></div>
+                </div>
               </div>
             </section>
             <section class="diagnostics-section">

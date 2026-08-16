@@ -8,6 +8,12 @@ export const DASHBOARD_EVENTS_SCRIPT = `
     elements.copyDiagnostics.addEventListener('click', () => {
       vscode.postMessage({ type: 'copyDiagnostics', folderUri: currentFolderUri });
     });
+    elements.contactSupport.addEventListener('click', () => {
+      vscode.postMessage({ type: 'contactSupport' });
+    });
+    elements.rateExtension.addEventListener('click', () => {
+      vscode.postMessage({ type: 'rateExtension' });
+    });
     elements.refresh.addEventListener('click', requestRefresh);
     elements.retryUnavailable.addEventListener('click', requestRefresh);
     elements.retryStaleSync.addEventListener('click', requestRefresh);
