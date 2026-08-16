@@ -30,11 +30,16 @@ export interface DetectedProjectActions {
   recommendedIntegrations: ProjectIntegrationCatalogItem[];
   stack: ProjectStackSnapshot;
 }
+type DetectedProjectCoreActions = Omit<
+  DetectedProjectActions,
+  'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'
+>;
+
 
 export async function detectProjectActions(rootPath: string): Promise<DetectedProjectActions> {
   const context = await createIntegrationDetectionContext(rootPath);
   const stack = await detectProjectStack(context);
-  let detected: Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> = {};
+  let detected: DetectedProjectCoreActions = {};
 
   if (context.node) detected = detectNodeActions(context.node);
   if (!detected.buildCommand && !detected.testCommand) {
@@ -62,7 +67,7 @@ export async function detectPredefinedIntegrations(
 
 async function detectNonNodeActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'>> {
+): Promise<DetectedProjectCoreActions> {
   const detectors = [
     detectDotnetActions,
     detectMavenActions,
@@ -80,7 +85,7 @@ async function detectNonNodeActions(
 
 async function detectDotnetActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> | undefined> {
+): Promise<DetectedProjectCoreActions | undefined> {
   const dotnetTarget = await firstMatchingFile(rootPath, [
     '.sln', '.slnx', '.csproj', '.vbproj', '.fsproj'
   ]);
@@ -95,7 +100,7 @@ async function detectDotnetActions(
 
 async function detectMavenActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> | undefined> {
+): Promise<DetectedProjectCoreActions | undefined> {
   if (!await exists(path.join(rootPath, 'pom.xml'))) return undefined;
   const executable = await executableForWrapper(
     rootPath,
@@ -111,7 +116,7 @@ async function detectMavenActions(
 
 async function detectGradleActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> | undefined> {
+): Promise<DetectedProjectCoreActions | undefined> {
   const gradleFile = await firstExisting(rootPath, [
     'build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts'
   ]);
@@ -130,21 +135,21 @@ async function detectGradleActions(
 
 async function detectCargoActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> | undefined> {
+): Promise<DetectedProjectCoreActions | undefined> {
   if (!await exists(path.join(rootPath, 'Cargo.toml'))) return undefined;
   return { buildCommand: 'cargo build', testCommand: 'cargo test', evidence: 'Cargo.toml' };
 }
 
 async function detectGoActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> | undefined> {
+): Promise<DetectedProjectCoreActions | undefined> {
   if (!await exists(path.join(rootPath, 'go.mod'))) return undefined;
   return { buildCommand: 'go build ./...', testCommand: 'go test ./...', evidence: 'go.mod' };
 }
 
 async function detectPythonActions(
   rootPath: string
-): Promise<Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> | undefined> {
+): Promise<DetectedProjectCoreActions | undefined> {
   const evidence = await firstExisting(rootPath, [
     'pyproject.toml', 'pytest.ini', 'setup.cfg', 'requirements.txt'
   ]);
@@ -157,7 +162,7 @@ async function detectPythonActions(
 
 function detectNodeActions(
   context: NodeProjectContext
-): Omit<DetectedProjectActions, 'integrations' | 'integrationCatalog' | 'recommendedIntegrations' | 'stack'> {
+): DetectedProjectCoreActions {
   const scripts = context.packageJson.scripts ?? {};
   const buildScript = firstScript(scripts, ['build', 'compile', 'typecheck']);
   const testScript = firstUsableTestScript(scripts);

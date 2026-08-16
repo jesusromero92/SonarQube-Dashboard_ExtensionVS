@@ -5,7 +5,8 @@ import {
   compactEvidence,
   evidence,
   findExecutable,
-  fileContains,
+  fileContainsTomlSection,
+  requirementsFileContainsPackage,
   firstExisting,
   versionFromRequirements
 } from '../helpers';
@@ -27,11 +28,11 @@ export const banditIntegrationProvider: PipelineIntegrationProvider = {
   async detect(context) {
     const config = await firstExisting(context.rootPath, ['.bandit', 'bandit.yaml', 'bandit.yml']);
     const pyproject = path.join(context.rootPath, 'pyproject.toml');
-    const pyprojectConfigured = await fileContains(pyproject, /\[tool\.bandit(?:\.|\])/i);
+    const pyprojectConfigured = await fileContainsTomlSection(pyproject, 'tool.bandit');
     const requirements = await firstExisting(context.rootPath, ['requirements.txt', 'requirements-dev.txt']);
-    const requirementsConfigured = Boolean(requirements && await fileContains(
-      path.join(context.rootPath, requirements), /^\s*bandit(?:[<>=~!]|\s|$)/im
-    ));
+    const requirementsConfigured = await requirementsFileContainsPackage(
+      context.rootPath, requirements, 'bandit'
+    );
     const binary = await findExecutable(context.platform, 'bandit', context.rootPath);
     if (!config && !pyprojectConfigured && !requirementsConfigured) return undefined;
 

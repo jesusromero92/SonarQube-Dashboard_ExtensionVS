@@ -15,10 +15,10 @@ export interface ResolvedPipelineCommand {
   readonly sensitiveValues: readonly string[];
 }
 
-const CUSTOM_VARIABLE_PATTERN = /\$\{variable\.([A-Za-z_][A-Za-z0-9_]*)\}/g;
-const SECRET_PATTERN = /\$\{secret\.([A-Za-z_][A-Za-z0-9_]*)\}/g;
-const INTEGRATION_COMMAND_PATTERN = /\$\{integration\.([A-Za-z0-9_-]+)\.command\}/g;
-const BUILTIN_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+const CUSTOM_VARIABLE_PATTERN = /\$\{variable\.([A-Za-z_]\w*)\}/g;
+const SECRET_PATTERN = /\$\{secret\.([A-Za-z_]\w*)\}/g;
+const INTEGRATION_COMMAND_PATTERN = /\$\{integration\.([\w-]+)\.command\}/g;
+const BUILTIN_PATTERN = /\$\{([A-Za-z_]\w*)\}/g;
 
 export function resolvePipelineCommand(
   template: string,
@@ -96,7 +96,7 @@ function replaceBuiltins(
   variables: Readonly<Record<string, string | undefined>>
 ): string {
   return value.replace(BUILTIN_PATTERN, (match, name: string) => {
-    if (!Object.prototype.hasOwnProperty.call(variables, name)) return match;
+    if (!Object.hasOwn(variables, name)) return match;
     const replacement = variables[name];
     if (replacement === undefined) {
       throw new Error(`La variable dinámica “${name}” no está disponible para este proyecto.`);

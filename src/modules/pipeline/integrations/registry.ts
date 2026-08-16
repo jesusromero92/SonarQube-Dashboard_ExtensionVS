@@ -85,7 +85,7 @@ export function getRegisteredIntegrationWatchFiles(): string[] {
   for (const provider of PIPELINE_INTEGRATION_PROVIDERS) {
     for (const file of provider.watchFiles ?? []) files.add(file);
   }
-  return [...files].sort();
+  return [...files].sort((left, right) => left.localeCompare(right));
 }
 
 

@@ -1,4 +1,4 @@
-export const ANALYSIS_SCRIPT = `    function analysisTimingCommandKey(command) {
+export const ANALYSIS_SCRIPT = String.raw`    function analysisTimingCommandKey(command) {
       return String(command || '').trim().replace(/\s+/g, ' ').toLowerCase();
     }
 

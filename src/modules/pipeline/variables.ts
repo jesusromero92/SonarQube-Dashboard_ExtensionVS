@@ -4,7 +4,7 @@ import type * as vscode from 'vscode';
 const PIPELINE_VARIABLES_STORAGE_PREFIX = 'sonarQubeDashboard.pipeline.variables:';
 const PIPELINE_SECRET_NAMES_STORAGE_PREFIX = 'sonarQubeDashboard.pipeline.secretNames:';
 const PIPELINE_SECRET_VALUE_PREFIX = 'sonarQubeDashboard.pipeline.secret:';
-const PIPELINE_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const PIPELINE_VARIABLE_NAME = /^[A-Za-z_]\w*$/;
 
 export interface PipelineVariableEntry {
   name: string;

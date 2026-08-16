@@ -74,7 +74,57 @@ export function relativeFindingFile(cwd: string, file: string | undefined): stri
 }
 
 export function stripAnsi(value: string): string {
-  return value.replace(/\u001B(?:\[[0-?]*[ -\/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\))/g, '');
+  let result = '';
+  let index = 0;
+  while (index < value.length) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) break;
+
+    if (codePoint !== 27) {
+      result += String.fromCodePoint(codePoint);
+      index += codePointLength(codePoint);
+      continue;
+    }
+
+    const next = value[index + 1];
+    if (next === '[') {
+      index = skipControlSequence(value, index + 2);
+      continue;
+    }
+    if (next === ']') {
+      index = skipOperatingSystemCommand(value, index + 2);
+      continue;
+    }
+    index += Math.min(2, value.length - index);
+  }
+  return result;
+}
+
+function skipControlSequence(value: string, start: number): number {
+  let index = start;
+  while (index < value.length) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) break;
+    index += codePointLength(codePoint);
+    if (codePoint >= 64 && codePoint <= 126) break;
+  }
+  return index;
+}
+
+function skipOperatingSystemCommand(value: string, start: number): number {
+  let index = start;
+  while (index < value.length) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) break;
+    if (codePoint === 7) return index + 1;
+    if (codePoint === 27 && value[index + 1] === '\\') return index + 2;
+    index += codePointLength(codePoint);
+  }
+  return index;
+}
+
+function codePointLength(codePoint: number): 1 | 2 {
+  return codePoint > 0xffff ? 2 : 1;
 }
 
 export function parseJsonValue(value: string): unknown {

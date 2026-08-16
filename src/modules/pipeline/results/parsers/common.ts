@@ -20,12 +20,12 @@ export function parserErrorResult(
     parserId,
     'error',
     [],
-    error instanceof Error ? error.message : String(error)
+    errorMessage(error)
   );
 }
 
 export function severityFromText(value: unknown): PipelineFindingSeverity {
-  const normalized = String(value ?? '').trim().toLowerCase();
+  const normalized = scalarString(value)?.trim().toLowerCase() ?? '';
   if (normalized === 'critical' || normalized === 'blocker') return 'critical';
   if (normalized === 'high' || normalized === 'error' || normalized === 'major') return 'high';
   if (normalized === 'medium' || normalized === 'moderate' || normalized === 'warning' || normalized === 'warn') return 'medium';
@@ -70,4 +70,17 @@ export function arrayValue(value: unknown): unknown[] {
 
 export function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+export function scalarString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  return undefined;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return scalarString(error) ?? 'Unknown parser error';
 }

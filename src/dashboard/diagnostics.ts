@@ -187,11 +187,7 @@ export function formatDiagnosticsReport(snapshot: ExtensionDiagnosticsSnapshot):
     lines,
     snapshot.modules.map(module => [
       module.displayName || module.id,
-      module.enabled
-        ? module.loaded
-          ? 'enabled / runtime loaded'
-          : 'enabled / runtime not loaded'
-        : 'disabled'
+      formatModuleRuntimeState(module)
     ])
   );
 
@@ -199,7 +195,7 @@ export function formatDiagnosticsReport(snapshot: ExtensionDiagnosticsSnapshot):
   for (const section of snapshot.moduleDiagnostics) {
     lines.push(`${section.title}:`);
     for (const item of section.items) {
-      lines.push(`  - ${item.label}: ${item.value}${item.status ? ` [${item.status}]` : ''}`);
+      lines.push(formatModuleHealthItem(item));
     }
   }
   if (snapshot.moduleDiagnostics.length === 0) {
@@ -216,7 +212,7 @@ export function formatDiagnosticsReport(snapshot: ExtensionDiagnosticsSnapshot):
     `Status: ${snapshot.sonarStatus || '—'}`,
     `Compatibility profile: ${snapshot.compatibilityProfile || '—'}`,
     `Applied profiles: ${snapshot.compatibilityProfiles.join(', ') || '—'}`,
-    `Response time: ${snapshot.responseTimeMs === undefined ? '—' : `${snapshot.responseTimeMs} ms`}`,
+    `Response time: ${formatResponseTime(snapshot.responseTimeMs)}`,
     '',
     '[Scanner]',
     `Scanner: ${snapshot.scanner || '—'}`,
@@ -254,8 +250,7 @@ export function formatDiagnosticsReport(snapshot: ExtensionDiagnosticsSnapshot):
   if (snapshot.lastFailedRequest) {
     const failure = snapshot.lastFailedRequest;
     lines.push(
-      `${failure.occurredAt} ${failure.method} ${failure.endpoint}` +
-        `${failure.status === undefined ? '' : ` [${failure.status}]`}`,
+      formatFailedRequest(failure),
       redactSensitiveText(failure.message)
     );
   } else {
@@ -377,6 +372,25 @@ function normalizeStatus(
     : undefined;
 }
 
+function formatModuleRuntimeState(module: ExtensionDiagnosticsModuleState): string {
+  if (!module.enabled) return 'disabled';
+  return module.loaded ? 'enabled / runtime loaded' : 'enabled / runtime not loaded';
+}
+
+function formatModuleHealthItem(item: ExtensionDiagnosticsModuleItem): string {
+  const status = item.status ? ` [${item.status}]` : '';
+  return `  - ${item.label}: ${item.value}${status}`;
+}
+
+function formatResponseTime(value: number | undefined): string {
+  return value === undefined ? '—' : `${value} ms`;
+}
+
+function formatFailedRequest(failure: SonarRequestFailure): string {
+  const status = failure.status === undefined ? '' : ` [${failure.status}]`;
+  return `${failure.occurredAt} ${failure.method} ${failure.endpoint}${status}`;
+}
+
 function appendRows(lines: string[], rows: readonly (readonly (string | undefined)[])[]): void {
   if (rows.length === 0) {
     lines.push('—');
@@ -395,11 +409,16 @@ function redactSensitiveText(value: string): string {
       /((?:token|password|passwd|secret|api[_-]?key|authorization)\s*[=:]\s*)(["']?)[^\s"'&;]+\2/gi,
       '$1********'
     )
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer ********');
+    .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer ********');
 }
 
 function asString(value: unknown): string {
-  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  return '';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -407,5 +426,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? error.message : asString(error) || 'Unknown error';
 }

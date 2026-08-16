@@ -3,7 +3,7 @@ function add(left, right) {
 }
 
 function formatTotal(label, total) {
-  return `${label}: ${`${total} EURO`}`;
+  return `${label}: ${total} EUR`;
 }
 
 module.exports = { add, formatTotal };

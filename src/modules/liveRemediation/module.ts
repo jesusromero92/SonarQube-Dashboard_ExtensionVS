@@ -39,6 +39,14 @@ function issueKey(argument: unknown): string | undefined {
     : undefined;
 }
 
+function sonarIdeDiagnostics(
+  extension: vscode.Extension<unknown> | undefined
+): { value: string; status: 'healthy' | 'warning' | 'unknown' } {
+  if (!extension) return { value: 'No instalado', status: 'unknown' };
+  if (extension.isActive) return { value: 'Activo', status: 'healthy' };
+  return { value: 'Instalado', status: 'warning' };
+}
+
 export class LiveRemediationModule implements DashboardModule {
   readonly id = 'liveRemediation' as const;
   readonly displayName = 'Live Remediation';
@@ -209,6 +217,7 @@ export class LiveRemediationModule implements DashboardModule {
     _folder: vscode.WorkspaceFolder | undefined
   ): Promise<Record<string, unknown>> {
     const extension = vscode.extensions.getExtension(SONARQUBE_FOR_IDE_EXTENSION_ID);
+    const ideDiagnostics = sonarIdeDiagnostics(extension);
     return {
       moduleDiagnostics: [{
         moduleId: 'liveRemediation',
@@ -221,8 +230,8 @@ export class LiveRemediationModule implements DashboardModule {
           },
           {
             label: 'SonarQube for IDE',
-            value: extension ? (extension.isActive ? 'Activo' : 'Instalado') : 'No instalado',
-            status: extension?.isActive ? 'healthy' : extension ? 'warning' : 'unknown'
+            value: ideDiagnostics.value,
+            status: ideDiagnostics.status
           }
         ]
       }]

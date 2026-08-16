@@ -90,39 +90,61 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
   private async performModuleSync(): Promise<boolean> {
     if (this.disposed) return false;
     const state = getDashboardModuleState();
-    const signature = this.definitions
-      .map(definition => `${definition.id}:${state[definition.id] ? '1' : '0'}`)
-      .join('|');
-    const runtimeMatchesState = this.definitions.every(
-      definition => Boolean(state[definition.id]) === this.loadedModules.has(definition.id)
-    );
+    const signature = this.getStateSignature(state);
+    const runtimeMatchesState = this.runtimeMatchesState(state);
     if (signature === this.lastSyncedSignature && runtimeMatchesState) return false;
 
     let changed = signature !== this.lastSyncedSignature || !runtimeMatchesState;
-
     for (const definition of this.definitions) {
-      const module = this.loadedModules.get(definition.id);
-      if (state[definition.id]) {
-        try {
-          if (await this.loadAndActivate(definition)) changed = true;
-        } catch (error) {
-          // Never leave the persisted state claiming that a module is enabled
-          // when its lazy implementation could not be started.
-          state[definition.id] = false;
-          await setDashboardModuleEnabled(definition.id, false);
-          this.reportModuleError(definition, error);
-          changed = true;
-        }
-      } else if (module) {
-        try {
-          this.unloadModule(definition.id);
-        } catch (error) {
-          this.reportModuleError(definition, error);
-        }
-        changed = true;
-      }
+      changed = await this.synchronizeDefinition(definition, state) || changed;
     }
+    return this.finalizeModuleSync(state, changed);
+  }
 
+  private runtimeMatchesState(state: DashboardModuleState): boolean {
+    return this.definitions.every(
+      definition => Boolean(state[definition.id]) === this.loadedModules.has(definition.id)
+    );
+  }
+
+  private async synchronizeDefinition(
+    definition: DashboardModuleDefinition,
+    state: DashboardModuleState
+  ): Promise<boolean> {
+    if (state[definition.id]) return this.synchronizeEnabledDefinition(definition, state);
+    if (!this.loadedModules.has(definition.id)) return false;
+    this.synchronizeDisabledDefinition(definition);
+    return true;
+  }
+
+  private async synchronizeEnabledDefinition(
+    definition: DashboardModuleDefinition,
+    state: DashboardModuleState
+  ): Promise<boolean> {
+    try {
+      return await this.loadAndActivate(definition);
+    } catch (error) {
+      // Never leave the persisted state claiming that a module is enabled
+      // when its lazy implementation could not be started.
+      state[definition.id] = false;
+      await setDashboardModuleEnabled(definition.id, false);
+      this.reportModuleError(definition, error);
+      return true;
+    }
+  }
+
+  private synchronizeDisabledDefinition(definition: DashboardModuleDefinition): void {
+    try {
+      this.unloadModule(definition.id);
+    } catch (error) {
+      this.reportModuleError(definition, error);
+    }
+  }
+
+  private async finalizeModuleSync(
+    state: DashboardModuleState,
+    changed: boolean
+  ): Promise<boolean> {
     if (this.disposed) return changed;
     await updateDashboardModuleContexts(state);
     if (this.disposed) return changed;
@@ -409,29 +431,82 @@ export class DashboardModuleRuntime implements DashboardModulesRuntime {
     const moduleDiagnostics: unknown[] = [];
     const moduleDiagnosticErrors: string[] = [];
 
+    await this.collectLoadedModuleDiagnostics(
+      folder,
+      state,
+      result,
+      moduleDiagnostics,
+      moduleDiagnosticErrors
+    );
+    this.attachModuleDiagnostics(result, moduleDiagnostics, moduleDiagnosticErrors);
+    return result;
+  }
+
+  private async collectLoadedModuleDiagnostics(
+    folder: vscode.WorkspaceFolder | undefined,
+    state: DashboardModuleState,
+    result: Record<string, unknown>,
+    moduleDiagnostics: unknown[],
+    moduleDiagnosticErrors: string[]
+  ): Promise<void> {
     for (const module of this.loadedModules.values()) {
       if (!state[module.id]) continue;
-      try {
-        const contribution = await module.collectDiagnosticsContribution(folder);
-        for (const [key, value] of Object.entries(contribution)) {
-          if (key === 'moduleDiagnostics' && Array.isArray(value)) {
-            moduleDiagnostics.push(...value);
-          } else if (key === 'moduleDiagnosticErrors' && Array.isArray(value)) {
-            moduleDiagnosticErrors.push(...value.filter(
-              (item): item is string => typeof item === 'string'
-            ));
-          } else {
-            result[key] = value;
-          }
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        moduleDiagnosticErrors.push(`${module.displayName}: ${detail}`);
-      }
+      await this.collectSingleModuleDiagnostics(
+        module,
+        folder,
+        result,
+        moduleDiagnostics,
+        moduleDiagnosticErrors
+      );
     }
+  }
+
+  private async collectSingleModuleDiagnostics(
+    module: DashboardModule,
+    folder: vscode.WorkspaceFolder | undefined,
+    result: Record<string, unknown>,
+    moduleDiagnostics: unknown[],
+    moduleDiagnosticErrors: string[]
+  ): Promise<void> {
+    try {
+      const contribution = await module.collectDiagnosticsContribution(folder);
+      this.mergeDiagnosticsContribution(
+        contribution, result, moduleDiagnostics, moduleDiagnosticErrors
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      moduleDiagnosticErrors.push(`${module.displayName}: ${detail}`);
+    }
+  }
+
+  private mergeDiagnosticsContribution(
+    contribution: Record<string, unknown>,
+    result: Record<string, unknown>,
+    moduleDiagnostics: unknown[],
+    moduleDiagnosticErrors: string[]
+  ): void {
+    for (const [key, value] of Object.entries(contribution)) {
+      if (key === 'moduleDiagnostics' && Array.isArray(value)) {
+        moduleDiagnostics.push(...value);
+        continue;
+      }
+      if (key === 'moduleDiagnosticErrors' && Array.isArray(value)) {
+        moduleDiagnosticErrors.push(...value.filter(
+          (item): item is string => typeof item === 'string'
+        ));
+        continue;
+      }
+      result[key] = value;
+    }
+  }
+
+  private attachModuleDiagnostics(
+    result: Record<string, unknown>,
+    moduleDiagnostics: unknown[],
+    moduleDiagnosticErrors: string[]
+  ): void {
     if (moduleDiagnostics.length > 0) result.moduleDiagnostics = moduleDiagnostics;
     if (moduleDiagnosticErrors.length > 0) result.moduleDiagnosticErrors = moduleDiagnosticErrors;
-    return result;
   }
 
   dispose(): void {

@@ -55,6 +55,7 @@ import { appendAnalysisPipelineStage } from './parser';
 import { integrationCommandRecord } from './commandVariables';
 import {
   PipelineVariableStore,
+  isPipelineVariableName,
   pipelineVariablesRecord,
   type PipelineVariableEntry
 } from './variables';
@@ -390,7 +391,7 @@ export class PipelineDashboardController implements vscode.Disposable {
       prompt: localizeRuntimeText('Nombre del secreto. Se usará como ${secret.NOMBRE}.', this.language),
       placeHolder: 'SNYK_TOKEN',
       ignoreFocusOut: true,
-      validateInput: (value: string) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(value.trim())
+      validateInput: (value: string) => isPipelineVariableName(value)
         ? undefined
         : 'Usa letras, números y guiones bajos, empezando por una letra o _.'
     });

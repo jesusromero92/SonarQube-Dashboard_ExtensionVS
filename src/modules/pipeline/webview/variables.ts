@@ -202,17 +202,17 @@ export const PIPELINE_VARIABLES_SCRIPT = `    let pipelineVariablesSaving = fals
           .map(item => [String(item?.name || ''), String(item?.value ?? '')])
           .filter(([name]) => name)
       );
-      result = result.replace(/\$\{variable\.([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name) =>
+      result = result.replace(/\\$\\{variable\\.([A-Za-z_]\\w*)\\}/g, (match, name) =>
         Object.prototype.hasOwnProperty.call(custom, name) ? custom[name] : match
       );
       const integrations = new Map(
         (Array.isArray(config?.integrationCommandVariables) ? config.integrationCommandVariables : [])
           .map(item => [String(item?.id || ''), String(item?.command || '')])
       );
-      result = result.replace(/\$\{integration\.([A-Za-z0-9_-]+)\.command\}/g, (match, id) =>
+      result = result.replace(/\\$\\{integration\\.([\\w-]+)\\.command\\}/g, (match, id) =>
         integrations.get(id) || match
       );
-      return result.replace(/\$\{secret\.[A-Za-z_][A-Za-z0-9_]*\}/g, '********');
+      return result.replace(/\\$\\{secret\\.[A-Za-z_]\\w*\\}/g, '********');
     }
 
     function handlePipelineVariablesMessage(message) {

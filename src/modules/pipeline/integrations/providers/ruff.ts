@@ -5,7 +5,8 @@ import {
   compactEvidence,
   evidence,
   findExecutable,
-  fileContains,
+  fileContainsTomlSection,
+  requirementsFileContainsPackage,
   firstExisting,
   versionFromRequirements
 } from '../helpers';
@@ -29,11 +30,11 @@ export const ruffIntegrationProvider: PipelineIntegrationProvider = {
   async detect(context) {
     const config = await firstExisting(context.rootPath, ['ruff.toml', '.ruff.toml']);
     const pyproject = path.join(context.rootPath, 'pyproject.toml');
-    const pyprojectConfigured = await fileContains(pyproject, /\[tool\.ruff(?:\.|\])/i);
+    const pyprojectConfigured = await fileContainsTomlSection(pyproject, 'tool.ruff');
     const requirements = await firstExisting(context.rootPath, ['requirements.txt', 'requirements-dev.txt']);
-    const requirementsConfigured = Boolean(requirements && await fileContains(
-      path.join(context.rootPath, requirements), /^\s*ruff(?:[<>=~!]|\s|$)/im
-    ));
+    const requirementsConfigured = await requirementsFileContainsPackage(
+      context.rootPath, requirements, 'ruff'
+    );
     const binary = await findExecutable(context.platform, 'ruff', context.rootPath);
     if (!config && !pyprojectConfigured && !requirementsConfigured) return undefined;
 

@@ -92,6 +92,27 @@ export async function fileContains(file: string, pattern: RegExp): Promise<boole
   }
 }
 
+export async function fileContainsTomlSection(file: string, section: string): Promise<boolean> {
+  try {
+    const prefix = `[${section.toLowerCase()}`;
+    const content = await fs.readFile(file, 'utf8');
+    return content.split(/\r?\n/).some(line => {
+      const normalized = line.trim().toLowerCase();
+      return normalized === `${prefix}]` || normalized.startsWith(`${prefix}.`);
+    });
+  } catch {
+    return false;
+  }
+}
+
+export async function requirementsFileContainsPackage(
+  rootPath: string,
+  requirementsFile: string | undefined,
+  packageName: string
+): Promise<boolean> {
+  return Boolean(await findRequirementLine(rootPath, requirementsFile, packageName));
+}
+
 export function firstScript(
   scripts: Record<string, string>,
   candidates: readonly string[]
@@ -153,18 +174,33 @@ export async function versionFromRequirements(
   requirementsFile: string | undefined,
   packageName: string
 ): Promise<ProjectIntegrationVersion | undefined> {
+  const line = await findRequirementLine(rootPath, requirementsFile, packageName);
+  if (!line) return undefined;
+  const version = line.slice(packageName.length).trim();
+  return version ? { value: version, source: 'declared' } : undefined;
+}
+
+async function findRequirementLine(
+  rootPath: string,
+  requirementsFile: string | undefined,
+  packageName: string
+): Promise<string | undefined> {
   if (!requirementsFile) return undefined;
   try {
     const content = await fs.readFile(path.join(rootPath, requirementsFile), 'utf8');
-    const line = content.split(/\r?\n/).map(item => item.trim()).find(item =>
-      new RegExp(`^${escapeRegExp(packageName)}(?:\\[.*?\\])?(?:[<>=~!]|\\s|$)`, 'i').test(item)
-    );
-    if (!line) return undefined;
-    const version = line.slice(packageName.length).trim();
-    return version ? { value: version, source: 'declared' } : undefined;
+    return content
+      .split(/\r?\n/)
+      .map(item => item.trim())
+      .find(item => requirementLineMatchesPackage(item, packageName));
   } catch {
     return undefined;
   }
+}
+
+function requirementLineMatchesPackage(line: string, packageName: string): boolean {
+  if (!line.toLowerCase().startsWith(packageName.toLowerCase())) return false;
+  const separator = line.charAt(packageName.length);
+  return !separator || '<>=~!['.includes(separator) || separator.trim() === '';
 }
 
 export function buildDetectedIntegration(
@@ -218,8 +254,4 @@ export function compactEvidence(
     unique.set(`${item.source}:${item.value}`, item);
   }
   return [...unique.values()];
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

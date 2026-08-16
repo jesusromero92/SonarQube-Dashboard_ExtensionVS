@@ -1,11 +1,10 @@
-import * as path from 'node:path';
 import type { PipelineIntegrationProvider } from '../contracts';
 import {
   buildDetectedIntegration,
   compactEvidence,
   evidence,
   findExecutable,
-  fileContains,
+  requirementsFileContainsPackage,
   firstExisting,
   versionFromRequirements
 } from '../helpers';
@@ -29,9 +28,9 @@ export const checkovIntegrationProvider: PipelineIntegrationProvider = {
       '.checkov.yml', '.checkov.yaml', 'checkov.yml', 'checkov.yaml'
     ]);
     const requirements = await firstExisting(context.rootPath, ['requirements.txt', 'requirements-dev.txt']);
-    const requirementsConfigured = Boolean(requirements && await fileContains(
-      path.join(context.rootPath, requirements), /^\s*checkov(?:[<>=~!]|\s|$)/im
-    ));
+    const requirementsConfigured = await requirementsFileContainsPackage(
+      context.rootPath, requirements, 'checkov'
+    );
     const binary = await findExecutable(context.platform, 'checkov', context.rootPath);
     if (!config && !requirementsConfigured) return undefined;
 

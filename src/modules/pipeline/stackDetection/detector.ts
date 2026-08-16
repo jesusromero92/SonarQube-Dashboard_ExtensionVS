@@ -1,7 +1,12 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { IntegrationDetectionContext } from '../integrations/contracts';
-import { exists, fileContains, firstExisting } from '../integrations/helpers';
+import {
+  exists,
+  fileContainsTomlSection,
+  firstExisting,
+  requirementsFileContainsPackage
+} from '../integrations/helpers';
 import type { ProjectStackSnapshot, ProjectStackTechnology } from './contracts';
 
 interface StackSignal {
@@ -81,7 +86,9 @@ async function detectPython(
   }
 
   const pytestConfig = await firstExisting(rootPath, ['pytest.ini', 'tox.ini']);
-  const pyprojectHasPytest = await fileContains(path.join(rootPath, 'pyproject.toml'), /\[(?:tool\.)?pytest(?:\.|\])/i);
+  const pyproject = path.join(rootPath, 'pyproject.toml');
+  const pyprojectHasPytest = await fileContainsTomlSection(pyproject, 'tool.pytest') ||
+    await fileContainsTomlSection(pyproject, 'pytest');
   const requirementsHasPytest = await requirementsContain(rootPath, ['requirements.txt', 'requirements-dev.txt'], 'pytest');
   if (pytestConfig || pyprojectHasPytest || requirementsHasPytest) {
     add(detected, 'pytest', 'pytest', 'tests', pytestConfig ?? (pyprojectHasPytest ? 'pyproject.toml' : requirementsHasPytest!));
@@ -179,9 +186,7 @@ async function requirementsContain(
 ): Promise<string | undefined> {
   for (const file of files) {
     if (!await exists(path.join(rootPath, file))) continue;
-    if (await fileContains(path.join(rootPath, file), new RegExp(`^\\s*${packageName}(?:[<>=~!\\s]|$)`, 'im'))) {
-      return file;
-    }
+    if (await requirementsFileContainsPackage(rootPath, file, packageName)) return file;
   }
   return undefined;
 }

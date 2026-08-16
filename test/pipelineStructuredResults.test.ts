@@ -6,7 +6,7 @@ import { parseReactDoctorResult } from '../src/modules/pipeline/results/parsers/
 import { parseRuffResult } from '../src/modules/pipeline/results/parsers/ruff';
 import { parseSemgrepResult } from '../src/modules/pipeline/results/parsers/semgrep';
 import { diffStructuredResults } from '../src/modules/pipeline/results/diff';
-import { createStructuredResult } from '../src/modules/pipeline/results/fingerprint';
+import { createStructuredResult, stripAnsi } from '../src/modules/pipeline/results/fingerprint';
 import { attachStructuredResultDiffs } from '../src/modules/pipeline/history';
 import { associatePipelineStepsWithIntegrations } from '../src/modules/pipeline/requests';
 import type { DetectedProjectIntegration } from '../src/modules/pipeline/integrations';
@@ -42,6 +42,25 @@ test('ESLint parser converts JSON messages into stable findings and metrics', ()
   assert.equal(result.summary.medium, 1);
   assert.equal(result.findings[0].location?.file, 'src/a.ts');
   assert.equal(result.metrics.find(item => item.key === 'errors')?.value, 1);
+});
+
+test('ESLint text fallback parses the standard summary without a backtracking regex', () => {
+  const result = parseEslintResult({
+    ...baseOutput,
+    toolId: 'eslint',
+    toolName: 'ESLint',
+    output: '✖ 3 problems (2 errors, 1 warning)'
+  });
+
+  assert.equal(result.status, 'partial');
+  assert.equal(result.metrics.find(item => item.key === 'total')?.value, 3);
+  assert.equal(result.metrics.find(item => item.key === 'errors')?.value, 2);
+  assert.equal(result.metrics.find(item => item.key === 'warnings')?.value, 1);
+});
+
+test('ANSI stripping preserves Unicode code points while removing control sequences', () => {
+  assert.equal(stripAnsi('\u001b[31m🚀 café\u001b[0m'), '🚀 café');
+  assert.equal(stripAnsi('A\u001b]0;title\u0007🚀'), 'A🚀');
 });
 
 test('npm audit parser converts advisories and severity totals', () => {
