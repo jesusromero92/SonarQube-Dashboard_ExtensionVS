@@ -92,7 +92,7 @@ const SUPPORT_BUG_REPORT_TEMPLATE = 'bug_report.yml';
 
 export function buildSupportIssuePageUrl(issuesUrl: string): string {
   const url = new URL(issuesUrl.trim());
-  const normalizedPath = url.pathname.replace(/\/+$/u, '');
+  const normalizedPath = removeTrailingSlashes(url.pathname);
   url.pathname = normalizedPath.endsWith('/issues')
     ? `${normalizedPath}/new`
     : normalizedPath;
@@ -136,4 +136,13 @@ export function buildSupportIssueReport(
     '',
     '> Tokens, secrets, workspace paths, SonarQube server URLs and project identifiers are not added automatically.'
   ].join('\n');
+}
+
+
+function removeTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
 }

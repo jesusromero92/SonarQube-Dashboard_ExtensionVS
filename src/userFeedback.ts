@@ -79,7 +79,7 @@ export class UserFeedbackService implements vscode.Disposable {
     }
 
     const report = buildSupportIssueReport({
-      extensionVersion: String(packageJson.version ?? ''),
+      extensionVersion: packageMetadataString(packageJson.version),
       vscodeVersion: vscode.version,
       platform: process.platform,
       architecture: process.arch,
@@ -105,8 +105,8 @@ export class UserFeedbackService implements vscode.Disposable {
       name?: unknown;
       publisher?: unknown;
     };
-    const publisher = String(packageJson.publisher ?? '').trim();
-    const extensionName = String(packageJson.name ?? '').trim();
+    const publisher = packageMetadataString(packageJson.publisher).trim();
+    const extensionName = packageMetadataString(packageJson.name).trim();
     if (!publisher || !extensionName) {
       await vscode.window.showWarningMessage(
         this.text(
@@ -205,14 +205,14 @@ export class UserFeedbackService implements vscode.Disposable {
   }): string {
     const bugsUrl = typeof packageJson.bugs === 'string'
       ? packageJson.bugs
-      : String(packageJson.bugs?.url ?? '');
+      : packageMetadataString(packageJson.bugs?.url);
     if (bugsUrl.trim()) {
       return bugsUrl.trim();
     }
 
     const repositoryUrl = typeof packageJson.repository === 'string'
       ? packageJson.repository
-      : String(packageJson.repository?.url ?? '');
+      : packageMetadataString(packageJson.repository?.url);
     if (!repositoryUrl.trim()) {
       return '';
     }
@@ -221,12 +221,28 @@ export class UserFeedbackService implements vscode.Disposable {
       .replace(/^git\+/u, '')
       .replace(/\.git$/u, '')
       .replace(/^git@github\.com:/u, 'https://github.com/');
-    return `${normalized.replace(/\/+$/u, '')}/issues`;
+    return `${removeTrailingSlashes(normalized)}/issues`;
   }
 
   private text(spanish: string, english: string): string {
     return this.getLanguage() === 'es' ? spanish : english;
   }
+}
+
+function packageMetadataString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value.toString();
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'bigint') return value.toString();
+  return '';
+}
+
+function removeTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
 }
 
 
